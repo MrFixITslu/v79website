@@ -8,6 +8,7 @@ services:
     expose:
       - "3000"
     environment:
+      V79_PLATFORM_SHARED_SECRET: ${V79_PLATFORM_SHARED_SECRET:-}
       NODE_ENV: production
       PORT: 3000
       CANONICAL_DOMAIN: ${CANONICAL_DOMAIN:-https://v79sl.com}
