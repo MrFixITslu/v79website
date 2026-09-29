@@ -944,8 +944,15 @@ async function startServer() {
     });
   });
 
+  function readPlatformSecret() {
+    const direct = String(process.env.V79_PLATFORM_SHARED_SECRET || "").trim();
+    if (direct) return direct;
+    const file = String(process.env.V79_PLATFORM_SHARED_SECRET_FILE || "/run/secrets/v79-readonly-platform-token");
+    try { return fs.readFileSync(file, "utf8").trim(); } catch { return ""; }
+  }
+
   function verifyPlatformRead(req: express.Request, res: express.Response, next: express.NextFunction) {
-    const secret = String(process.env.V79_PLATFORM_SHARED_SECRET || "");
+    const secret = readPlatformSecret();
     const timestamp = String(req.get("x-v79-timestamp") || "");
     const signature = String(req.get("x-v79-signature") || "");
     const serviceId = String(req.get("x-v79-service-id") || "");
