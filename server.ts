@@ -944,6 +944,63 @@ async function startServer() {
     });
   });
 
+  function verifyPlatformRead(req: express.Request, res: express.Response, next: express.NextFunction) {
+    const secret = String(process.env.V79_PLATFORM_SHARED_SECRET || "");
+    const timestamp = String(req.get("x-v79-timestamp") || "");
+    const signature = String(req.get("x-v79-signature") || "");
+    const serviceId = String(req.get("x-v79-service-id") || "");
+    if (secret.length < 32) return res.status(503).json({ error: "V79 platform integration is not configured." });
+    if (serviceId !== "v79-hub" || !timestamp || !signature) return res.status(401).json({ error: "Invalid V79 platform credentials." });
+    const when = Number(timestamp);
+    if (!Number.isFinite(when) || Math.abs(Date.now() - when) > 5 * 60_000) return res.status(401).json({ error: "Expired V79 platform request." });
+    const pathname = new URL(req.originalUrl, "http://v79.internal").pathname;
+    const bodyHash = crypto.createHash("sha256").update("").digest("hex");
+    const canonical = [req.method.toUpperCase(), pathname, timestamp, bodyHash].join("\n");
+    const expected = crypto.createHmac("sha256", secret).update(canonical).digest("hex");
+    let valid = false;
+    try {
+      const a = Buffer.from(expected, "hex");
+      const b = Buffer.from(signature, "hex");
+      valid = a.length === b.length && crypto.timingSafeEqual(a, b);
+    } catch {}
+    if (!valid) return res.status(401).json({ error: "Invalid V79 platform signature." });
+    next();
+  }
+
+  function websitePlatformMetrics() {
+    const crm = crmStorage.getMetrics();
+    const formLeads = db.getLeads();
+    const leadSync = {
+      totalFormLeads: formLeads.length,
+      tiquetPending: formLeads.filter((lead: any) => lead.tiquetSyncStatus && lead.tiquetSyncStatus !== "sent").length,
+      hubPending: formLeads.filter((lead: any) => lead.hubEventStatus && lead.hubEventStatus !== "sent").length,
+    };
+    return {
+      ...crm,
+      leadSync,
+      server: {
+        version: BUILD_VERSION,
+        uptimeSeconds: Math.floor(process.uptime()),
+        startedAt: SERVER_START_TIME,
+      },
+    };
+  }
+
+  app.get("/api/platform/summary/:subject", verifyPlatformRead, (req, res) => {
+    const subject = String(req.params.subject || "").trim();
+    if (!/^[A-Za-z0-9._:@-]{1,180}$/.test(subject)) return res.status(400).json({ error: "Invalid platform subject." });
+    res.json({
+      product: "website",
+      subjectId: subject,
+      generatedAt: new Date().toISOString(),
+      metrics: websitePlatformMetrics(),
+    });
+  });
+
+  app.get("/api/platform/admin/stats", verifyPlatformRead, (_req, res) => {
+    res.json({ ...websitePlatformMetrics(), generatedAt: new Date().toISOString() });
+  });
+
   // Version status endpoint so deployments can verify freshness
   app.get("/api/version", (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
