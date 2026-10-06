@@ -2772,8 +2772,8 @@ async function startServer() {
           description: "See how V79 Digital supports hospitality, retail, professional services, education, and other organisations with practical ICT, cloud, network, security, and software solutions.",
         },
         "/solutions": {
-          title: "Business Software, SaaS & V79 Academy | V79 Digital",
-          description: "Explore V79 Digital software, SaaS applications, business tools, and practical training from V79 Academy.",
+          title: "V79 Hub Business Platform & Apps | V79 Digital",
+          description: "Explore the V79 Hub business ecosystem: one workspace connecting V79 finance, customer support, marketing, sales tools, and V79 Academy learning.",
         },
         "/resources": {
           title: "ICT Resources & Business Technology Guides | V79 Digital",
@@ -2810,9 +2810,9 @@ async function startServer() {
           points: ["Small business", "Hospitality", "Retail", "Healthcare", "Government", "Professional and financial services"],
         },
         "/solutions": {
-          heading: "V79 Business Software & Training",
-          summary: "A separate product area for V79 software, customer tools, and V79 Academy training alongside the core managed-services business.",
-          points: ["V79 business applications", "Customer tools", "V79 Academy", "Courses and practical training"],
+          heading: "Run Your Business from V79 Hub",
+          summary: "V79 Hub is the centre of the V79 business ecosystem: one workspace connecting the business applications and services enabled for your organisation.",
+          points: ["One business workspace", "FFPRO finance", "V79 Tiquet support", "V79 Marketing", "V79 POS", "Connected V79 Academy learning"],
         },
         "/resources": {
           heading: "ICT Resources & Business Technology Guides",
@@ -2853,7 +2853,7 @@ async function startServer() {
         const pageLinks = [
           ["/services", "Services"],
           ["/about", "About"],
-          ["/solutions", "Business Software"],
+          ["/solutions", "V79 Hub"],
           ["/resources", "Resources"],
           ["/contact", "Contact"],
         ].map(([href, label]) => `<a href="${href}" style="color:#0f766e;margin-right:16px">${label}</a>`).join("");
@@ -3164,7 +3164,7 @@ ${articlesXml}</urlset>`;
   app.use('/api', (_req,res)=>res.status(404).json({error:'API route not found'}));
   app.get('/privacy', (_req,res)=>res.redirect(308, '/privacy.html'));
   app.get('/blog', (_req,res)=>res.redirect(301, '/resources'));
-  app.get('/courses', (_req,res)=>res.redirect(301, '/solutions'));
+  app.get('/courses', (_req,res)=>res.redirect(301, 'https://v79academy.v79sl.com/academy'));
   app.get('/marketplace', (_req,res)=>res.redirect(301, '/solutions'));
   app.use((req,res,next)=>{
     if (/^\/(?:adimin|adimn)(?:\/|$)/i.test(req.path)) {
@@ -3297,7 +3297,7 @@ ${articlesXml}</urlset>`;
 
   // Active listener
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] VISION79 SaaS Marketplace running at http://0.0.0.0:${PORT}`);
+    console.log(`[Server] V79 Digital website running at http://0.0.0.0:${PORT}`);
   });
 }
 
