@@ -7,7 +7,7 @@ const TEAM = [
   {
     name: "Neil Verdant",
     role: "Founder & Lead Systems Architect",
-    bio: "Over 25 years of enterprise ICT experience across telecommunications, fibre networks, and cloud infrastructure.",
+    bio: "More than 20 years of ICT experience across telecommunications, fibre networks, and enterprise technology.",
     linkedin: "https://linkedin.com",
     email: "vision79slu@gmail.com",
     initials: "NV",
@@ -104,7 +104,7 @@ export default function AboutPage() {
             className="space-y-5"
           >
             <p className="text-sm text-app-text-sec font-light leading-relaxed">
-              Vision79 Digital was founded with one goal — to bring world-class technology solutions to the Caribbean. With more than 25 years of experience delivering telecommunications, enterprise ICT services, fibre networks, cloud infrastructure, and software solutions, we combine technical expertise with practical business knowledge.
+              Vision79 Digital was founded to bring practical, resilient technology solutions to Caribbean businesses. With more than 20 years of experience across telecommunications, enterprise ICT services, fibre networks, cloud infrastructure, and software solutions, we combine technical expertise with practical business knowledge.
             </p>
             <div className="space-y-3 pt-2">
               <div>
@@ -166,7 +166,7 @@ export default function AboutPage() {
               </div>
               <div className="flex items-start gap-2.5 text-white/90">
                 <ShieldCheck className="w-4 h-4 text-v79-teal mt-0.5 shrink-0" />
-                <span>Specialist in hurricane disaster recovery, air-gapped backups, and business continuity systems.</span>
+                <span>Experience designing disaster recovery, backup, and business continuity systems for Caribbean operating conditions.</span>
               </div>
               <div className="flex items-start gap-2.5 text-white/90">
                 <Award className="w-4 h-4 text-v79-teal mt-0.5 shrink-0" />
