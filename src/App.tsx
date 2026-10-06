@@ -1,19 +1,18 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { motion, AnimatePresence, MotionConfig } from "motion/react";
 import {
-  Sun, Moon, Menu, X, Search, Package, AlertTriangle,
-  ChevronLeft, ChevronRight, ChevronDown, Megaphone, Star,
-  Phone, MessageSquare,
+  Sun, Moon, Menu, X, ChevronDown, Phone, MessageSquare,
+  LayoutDashboard, WalletCards, Megaphone, ShoppingCart,
+  GraduationCap, ArrowRight, ShieldCheck, CheckCircle2,
 } from "lucide-react";
 import HomePage from "./components/HomePage";
 import AboutPage from "./components/AboutPage";
 import ServicesPage from "./components/ServicesPage";
 import IndustriesPage from "./components/IndustriesPage";
 import ContactPage from "./components/ContactPage";
-import { SaaSApp, SaaSAd, CategoryFilter } from "./types";
-import { AppLogo } from "./components/AppLogo";
+import { SaaSApp } from "./types";
 import { V79OfficialLogo } from "./components/V79OfficialLogo";
-import { AppCardSkeleton, SectionLoadingFallback } from "./components/ui/Skeleton";
+import { SectionLoadingFallback } from "./components/ui/Skeleton";
 import { CLIENT_STORIES } from "./data/testimonials";
 
 const ResourcesPage = lazy(() => import("./components/ResourcesPage"));
@@ -28,16 +27,6 @@ const ArticleDetailPage = lazy(() =>
 const CourseDetailPage = lazy(() =>
   import("./components/CourseDetailPage").then(m => ({ default: m.CourseDetailPage }))
 );
-const OnboardingFeedback = lazy(() =>
-  import("./components/OnboardingFeedback").then(m => ({ default: m.OnboardingFeedback }))
-);
-
-const isPromoActive = (app: SaaSApp) => {
-  if (app.category !== "courses" || !app.createdAt) return false;
-  const diff = Math.abs(new Date().getTime() - new Date(app.createdAt).getTime());
-  return Math.ceil(diff / (1000 * 60 * 60 * 24)) <= 30;
-};
-
 function getCourseIdFromUrl(): number | null {
   const match = window.location.pathname.match(/^\/course\/(\d+)/);
   return match ? parseInt(match[1], 10) : null;
@@ -108,18 +97,10 @@ export default function App() {
     catch { return "dark"; }
   });
 
-  // Solutions marketplace state
+  // Legacy course deep-links remain supported, but course discovery now lives in V79 Academy.
   const [apps, setApps] = useState<SaaSApp[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const hadSelectedCourse = useRef(false);
   const [selectedCourse, setSelectedCourse] = useState<SaaSApp | null>(null);
-  const [selectedToolForFeedback, setSelectedToolForFeedback] = useState<SaaSApp | null>(null);
-  const [ads, setAds] = useState<SaaSAd[]>([]);
-  const [currentAdIndex, setCurrentAdIndex] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
-  const [pulsingAppId, setPulsingAppId] = useState<number | null>(null);
 
   // Directly selected article for direct link reading (WhatsApp, social, or in-app click)
   const [selectedArticleSlug, setSelectedArticleSlug] = useState<string | null>(() => {
@@ -156,25 +137,16 @@ export default function App() {
     root.classList.toggle("light", theme !== "dark");
   }, [theme]);
 
-  const fetchApps = async () => {
-    try {
-      setLoading(true); setErrorMsg(null);
-      const res = await fetch("/api/apps");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setApps(await res.json());
-    } catch (err: any) {
-      setErrorMsg(err.message || "Failed to load applications");
-    } finally { setLoading(false); }
-  };
-
-  const fetchAds = async () => {
-    try {
-      const res = await fetch("/api/ads");
-      if (res.ok) setAds(await res.json());
-    } catch {}
-  };
-
-  useEffect(() => { fetchApps(); fetchAds(); }, []);
+  useEffect(() => {
+    if (!window.location.pathname.startsWith("/course/")) return;
+    const loadCourses = async () => {
+      try {
+        const res = await fetch("/api/apps");
+        if (res.ok) setApps(await res.json());
+      } catch {}
+    };
+    void loadCourses();
+  }, []);
 
   // Direct marketing URLs should land on the matching section instead of
   // always opening at the top of the long-form homepage.
@@ -231,36 +203,6 @@ export default function App() {
     window.addEventListener("popstate", handlePop);
     return () => window.removeEventListener("popstate", handlePop);
   }, [apps]);
-
-  useEffect(() => {
-    if (ads.length <= 1) return;
-    const t = setInterval(() => setCurrentAdIndex(p => (p + 1) % ads.length), 6000);
-    return () => clearInterval(t);
-  }, [ads]);
-
-  const handleAppLaunch = async (app: SaaSApp) => {
-    try {
-      setPulsingAppId(app.id); setTimeout(() => setPulsingAppId(null), 1000);
-      const res = await fetch("/api/apps/increment", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: app.id })
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setApps(apps.map(a => a.id === app.id ? updated : a));
-      }
-      if (app.accessUrl) window.open(app.accessUrl, "_blank", "noopener,noreferrer");
-    } catch {}
-  };
-
-  const filteredApps = apps.filter(app => {
-    if (!app) return false;
-    const catOk = selectedCategory === "all" || app.category === selectedCategory;
-    const q = searchQuery.toLowerCase();
-    const textOk = [(app.name || ""), (app.subtitle || ""), (app.description || "")]
-      .some(s => s.toLowerCase().includes(q));
-    return catOk && textOk;
-  });
 
   // Keep nav highlight in sync while the user scrolls, not just on click
   useEffect(() => {
@@ -684,152 +626,155 @@ export default function App() {
 
         <section id="solutions" className="scroll-mt-32 max-w-7xl mx-auto px-6 lg:px-12 w-full">
           <AnimatePresence mode="wait">
-            {selectedToolForFeedback ? (
-              <motion.div key="feedback" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.15 }}>
-                <Suspense fallback={<SectionLoadingFallback />}>
-                  <OnboardingFeedback app={selectedToolForFeedback} onBack={() => setSelectedToolForFeedback(null)} />
-                </Suspense>
-              </motion.div>
-            ) : selectedCourse ? (
+            {selectedCourse ? (
               <motion.div key="course" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.15 }}>
                 <Suspense fallback={<SectionLoadingFallback />}>
                   <CourseDetailPage course={selectedCourse} onBack={() => setSelectedCourse(null)} />
                 </Suspense>
               </motion.div>
             ) : (
-              <motion.div key="explore" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }} className="space-y-8">
-                <div className="flex flex-col gap-2">
-                  <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-indigo-400">V79 Products</span>
-                  <h2 className="text-3xl sm:text-4xl font-extrabold font-display tracking-tight text-app-text dark:text-white">Business Software & Training</h2>
-                  <p className="text-app-text-sec text-sm font-light">V79 Digital services remain our primary offering. This section contains our separate software products, customer tools, and V79 Academy training.</p>
-                </div>
-
-                {/* Solutions Quick Links */}
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {[
-                    { label: "V79 Academy", desc: "Courses, certifications, masterclasses", action: () => { window.location.href = "https://v79academy.v79sl.com/academy"; }, classes: "hover:border-violet-500/30 hover:bg-violet-500/[0.02]", textClasses: "group-hover:text-violet-400" },
-                    { label: "V79 App Marketplace", desc: "Web apps, desktop tools, and games", action: () => { setSelectedCategory("all"); scrollTo("app-marketplace-grid"); }, classes: "hover:border-indigo-500/30 hover:bg-indigo-500/[0.02]", textClasses: "group-hover:text-indigo-400" },
-                  ].map(s => (
-                    <button key={s.label} onClick={s.action} className={`glass p-5 rounded-2xl border border-app-border text-left space-y-1.5 transition-all cursor-pointer group ${s.classes}`}>
-                      <div className={`text-xs font-bold font-display text-app-text dark:text-white transition ${s.textClasses}`}>{s.label}</div>
-                      <div className="text-[11px] text-app-text-sec font-light">{s.desc}</div>
+              <motion.div key="hub-ecosystem" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="space-y-10 lg:space-y-12">
+                <div className="max-w-3xl space-y-4">
+                  <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-indigo-400">V79 Business Platform</span>
+                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display tracking-tight text-app-text dark:text-white">Run Your Business from V79 Hub</h2>
+                  <p className="text-app-text-sec text-sm sm:text-base font-light leading-relaxed max-w-2xl">
+                    One account. One dashboard. The tools your business needs. V79 Hub brings your V79 business applications together so your team can manage finances, customers, marketing, sales and business activity from one secure workspace.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <a href="https://hub.v79sl.com" className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 text-sm font-semibold transition no-underline">
+                      Explore V79 Hub <ArrowRight className="w-4 h-4" />
+                    </a>
+                    <button onClick={() => scrollTo("contact")} className="inline-flex items-center justify-center gap-2 rounded-xl border border-app-border bg-app-btn-sec hover:border-indigo-400/40 px-5 py-3 text-sm font-semibold text-app-text transition cursor-pointer">
+                      Request Access
                     </button>
-                  ))}
-                </div>
-
-                {ads.length > 0 && (
-                  <div className="relative overflow-hidden rounded-2xl border border-app-border bg-app-aside-bg/40 shadow-lg group">
-                    <div className="relative h-[200px] sm:h-[160px] w-full select-none">
-                      <AnimatePresence mode="wait">
-                        <motion.div key={currentAdIndex} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}
-                          onClick={() => { const link = ads[currentAdIndex]?.linkUrl; if (link?.includes("service") || link === "/services-pricing") scrollTo("services"); else if (link) window.open(link, "_blank", "noopener,noreferrer"); }}
-                          className="absolute inset-0 flex flex-col sm:flex-row items-stretch cursor-pointer">
-                          <div className="relative w-full sm:w-2/5 h-32 sm:h-full bg-zinc-800 overflow-hidden shrink-0">
-                            <img src={ads[currentAdIndex].imageUrl} alt={ads[currentAdIndex].title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition duration-700" referrerPolicy="no-referrer" />
-                            <div className="absolute top-3 left-3 px-2 py-0.5 bg-black/70 backdrop-blur-md rounded border border-white/20 text-[8px] font-mono font-bold tracking-widest text-emerald-400 uppercase flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Spotlight
-                            </div>
-                          </div>
-                          <div className="p-5 flex-1 flex flex-col justify-center space-y-1.5">
-                            <div className="flex items-center gap-1.5 text-[10px] font-mono text-indigo-400 font-semibold uppercase"><Megaphone className="w-3 h-3" />Featured</div>
-                            <h2 className="text-base font-bold text-app-text font-display leading-tight">{ads[currentAdIndex].title}</h2>
-                            <p className="text-[11px] text-app-text-sec font-light">{ads[currentAdIndex].subtitle}</p>
-                          </div>
-                        </motion.div>
-                      </AnimatePresence>
-                    </div>
-                    {ads.length > 1 && (
-                      <>
-                        <button onClick={e => { e.stopPropagation(); setCurrentAdIndex(p => (p - 1 + ads.length) % ads.length); }} aria-label="Previous advertisement" className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg border border-app-border bg-app-bg/80 text-app-text backdrop-blur-md opacity-0 group-hover:opacity-100 transition cursor-pointer"><ChevronLeft className="w-4 h-4" /></button>
-                        <button onClick={e => { e.stopPropagation(); setCurrentAdIndex(p => (p + 1) % ads.length); }} aria-label="Next advertisement" className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg border border-app-border bg-app-bg/80 text-app-text backdrop-blur-md opacity-0 group-hover:opacity-100 transition cursor-pointer"><ChevronRight className="w-4 h-4" /></button>
-                      </>
-                    )}
                   </div>
-                )}
-
-                <div className="relative flex items-center max-w-2xl">
-                  <Search className="absolute left-4 text-app-text-muted w-5 h-5" />
-                  <input id="search-input" type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value.toLowerCase())}
-                    placeholder="Search tools, databases, frameworks, extensions..."
-                    aria-label="Search software and courses"
-                    className="w-full bg-app-input border border-app-input-border rounded-full py-3 pl-12 pr-6 text-sm focus:outline-none focus:ring-1 focus:ring-app-border transition-all text-app-text placeholder:text-app-text-muted/60" />
-                  {searchQuery && <button onClick={() => setSearchQuery("")} aria-label="Clear search" className="absolute right-4 text-app-text-muted hover:text-app-text text-xs font-mono font-bold cursor-pointer">CLEAR</button>}
                 </div>
 
-                <div id="app-marketplace-grid" className="scroll-mt-32">
-                  {loading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                      {[1, 2, 3].map(n => <AppCardSkeleton key={n} />)}
+                <div className="relative overflow-hidden rounded-3xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/[0.10] via-app-aside-bg/70 to-app-bg p-6 sm:p-8 lg:p-10 shadow-xl">
+                  <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
+                  <div className="relative grid lg:grid-cols-[1.05fr_1fr] gap-8 items-center">
+                    <div className="space-y-5">
+                      <div className="w-14 h-14 rounded-2xl border border-indigo-400/20 bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                        <LayoutDashboard className="w-7 h-7" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-indigo-400 font-bold">The centre of the ecosystem</div>
+                        <h3 className="text-2xl sm:text-3xl font-bold font-display text-app-text dark:text-white">V79 Hub</h3>
+                        <p className="text-sm text-app-text-sec leading-relaxed max-w-xl">
+                          Your business workspace for secure sign-in, access to V79 applications, key information and the services enabled for your organisation.
+                        </p>
+                      </div>
+                      <a href="https://hub.v79sl.com" className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-400 hover:text-indigo-300 no-underline transition">
+                        Open V79 Hub <ArrowRight className="w-4 h-4" />
+                      </a>
                     </div>
-                  ) : errorMsg ? (
-                    <div className="text-center py-12 glass rounded-2xl space-y-3">
-                      <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
-                      <p className="text-xs text-app-text-muted font-mono">{errorMsg}</p>
-                      <button onClick={fetchApps} className="px-3 py-1.5 bg-app-btn-sec border border-app-border rounded text-xs text-app-text cursor-pointer">Retry</button>
+
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {[
+                        "One business workspace",
+                        "Central app access",
+                        "Business KPI visibility",
+                        "Subscription management",
+                      ].map(item => (
+                        <div key={item} className="flex items-center gap-3 rounded-xl border border-app-border bg-app-bg/55 px-4 py-3 text-xs text-app-text-sec">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>{item}</span>
+                        </div>
+                      ))}
                     </div>
-                  ) : filteredApps.length === 0 ? (
-                    <div className="text-center py-16 bg-app-aside-bg rounded-2xl border border-app-border space-y-3 text-app-text-sec">
-                      <Package className="w-10 h-10 mx-auto text-app-text-muted" />
-                      <p className="text-sm">No results match your filters.</p>
-                      <button onClick={() => { setSelectedCategory("all"); setSearchQuery(""); }} className="px-3 py-1 text-xs border border-app-border rounded bg-app-btn-sec text-app-text cursor-pointer">Reset</button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-app-text-muted font-bold">Business modules</div>
+                    <h3 className="mt-1 text-xl sm:text-2xl font-bold font-display text-app-text dark:text-white">Add the capabilities your business needs</h3>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className="glass rounded-2xl border border-app-border p-5 space-y-4 hover:border-indigo-400/30 transition">
+                      <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400"><WalletCards className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-app-text-muted">Manage Money</div>
+                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white">FFPRO</h4>
+                        <p className="mt-2 text-xs leading-relaxed text-app-text-sec">Track finances, budgets, cash flow, goals and business financial performance.</p>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                      {filteredApps.map((app, idx) => {
-                        const isCourse = app.category === "courses";
-                        const isWeb = app.category === "web";
-                        const isPulsing = pulsingAppId === app.id;
-                        const priceNum = Number(app.price || 0);
-                        const hasPromo = isCourse && isPromoActive(app) && priceNum > 0;
-                        const promoPriceNum = priceNum * 0.5;
-                        const pricingText = isCourse ? (priceNum > 0 ? `$${priceNum.toFixed(2)}` : "Free") : app.pricingType === "free" ? "Free" : priceNum > 0 ? `$${priceNum.toFixed(2)}` : "Subscription";
-                        const badgeColor = isCourse ? "bg-violet-600/10 text-violet-500 border border-violet-500/20" : app.category === "desktop" ? "bg-blue-600/10 text-blue-500 border border-blue-500/20" : "bg-app-btn-sec text-app-text-sec border border-app-border";
-                        return (
-                          <a href={isCourse ? `/course/${app.id}` : "#"} key={app.id ?? `fb-${idx}`}
-                            onClick={e => { if (isCourse) { e.preventDefault(); setSelectedCourse(app); } else { e.preventDefault(); setSelectedToolForFeedback(app); } }}
-                            className="glass p-5 rounded-2xl flex flex-col justify-between gap-4 group hover:border-app-text/30 transition-all duration-300 shadow-sm hover:shadow-lg hover:bg-indigo-500/[0.01] no-underline text-inherit cursor-pointer">
-                            <div className="space-y-4">
-                              <div className="flex justify-between items-start">
-                                <div className="w-12 h-12 bg-app-btn-sec rounded-xl flex items-center justify-center border border-app-border"><AppLogo logoUrl={app.logoUrl} /></div>
-                                <div className="flex flex-col items-end gap-1 font-mono">
-                                  <span className={`text-[10px] px-2 py-0.5 rounded uppercase ${badgeColor}`}>{isCourse ? "Course 📚" : app.category}</span>
-                                  {hasPromo ? (
-                                    <span className="text-[10px] px-2 py-0.5 border rounded uppercase bg-emerald-500/15 text-emerald-400 border-emerald-500/25 font-bold animate-pulse">🔥 ${promoPriceNum.toFixed(2)} (50% OFF)</span>
-                                  ) : (
-                                    <span className={`text-[10px] px-2 py-0.5 border rounded uppercase ${isCourse ? "bg-violet-500/10 text-violet-500 border-violet-500/20 font-bold" : "border-app-border bg-app-btn-sec/50 text-app-text-muted"}`}>{pricingText}</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div>
-                                <h4 className="font-bold text-app-text group-hover:text-indigo-400 transition font-display text-base tracking-tight">{app.name}</h4>
-                                <p className="text-[11px] text-app-text-sec font-mono mt-1 tracking-wide">{app.subtitle}</p>
-                                <div className="flex items-center gap-1.5 mt-2 text-[10px] font-mono">
-                                  <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                                  <span className="font-bold text-yellow-500">{app.rating || 0}</span>
-                                  <span className="text-app-text-muted">•</span>
-                                  <span className="text-app-text-muted">{isCourse ? `By ${app.instructor || "Expert"}` : "Reviews"}</span>
-                                </div>
-                                <p className="text-xs text-app-text-muted mt-2.5 line-clamp-3 leading-relaxed">{app.description}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between pt-1.5 border-t border-app-border/40">
-                              <div className="flex items-center space-x-1 font-mono text-[10px] text-app-text-sec">
-                                <span className="font-semibold">{(app.launchCount || 0).toLocaleString()}</span>
-                                <span className="text-app-text-muted">{isCourse ? "Students" : isWeb ? "Launches" : "Downloads"}</span>
-                              </div>
-                              {isCourse ? (
-                                <a href={`/course/${app.id}`} onClick={e => { e.preventDefault(); setSelectedCourse(app); }} className="px-4 py-2 rounded-lg text-xs font-semibold bg-violet-600 text-white hover:bg-violet-500 no-underline cursor-pointer">Take Course 🎓</a>
-                              ) : (
-                                <button onClick={e => { e.stopPropagation(); handleAppLaunch(app); }} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${isPulsing ? "bg-app-text text-app-bg scale-95 opacity-80" : "bg-app-text text-app-bg hover:opacity-90"}`}>
-                                  {app.pricingType === "premium" ? "Subscribe 🔒" : isWeb ? "Launch ↗" : "Download ↓"}
-                                </button>
-                              )}
-                            </div>
-                          </a>
-                        );
-                      })}
+
+                    <div className="glass rounded-2xl border border-app-border p-5 space-y-4 hover:border-indigo-400/30 transition">
+                      <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400"><CheckCircle2 className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-app-text-muted">Manage Customers & Support</div>
+                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white">V79 Tiquet</h4>
+                        <p className="mt-2 text-xs leading-relaxed text-app-text-sec">Manage customer requests, service tickets, follow-up and support activity.</p>
+                      </div>
                     </div>
-                  )}
+
+                    <div className="glass rounded-2xl border border-app-border p-5 space-y-4 hover:border-indigo-400/30 transition">
+                      <div className="w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400"><Megaphone className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-app-text-muted">Grow Your Business</div>
+                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white">V79 Marketing</h4>
+                        <p className="mt-2 text-xs leading-relaxed text-app-text-sec">Organise leads, campaigns, events and customer engagement from one workflow.</p>
+                      </div>
+                    </div>
+
+                    <div className="glass rounded-2xl border border-app-border p-5 space-y-4 hover:border-indigo-400/30 transition">
+                      <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400"><ShoppingCart className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-app-text-muted">Manage Sales</div>
+                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white">V79 POS</h4>
+                        <p className="mt-2 text-xs leading-relaxed text-app-text-sec">Support day-to-day selling, transaction workflows and operational sales visibility.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.05] p-6 sm:p-7 flex flex-col lg:flex-row lg:items-center gap-6 lg:justify-between">
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shrink-0"><GraduationCap className="w-6 h-6" /></div>
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-violet-400 font-bold">Connected Learning</div>
+                      <h3 className="text-xl font-bold font-display text-app-text dark:text-white">V79 Academy</h3>
+                      <p className="text-xs sm:text-sm text-app-text-sec leading-relaxed max-w-2xl">Practical technology and business training for individuals and teams. Course discovery and learning now live in the Academy rather than the business-app marketplace.</p>
+                    </div>
+                  </div>
+                  <a href="https://v79academy.v79sl.com/academy" className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 hover:bg-violet-500/15 px-5 py-3 text-sm font-semibold text-violet-400 no-underline transition shrink-0">
+                    Explore V79 Academy <ArrowRight className="w-4 h-4" />
+                  </a>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-app-text-muted font-bold">How V79 Hub works</div>
+                    <h3 className="mt-1 text-xl sm:text-2xl font-bold font-display text-app-text dark:text-white">A simpler way to build your business toolkit</h3>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {[
+                      ["01", "Create your business workspace", "Your organisation gets its own secure V79 workspace."],
+                      ["02", "Add the tools you need", "Enable the business applications and services that fit how you operate."],
+                      ["03", "Run everything from Hub", "Access your applications and key business information from one place."],
+                    ].map(([step, title, copy]) => (
+                      <div key={step} className="rounded-2xl border border-app-border bg-app-aside-bg/40 p-5">
+                        <div className="text-xs font-mono font-bold text-indigo-400">{step}</div>
+                        <h4 className="mt-3 text-sm font-bold font-display text-app-text dark:text-white">{title}</h4>
+                        <p className="mt-2 text-xs leading-relaxed text-app-text-sec">{copy}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-app-border bg-app-aside-bg/35 p-5 sm:p-6 flex flex-col sm:flex-row gap-5 sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-bold text-app-text dark:text-white">A focused business ecosystem</h3>
+                      <p className="mt-1 text-xs text-app-text-sec max-w-2xl">V79 Hub is reserved for customer business tools. Games, community projects and experimental products remain separate from the SMB platform.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => scrollTo("contact")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-app-btn-sec border border-app-border hover:border-indigo-400/40 px-4 py-2.5 text-xs font-semibold text-app-text transition cursor-pointer shrink-0">
+                    Talk to V79 Digital <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </motion.div>
             )}
