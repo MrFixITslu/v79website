@@ -936,12 +936,7 @@ async function startServer() {
   // healthcheck 404'd and the container was silently reporting unhealthy.
   app.get("/api/health", (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    res.status(200).json({
-      status: "ok",
-      version: BUILD_VERSION,
-      uptime: Math.floor(process.uptime()),
-      startedAt: SERVER_START_TIME
-    });
+    res.status(200).json({ status: "ok" });
   });
 
   function readPlatformSecret() {
@@ -1011,13 +1006,7 @@ async function startServer() {
   // Version status endpoint so deployments can verify freshness
   app.get("/api/version", (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    res.status(200).json({
-      name: "Vision79 Digital",
-      version: BUILD_VERSION,
-      uptime: Math.floor(process.uptime()),
-      startedAt: SERVER_START_TIME,
-      nodeEnv: process.env.NODE_ENV || "development"
-    });
+    res.status(200).json({ name: "V79 Digital", status: "ok" });
   });
 
   // Static serving for uploaded course materials (audio, video, documents)
@@ -1077,12 +1066,9 @@ async function startServer() {
 
   // Canonical admin intercept routes registered first to prioritize admin page loading
   const adminPaths = [
-    "/admin", "/admin/", 
+    "/admin", "/admin/",
     "/admin.html",
-    "/adimin", "/adimin/", 
-    "/adimn", "/adimn/", 
-    "/Admin", "/Admin/", 
-    "/Adimin", "/Adimin/"
+    "/Admin", "/Admin/"
   ];
 
   app.get(adminPaths, async (req, res, next) => {
@@ -2799,6 +2785,47 @@ async function startServer() {
         },
       };
 
+      // Server-rendered, route-specific fallback content gives crawlers and
+      // no-JavaScript clients meaningful page copy while the React app loads.
+      // The copy mirrors the visible sections and is replaced by React on mount.
+      const seoFallbacks: Record<string, { heading: string; summary: string; points: string[] }> = {
+        "/": {
+          heading: "Managed IT Services & Cybersecurity Built for the Caribbean",
+          summary: "V79 Digital helps Saint Lucia organisations manage, secure, and improve the technology their businesses depend on.",
+          points: ["Managed IT support", "Cybersecurity", "Cloud and backup", "Networks and VoIP", "Business software", "Technology training"],
+        },
+        "/about": {
+          heading: "About V79 Digital",
+          summary: "Caribbean-rooted ICT and telecommunications experience focused on practical, resilient technology for Saint Lucia businesses.",
+          points: ["More than 20 years of ICT experience", "Telecommunications and fibre", "Enterprise technology", "Business continuity", "Cloud and software"],
+        },
+        "/services": {
+          heading: "IT, Cloud, Cybersecurity & Automation Services",
+          summary: "Managed technology services are V79 Digital's primary offering, with clearly scoped support and response expectations.",
+          points: ["Managed IT support", "Cybersecurity assessments", "Cloud and backup", "Network and VoIP", "Custom software", "Automation and ICT assessments"],
+        },
+        "/industries": {
+          heading: "Technology Services for Saint Lucia Organisations",
+          summary: "Practical ICT services shaped around the operating needs of Caribbean businesses and institutions.",
+          points: ["Small business", "Hospitality", "Retail", "Healthcare", "Government", "Professional and financial services"],
+        },
+        "/solutions": {
+          heading: "V79 Business Software & Training",
+          summary: "A separate product area for V79 software, customer tools, and V79 Academy training alongside the core managed-services business.",
+          points: ["V79 business applications", "Customer tools", "V79 Academy", "Courses and practical training"],
+        },
+        "/resources": {
+          heading: "ICT Resources & Business Technology Guides",
+          summary: "Practical guidance for Caribbean businesses covering IT operations, cybersecurity, networks, cloud, software, and digital resilience.",
+          points: ["Managed IT guidance", "Cybersecurity", "Cloud and backup", "Networking", "Business software", "Digital operations"],
+        },
+        "/contact": {
+          heading: "Contact V79 Digital",
+          summary: "Discuss managed IT, cybersecurity, cloud, networking, business software, or a scoped ICT assessment for your organisation.",
+          points: ["Free initial ICT consultation", "Saint Lucia business support", "Phone and WhatsApp contact", "Response within one business day"],
+        },
+      };
+
       const articleSlug = (req.query.article as string) || (normalizedPath.startsWith("/resources/") ? normalizedPath.slice("/resources/".length) : "");
       if (articleSlug) {
         const article = getArticleData(articleSlug);
@@ -2810,16 +2837,31 @@ async function startServer() {
           description: article.description,
           image: imageUrl,
           type: "article",
-          url: `${canonicalBase}/?article=${encodeURIComponent(article.slug)}`,
+          url: `${canonicalBase}/resources?article=${encodeURIComponent(article.slug)}`,
         });
       }
 
       const page = staticPages[normalizedPath];
       if (!page) return html;
-      return applyMeta(html, {
+      let result = applyMeta(html, {
         ...page,
         url: normalizedPath === "/" ? `${canonicalBase}/` : `${canonicalBase}${normalizedPath}`,
       });
+
+      const fallback = seoFallbacks[normalizedPath];
+      if (fallback && result.includes('<div id="root"></div>')) {
+        const pageLinks = [
+          ["/services", "Services"],
+          ["/about", "About"],
+          ["/solutions", "Business Software"],
+          ["/resources", "Resources"],
+          ["/contact", "Contact"],
+        ].map(([href, label]) => `<a href="${href}" style="color:#0f766e;margin-right:16px">${label}</a>`).join("");
+        const points = fallback.points.map(point => `<li>${escapeAttr(point)}</li>`).join("");
+        const fallbackHtml = `<main style="max-width:960px;margin:0 auto;padding:56px 24px;font-family:Inter,Arial,sans-serif;line-height:1.6;color:#132238"><p style="font-weight:700;color:#0f766e">V79 Digital · Saint Lucia</p><h1 style="font-size:clamp(2rem,5vw,3.5rem);line-height:1.05">${escapeAttr(fallback.heading)}</h1><p style="font-size:1.1rem;max-width:760px">${escapeAttr(fallback.summary)}</p><ul>${points}</ul><nav aria-label="Primary">${pageLinks}</nav><p><a href="/contact" style="display:inline-block;margin-top:18px;color:#0f766e;font-weight:700">Book an ICT consultation</a></p></main>`;
+        result = result.replace('<div id="root"></div>', `<div id="root">${fallbackHtml}</div>`);
+      }
+      return result;
     } catch (err) {
       console.error("[SEO Meta] Error injecting dynamic metadata:", err);
       return html;
@@ -3121,10 +3163,16 @@ ${articlesXml}</urlset>`;
   // Vite development vs production serving logic
   app.use('/api', (_req,res)=>res.status(404).json({error:'API route not found'}));
   app.get('/privacy', (_req,res)=>res.redirect(308, '/privacy.html'));
+  app.get('/blog', (_req,res)=>res.redirect(301, '/resources'));
+  app.get('/courses', (_req,res)=>res.redirect(301, '/solutions'));
+  app.get('/marketplace', (_req,res)=>res.redirect(301, '/solutions'));
   app.use((req,res,next)=>{
+    if (/^\/(?:adimin|adimn)(?:\/|$)/i.test(req.path)) {
+      return res.redirect(301, req.path.replace(/^\/(?:adimin|adimn)/i, '/admin'));
+    }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
-    if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to Vision79 Digital</a>');
-    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/courses', '/marketplace', '/privacy', '/terms', '/admin', '/adimin', '/adimn'];
+    if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
+    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/admin'];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });

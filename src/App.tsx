@@ -73,6 +73,15 @@ const SECTIONS = [
 // open its card automatically, not just scroll to its still-collapsed header.
 const SERVICE_ACCORDION_IDS = ["managed-it", "cloud", "software", "ai-automation", "networking", "cybersecurity"];
 
+const MARKETING_ROUTE_TO_SECTION: Record<string, string> = {
+  "/about": "about",
+  "/services": "services",
+  "/industries": "industries",
+  "/solutions": "solutions",
+  "/resources": "resources",
+  "/contact": "contact",
+};
+
 export default function App() {
   const [activeSection, setActiveSection] = useState("home");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -124,7 +133,17 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const p = new URLSearchParams(window.location.search);
-      setSelectedArticleSlug(p.get("article"));
+      const article = p.get("article");
+      setSelectedArticleSlug(article);
+      if (article) return;
+      const path = window.location.pathname.replace(/\/+$/, "") || "/";
+      const target = path === "/" ? "home" : MARKETING_ROUTE_TO_SECTION[path];
+      if (!target) return;
+      setActiveSection(target);
+      window.setTimeout(() => {
+        const el = document.getElementById(target);
+        if (el) window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 110);
+      }, 40);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -156,6 +175,23 @@ export default function App() {
   };
 
   useEffect(() => { fetchApps(); fetchAds(); }, []);
+
+  // Direct marketing URLs should land on the matching section instead of
+  // always opening at the top of the long-form homepage.
+  useEffect(() => {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    const target = MARKETING_ROUTE_TO_SECTION[path];
+    if (!target) return;
+    setActiveSection(target);
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(target);
+      if (el) {
+        const topPos = el.getBoundingClientRect().top + window.pageYOffset - 110;
+        window.scrollTo(0, topPos);
+      }
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Deep-link support: /course/123 selects the course and scrolls to Solutions
   useEffect(() => {
@@ -290,10 +326,22 @@ export default function App() {
       return;
     }
 
-    setActiveSection(parentId || id);
+    const routeSection = parentId || id;
+    setActiveSection(routeSection);
     setMobileNavOpen(false);
     setOpenDropdown(null);
     setMobileExpanded(null);
+
+    // Keep the browser URL aligned with the section the visitor is viewing.
+    // This makes copied links, analytics, canonical routes, and back/forward
+    // navigation consistent instead of leaving every section at "/".
+    if (SECTIONS.some(section => section.id === routeSection)) {
+      const basePath = routeSection === "home" ? "/" : `/${routeSection}`;
+      const nextUrl = id !== routeSection ? `${basePath}#${id}` : basePath;
+      if (window.location.pathname + window.location.hash !== nextUrl) {
+        window.history.pushState({}, "", nextUrl);
+      }
+    }
 
     // Jumping straight to a specific service (e.g. "Cloud Solutions" from
     // the Services dropdown) should land with that card already open —
@@ -651,9 +699,9 @@ export default function App() {
             ) : (
               <motion.div key="explore" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }} className="space-y-8">
                 <div className="flex flex-col gap-2">
-                  <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-indigo-400">Products & Solutions</span>
-                  <h2 className="text-3xl sm:text-4xl font-extrabold font-display tracking-tight text-app-text dark:text-white">Our Software & Marketplace</h2>
-                  <p className="text-app-text-sec text-sm font-light">Our SaaS tools, courses, and specialized platforms — all in one place.</p>
+                  <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-indigo-400">V79 Products</span>
+                  <h2 className="text-3xl sm:text-4xl font-extrabold font-display tracking-tight text-app-text dark:text-white">Business Software & Training</h2>
+                  <p className="text-app-text-sec text-sm font-light">V79 Digital services remain our primary offering. This section contains our separate software products, customer tools, and V79 Academy training.</p>
                 </div>
 
                 {/* Solutions Quick Links */}
@@ -821,7 +869,7 @@ export default function App() {
               <V79OfficialLogo size="lg" />
             </div>
             <p className="text-xs text-slate-600 dark:text-white/70 font-light max-w-sm leading-relaxed">
-              World-class managed IT, cybersecurity, cloud infrastructure, and software development for businesses across Saint Lucia and the Eastern Caribbean.
+              Managed IT, cybersecurity, cloud infrastructure, and business software support for organisations across Saint Lucia and the Eastern Caribbean.
             </p>
           </div>
 
@@ -867,13 +915,9 @@ export default function App() {
         <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-white/50 font-mono">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-v79-teal-light animate-pulse" />
-            <span>System Operational · 99.9% Uptime SLA</span>
+            <span>Website operational · Service SLAs are defined by client agreement</span>
           </div>
           <div className="flex items-center gap-4">
-            <a href="/admin" className="text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1">
-              <span>Admin Portal</span>
-            </a>
-            <span className="text-slate-300 dark:text-white/20">·</span>
             <span>© 2026 VISION79 DIGITAL INC. All rights reserved.</span>
           </div>
         </div>
