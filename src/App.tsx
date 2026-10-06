@@ -73,6 +73,15 @@ const SECTIONS = [
 // open its card automatically, not just scroll to its still-collapsed header.
 const SERVICE_ACCORDION_IDS = ["managed-it", "cloud", "software", "ai-automation", "networking", "cybersecurity"];
 
+const MARKETING_ROUTE_TO_SECTION: Record<string, string> = {
+  "/about": "about",
+  "/services": "services",
+  "/industries": "industries",
+  "/solutions": "solutions",
+  "/resources": "resources",
+  "/contact": "contact",
+};
+
 export default function App() {
   const [activeSection, setActiveSection] = useState("home");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -124,7 +133,17 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const p = new URLSearchParams(window.location.search);
-      setSelectedArticleSlug(p.get("article"));
+      const article = p.get("article");
+      setSelectedArticleSlug(article);
+      if (article) return;
+      const path = window.location.pathname.replace(/\/+$/, "") || "/";
+      const target = path === "/" ? "home" : MARKETING_ROUTE_TO_SECTION[path];
+      if (!target) return;
+      setActiveSection(target);
+      window.setTimeout(() => {
+        const el = document.getElementById(target);
+        if (el) window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 110);
+      }, 40);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -161,15 +180,7 @@ export default function App() {
   // always opening at the top of the long-form homepage.
   useEffect(() => {
     const path = window.location.pathname.replace(/\/+$/, "") || "/";
-    const routeToSection: Record<string, string> = {
-      "/about": "about",
-      "/services": "services",
-      "/industries": "industries",
-      "/solutions": "solutions",
-      "/resources": "resources",
-      "/contact": "contact",
-    };
-    const target = routeToSection[path];
+    const target = MARKETING_ROUTE_TO_SECTION[path];
     if (!target) return;
     setActiveSection(target);
     const timer = window.setTimeout(() => {
@@ -315,10 +326,22 @@ export default function App() {
       return;
     }
 
-    setActiveSection(parentId || id);
+    const routeSection = parentId || id;
+    setActiveSection(routeSection);
     setMobileNavOpen(false);
     setOpenDropdown(null);
     setMobileExpanded(null);
+
+    // Keep the browser URL aligned with the section the visitor is viewing.
+    // This makes copied links, analytics, canonical routes, and back/forward
+    // navigation consistent instead of leaving every section at "/".
+    if (SECTIONS.some(section => section.id === routeSection)) {
+      const basePath = routeSection === "home" ? "/" : `/${routeSection}`;
+      const nextUrl = id !== routeSection ? `${basePath}#${id}` : basePath;
+      if (window.location.pathname + window.location.hash !== nextUrl) {
+        window.history.pushState({}, "", nextUrl);
+      }
+    }
 
     // Jumping straight to a specific service (e.g. "Cloud Solutions" from
     // the Services dropdown) should land with that card already open —
