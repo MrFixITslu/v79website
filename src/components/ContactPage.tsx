@@ -202,7 +202,7 @@ export default function ContactPage() {
               <div className="space-y-1 text-xs text-app-text-sec font-light">
                 <div className="flex justify-between"><span>Mon – Fri</span><span className="font-semibold text-app-text">8:00 AM – 5:00 PM</span></div>
                 <div className="flex justify-between"><span>Saturday</span><span className="font-semibold text-app-text">9:00 AM – 1:00 PM</span></div>
-                <div className="flex justify-between"><span>Emergency</span><span className="font-semibold text-v79-teal-light">24/7 MSP Clients</span></div>
+                <div className="flex justify-between"><span>After-hours</span><span className="font-semibold text-v79-teal-light">Contracted MSP clients</span></div>
               </div>
             </div>
 
