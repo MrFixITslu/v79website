@@ -936,12 +936,7 @@ async function startServer() {
   // healthcheck 404'd and the container was silently reporting unhealthy.
   app.get("/api/health", (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    res.status(200).json({
-      status: "ok",
-      version: BUILD_VERSION,
-      uptime: Math.floor(process.uptime()),
-      startedAt: SERVER_START_TIME
-    });
+    res.status(200).json({ status: "ok" });
   });
 
   function readPlatformSecret() {
@@ -1011,13 +1006,7 @@ async function startServer() {
   // Version status endpoint so deployments can verify freshness
   app.get("/api/version", (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    res.status(200).json({
-      name: "Vision79 Digital",
-      version: BUILD_VERSION,
-      uptime: Math.floor(process.uptime()),
-      startedAt: SERVER_START_TIME,
-      nodeEnv: process.env.NODE_ENV || "development"
-    });
+    res.status(200).json({ name: "V79 Digital", status: "ok" });
   });
 
   // Static serving for uploaded course materials (audio, video, documents)
