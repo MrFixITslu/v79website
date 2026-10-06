@@ -1066,12 +1066,9 @@ async function startServer() {
 
   // Canonical admin intercept routes registered first to prioritize admin page loading
   const adminPaths = [
-    "/admin", "/admin/", 
+    "/admin", "/admin/",
     "/admin.html",
-    "/adimin", "/adimin/", 
-    "/adimn", "/adimn/", 
-    "/Admin", "/Admin/", 
-    "/Adimin", "/Adimin/"
+    "/Admin", "/Admin/"
   ];
 
   app.get(adminPaths, async (req, res, next) => {
