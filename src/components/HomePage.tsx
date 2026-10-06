@@ -7,8 +7,6 @@ import {
   HelpCircle, ChevronDown, Activity, Sparkles
 } from "lucide-react";
 import { Button } from "./ui/Button";
-import { StormFailoverSimulator } from "./interactive/StormFailoverSimulator";
-import { DowntimeRiskCalculator } from "./interactive/DowntimeRiskCalculator";
 import { CLIENT_STORIES } from "../data/testimonials";
 
 const SERVICES = [
@@ -16,7 +14,7 @@ const SERVICES = [
     icon: Shield,
     title: "Cybersecurity & Threat Defense",
     desc: "Advanced endpoint protection, network audits, and vulnerability assessments.",
-    badge: "Ransomware & Zero-Day Shield",
+    badge: "Endpoint & Network Protection",
   },
   {
     icon: Cloud,
@@ -35,7 +33,7 @@ const SERVICES = [
     icon: Network,
     title: "Network Architecture & VoIP",
     desc: "Enterprise LAN/WAN design, firewall configuration, and hosted VoIP systems.",
-    badge: "Dual-WAN & Subsea Ring",
+    badge: "Resilient WAN Design",
   },
   {
     icon: Cpu,
@@ -57,7 +55,7 @@ const WHY_CHOOSE_VISION79 = [
   { title: "Telecommunications Heritage", desc: "20+ years of Caribbean telecoms and ICT experience behind every engagement.", icon: Network },
   { title: "Local Saint Lucia Support", desc: "Practical support shaped around local business operations and Caribbean conditions.", icon: Users },
   { title: "Data Sovereignty", desc: "Your data stays governed by the standards your business answers to.", icon: Lock },
-  { title: "Local Compliance", desc: "Built to meet Caribbean regulatory and data protection requirements.", icon: ShieldCheck },
+  { title: "Compliance-Aware Design", desc: "Security and data-handling controls are scoped around the requirements that apply to your organisation.", icon: ShieldCheck },
 ];
 
 const IMPACTS = [
@@ -84,15 +82,15 @@ const FAQS = [
   },
   {
     q: "How do you protect Saint Lucia businesses against hurricane and power-surge data loss?",
-    a: "We architect resilient hybrid-cloud systems specifically engineered for Caribbean realities. This includes commercial uninterruptible power supplies (UPS), automated voltage regulation, air-gapped immutable cloud backups, and automated multi-zone failovers so your operations resume seamlessly even if local power or fiber lines are disrupted."
+    a: "We design resilience around the risks that matter to your business. Depending on the agreed scope, this can include UPS and surge protection, tested backup and recovery plans, immutable or offline backup options, cloud redundancy, and documented recovery procedures for storm or connectivity disruptions."
   },
   {
     q: "What is included in the Free 30-Minute ICT Health Assessment?",
     a: "The initial 30-minute discovery consultation is free and focuses on your business priorities, current pain points, and immediate risks. If a formal technical assessment is appropriate, V79 Digital scopes it around your sites, users, systems, and required depth, then provides a clear quote before work begins."
   },
   {
-    q: "Do you support Microsoft 365, Google Workspace, and POS systems for local resorts and clinics?",
-    a: "Yes. We manage tenant migrations, security hardening (MFA, conditional access), email deliverability, and endpoint protection for Microsoft 365 and Google Workspace, as well as PMS, EHR, and retail POS systems across Saint Lucia hospitality, medical, retail, and financial verticals."
+    q: "Do you support Microsoft 365, Google Workspace, and common business systems?",
+    a: "Yes. We support Microsoft 365 and Google Workspace migrations, security hardening, email and endpoint configuration, and can scope integration or infrastructure support for POS, hospitality, healthcare, retail, and other business systems after reviewing the vendor and technical requirements."
   }
 ];
 
@@ -199,7 +197,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border border-app-border bg-app-card hover:bg-app-card-hover text-app-text dark:text-white text-sm font-semibold transition-all shadow-sm"
             >
               <Phone className="w-4 h-4 text-v79-teal" />
-              Emergency Support: (758) 726-0035
+              Existing Client Support: (758) 726-0035
             </a>
           </motion.div>
 
@@ -328,11 +326,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               );
             })}
           </div>
-
-          {/* Interactive Caribbean Storm & Grid Outage Simulator */}
-          <div className="pt-6">
-            <StormFailoverSimulator onConsultClick={() => onNavigate("contact")} />
-          </div>
         </div>
       </section>
 
@@ -395,11 +388,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   </motion.div>
                 );
               })}
-            </div>
-
-            {/* Interactive Caribbean Downtime Cost Calculator (EC$) */}
-            <div className="pt-12 text-left">
-              <DowntimeRiskCalculator onConsultClick={() => onNavigate("contact")} />
             </div>
           </div>
         </div>
