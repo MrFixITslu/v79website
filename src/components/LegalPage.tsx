@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { ArrowLeft, ExternalLink, FileText, ShieldCheck } from "lucide-react";
 import { V79OfficialLogo } from "./V79OfficialLogo";
 
-export type LegalDocumentType = "privacy" | "terms";
+export type LegalDocumentType = "privacy" | "terms" | "data-deletion";
 
 interface LegalPageProps {
   type: LegalDocumentType;
@@ -267,6 +267,59 @@ function PrivacyPolicy() {
   );
 }
 
+function DataDeletionInstructions() {
+  return (
+    <>
+      <Section title="Request deletion of V79-held data">
+        <p>
+          You can ask V79 Digital to delete personal information or connected-provider data that V79
+          controls by emailing <a className="font-semibold text-v79-teal dark:text-v79-teal-light underline" href="mailto:vision79slu@gmail.com">vision79slu@gmail.com</a>.
+          Use the subject <strong>Data Deletion Request</strong> and identify the V79 product or
+          workspace involved. Do not send passwords, OAuth tokens, recovery codes, or other secrets.
+        </p>
+        <p>
+          We may need to verify your identity or your authority over the relevant business workspace
+          before deleting information. We will delete or de-identify eligible V79-held information
+          within the period required by applicable law and provider rules, subject to limited records
+          we must retain for legal, security, fraud-prevention, accounting, or dispute purposes.
+        </p>
+      </Section>
+
+      <Section title="Disconnect Google, YouTube and other providers">
+        <p>
+          For supported provider connections, use <strong>V79 Marketing → Social → Disconnect</strong>.
+          For Google Business Profile and YouTube connections, V79 attempts to revoke the Google OAuth
+          authorisation before deleting the local provider connection record.
+        </p>
+        <p>
+          You can also revoke Google or YouTube access directly from your{" "}
+          <External href="https://security.google.com/settings/security/permissions">
+            Google security permissions
+          </External>. Other providers such as LinkedIn, TikTok, Facebook, and Instagram also provide
+          account settings where you can revoke third-party app access.
+        </p>
+      </Section>
+
+      <Section title="What deletion from V79 does not delete">
+        <p>
+          Deleting data held by V79 does not automatically delete posts, videos, messages, account
+          records, or other information held independently by Google, YouTube, LinkedIn, TikTok, Meta,
+          or another provider. Use the relevant provider's own controls to delete information from that
+          provider.
+        </p>
+      </Section>
+
+      <Section title="Questions">
+        <p>
+          For assistance with deletion or revocation, contact V79 Digital at{" "}
+          <a className="font-semibold text-v79-teal dark:text-v79-teal-light underline" href="mailto:vision79slu@gmail.com">vision79slu@gmail.com</a>
+          {" "}or <a className="font-semibold text-v79-teal dark:text-v79-teal-light underline" href="tel:+17587260035">+1 758 726 0035</a>.
+        </p>
+      </Section>
+    </>
+  );
+}
+
 function TermsOfService() {
   return (
     <>
@@ -502,7 +555,8 @@ function TermsOfService() {
 
 export default function LegalPage({ type }: LegalPageProps) {
   const privacy = type === "privacy";
-  const title = privacy ? "Privacy Policy" : "Terms of Service";
+  const deletion = type === "data-deletion";
+  const title = privacy ? "Privacy Policy" : deletion ? "Data Deletion Instructions" : "Terms of Service";
   const Icon = privacy ? ShieldCheck : FileText;
 
   useEffect(() => {
@@ -540,16 +594,16 @@ export default function LegalPage({ type }: LegalPageProps) {
         </div>
 
         <div className="space-y-8">
-          {privacy ? <PrivacyPolicy /> : <TermsOfService />}
+          {privacy ? <PrivacyPolicy /> : deletion ? <DataDeletionInstructions /> : <TermsOfService />}
         </div>
 
         <div className="mt-12 rounded-2xl border border-app-border bg-app-aside-bg/40 p-5 text-sm leading-6 text-app-text-sec">
-          <strong className="text-app-text">Related legal document:</strong>{" "}
-          {privacy ? (
-            <a className="font-semibold text-v79-teal dark:text-v79-teal-light underline" href="/terms">Terms of Service</a>
-          ) : (
-            <a className="font-semibold text-v79-teal dark:text-v79-teal-light underline" href="/privacy">Privacy Policy</a>
-          )}
+          <strong className="text-app-text">Related:</strong>{" "}
+          <a className="font-semibold text-v79-teal dark:text-v79-teal-light underline" href="/privacy">Privacy Policy</a>
+          {" · "}
+          <a className="font-semibold text-v79-teal dark:text-v79-teal-light underline" href="/terms">Terms of Service</a>
+          {" · "}
+          <a className="font-semibold text-v79-teal dark:text-v79-teal-light underline" href="/data-deletion">Data Deletion</a>
         </div>
       </main>
 
@@ -559,6 +613,7 @@ export default function LegalPage({ type }: LegalPageProps) {
           <div className="flex items-center gap-4">
             <a className="hover:text-v79-teal dark:hover:text-v79-teal-light" href="/privacy">Privacy Policy</a>
             <a className="hover:text-v79-teal dark:hover:text-v79-teal-light" href="/terms">Terms of Service</a>
+            <a className="hover:text-v79-teal dark:hover:text-v79-teal-light" href="/data-deletion">Data Deletion</a>
             <a className="hover:text-v79-teal dark:hover:text-v79-teal-light" href="/contact">Contact</a>
           </div>
         </div>
