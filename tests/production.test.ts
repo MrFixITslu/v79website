@@ -61,10 +61,15 @@ await test('production regression suite',{timeout:30000},async t=>{
   assert.equal(terms.status,200);
   assert.ok(terms.text.includes('V79 Digital Terms of Service'));
   assert.ok(terms.text.includes(`<link rel="canonical" href="${base}/terms" />`));
+  const deletion=await anon.call('/data-deletion');
+  assert.equal(deletion.status,200);
+  assert.ok(deletion.text.includes('V79 Digital Data Deletion Instructions'));
+  assert.ok(deletion.text.includes(`<link rel="canonical" href="${base}/data-deletion" />`));
   const sitemap=await anon.call('/sitemap.xml');
   assert.equal(sitemap.status,200);
   assert.ok(sitemap.text.includes(`${base}/privacy`));
   assert.ok(sitemap.text.includes(`${base}/terms`));
+  assert.ok(sitemap.text.includes(`${base}/data-deletion`));
   assert.equal(sitemap.text.includes(`${base}/privacy.html`),false);
  });
  await t.test('admin cookies, forced password change and CSRF',async()=>{let r=await admin.call('/api/admin/login','POST',{password:env.ADMIN_PASSWORD});assert.equal(r.status,200);assert.match(r.headers.get('set-cookie')!,/HttpOnly/);assert.match(r.headers.get('set-cookie')!,/Secure/);assert.equal(r.data.token,'cookie-session');assert.equal((await admin.call('/api/admin/leads')).status,403);r=await admin.call('/api/admin/change-password','POST',{currentPassword:env.ADMIN_PASSWORD,newPassword:'Changed-test-password-456!'});assert.equal(r.status,200);assert.equal((await admin.call('/api/admin/leads')).status,200);assert.equal((await admin.call('/api/admin/logout','POST',{}, {Origin:'https://attacker.test'})).status,403);});
