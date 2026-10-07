@@ -14,6 +14,7 @@ import { SaaSApp } from "./types";
 import { V79OfficialLogo } from "./components/V79OfficialLogo";
 import { SectionLoadingFallback } from "./components/ui/Skeleton";
 import { CLIENT_STORIES } from "./data/testimonials";
+import LegalPage from "./components/LegalPage";
 
 const ResourcesPage = lazy(() => import("./components/ResourcesPage"));
 const ArticleDetailPage = lazy(() =>
@@ -329,6 +330,11 @@ export default function App() {
 
   const isSectionActive = (sec: typeof SECTIONS[number]) =>
     activeSection === sec.id || (sec.subItems?.some(si => si.id === activeSection) ?? false);
+
+  const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (normalizedPath === "/privacy") return <LegalPage type="privacy" />;
+  if (normalizedPath === "/terms") return <LegalPage type="terms" />;
+  if (normalizedPath === "/data-deletion") return <LegalPage type="data-deletion" />;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -862,8 +868,11 @@ export default function App() {
             <div className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-v79-teal-light animate-pulse" />
             <span>Website operational · Service SLAs are defined by client agreement</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span>© 2026 VISION79 DIGITAL INC. All rights reserved.</span>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-end">
+            <a href="/privacy" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Privacy Policy</a>
+            <a href="/terms" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Terms of Service</a>
+            <a href="/data-deletion" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Data Deletion</a>
+            <span>© 2026 V79 Digital. All rights reserved.</span>
           </div>
         </div>
       </footer>

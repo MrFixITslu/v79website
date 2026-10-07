@@ -2783,6 +2783,18 @@ async function startServer() {
           title: "Contact V79 Digital | Business Technology Support Saint Lucia",
           description: "Contact V79 Digital to discuss managed IT, cloud, cybersecurity, networking, business software, automation, training, or a scoped technology assessment.",
         },
+        "/privacy": {
+          title: "Privacy Policy | V79 Digital",
+          description: "Read how V79 Digital collects, uses, protects, retains, and deletes personal information across V79 services and connected provider integrations.",
+        },
+        "/terms": {
+          title: "Terms of Service | V79 Digital",
+          description: "Read the terms governing use of V79 Digital websites, business software, connected provider integrations, subscriptions, and services.",
+        },
+        "/data-deletion": {
+          title: "Data Deletion Instructions | V79 Digital",
+          description: "Request deletion of V79-held personal or connected-provider data and learn how to revoke Google, YouTube, and other provider access.",
+        },
       };
 
       // Server-rendered, route-specific fallback content gives crawlers and
@@ -2823,6 +2835,21 @@ async function startServer() {
           heading: "Contact V79 Digital",
           summary: "Discuss managed IT, cybersecurity, cloud, networking, business software, or a scoped ICT assessment for your organisation.",
           points: ["Free initial ICT consultation", "Saint Lucia business support", "Phone and WhatsApp contact", "Response within one business day"],
+        },
+        "/privacy": {
+          heading: "V79 Digital Privacy Policy",
+          summary: "How V79 Digital handles personal information, connected-provider data, OAuth credentials, security, retention, deletion requests, and user privacy rights.",
+          points: ["V79 service data", "Google and YouTube API Services", "LinkedIn, TikTok and Meta integrations", "Data security and retention", "Access, correction and deletion requests"],
+        },
+        "/terms": {
+          heading: "V79 Digital Terms of Service",
+          summary: "The terms governing V79 websites, business applications, connected third-party services, AI-assisted features, subscriptions, acceptable use, and customer responsibilities.",
+          points: ["Accounts and acceptable use", "Customer content and publishing", "Third-party provider terms", "AI-assisted features", "Service availability and governing law"],
+        },
+        "/data-deletion": {
+          heading: "V79 Digital Data Deletion Instructions",
+          summary: "How to request deletion of V79-held data, disconnect provider integrations, and revoke Google or YouTube access.",
+          points: ["Request V79 data deletion", "Disconnect provider accounts", "Revoke Google and YouTube access", "Provider-held data is managed separately"],
         },
       };
 
@@ -3150,7 +3177,19 @@ ${fields.content || ""}`;
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>${domain}/privacy.html</loc>
+    <loc>${domain}/privacy</loc>
+    <lastmod>${nowIso}</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>${domain}/terms</loc>
+    <lastmod>${nowIso}</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>${domain}/data-deletion</loc>
     <lastmod>${nowIso}</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
@@ -3162,7 +3201,8 @@ ${articlesXml}</urlset>`;
 
   // Vite development vs production serving logic
   app.use('/api', (_req,res)=>res.status(404).json({error:'API route not found'}));
-  app.get('/privacy', (_req,res)=>res.redirect(308, '/privacy.html'));
+  app.get('/privacy.html', (_req,res)=>res.redirect(308, '/privacy'));
+  app.get('/terms.html', (_req,res)=>res.redirect(308, '/terms'));
   app.get('/blog', (_req,res)=>res.redirect(301, '/resources'));
   app.get('/courses', (_req,res)=>res.redirect(301, 'https://v79academy.v79sl.com/academy'));
   app.get('/marketplace', (_req,res)=>res.redirect(301, '/solutions'));
@@ -3172,7 +3212,7 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
-    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/admin'];
+    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/privacy', '/terms', '/data-deletion', '/admin'];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });
