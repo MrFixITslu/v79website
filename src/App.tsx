@@ -334,6 +334,7 @@ export default function App() {
   const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
   if (normalizedPath === "/privacy") return <LegalPage type="privacy" />;
   if (normalizedPath === "/terms") return <LegalPage type="terms" />;
+  if (normalizedPath === "/data-deletion") return <LegalPage type="data-deletion" />;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -870,6 +871,7 @@ export default function App() {
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-end">
             <a href="/privacy" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Privacy Policy</a>
             <a href="/terms" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Terms of Service</a>
+            <a href="/data-deletion" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Data Deletion</a>
             <span>© 2026 V79 Digital. All rights reserved.</span>
           </div>
         </div>
