@@ -745,7 +745,7 @@ export default function App() {
                       <p className="text-xs sm:text-sm text-app-text-sec leading-relaxed max-w-2xl">Practical technology and business training for individuals and teams. Course discovery and learning now live in the Academy rather than the business-app marketplace.</p>
                     </div>
                   </div>
-                  <a href="https://v79academy.v79sl.com/academy" className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 hover:bg-violet-500/15 px-5 py-3 text-sm font-semibold text-violet-400 no-underline transition shrink-0">
+                  <a href="https://academy.v79sl.com" className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 hover:bg-violet-500/15 px-5 py-3 text-sm font-semibold text-violet-400 no-underline transition shrink-0">
                     Explore V79 Academy <ArrowRight className="w-4 h-4" />
                   </a>
                 </div>
