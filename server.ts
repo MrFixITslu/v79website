@@ -2791,6 +2791,10 @@ async function startServer() {
           title: "Terms of Service | V79 Digital",
           description: "Read the terms governing use of V79 Digital websites, business software, connected provider integrations, subscriptions, and services.",
         },
+        "/data-deletion": {
+          title: "Data Deletion Instructions | V79 Digital",
+          description: "Request deletion of V79-held personal or connected-provider data and learn how to revoke Google, YouTube, and other provider access.",
+        },
       };
 
       // Server-rendered, route-specific fallback content gives crawlers and
@@ -2841,6 +2845,11 @@ async function startServer() {
           heading: "V79 Digital Terms of Service",
           summary: "The terms governing V79 websites, business applications, connected third-party services, AI-assisted features, subscriptions, acceptable use, and customer responsibilities.",
           points: ["Accounts and acceptable use", "Customer content and publishing", "Third-party provider terms", "AI-assisted features", "Service availability and governing law"],
+        },
+        "/data-deletion": {
+          heading: "V79 Digital Data Deletion Instructions",
+          summary: "How to request deletion of V79-held data, disconnect provider integrations, and revoke Google or YouTube access.",
+          points: ["Request V79 data deletion", "Disconnect provider accounts", "Revoke Google and YouTube access", "Provider-held data is managed separately"],
         },
       };
 
@@ -3179,6 +3188,12 @@ ${fields.content || ""}`;
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
+  <url>
+    <loc>${domain}/data-deletion</loc>
+    <lastmod>${nowIso}</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
 ${articlesXml}</urlset>`;
     
     res.send(sitemap);
@@ -3197,7 +3212,7 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
-    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/privacy', '/terms', '/admin'];
+    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/privacy', '/terms', '/data-deletion', '/admin'];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });
