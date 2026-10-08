@@ -93,10 +93,161 @@ jobs:
           set -euo pipefail
           test -n "$DEPLOY_SSH_KEY" && test -n "$DEPLOY_KNOWN_HOSTS"
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+          # GitHub secrets are sometimes pasted with Windows CRLF, literal \\n
+          # sequences, or as base64. Normalize those common storage formats
+          # before validating the private key.
+          key="${DEPLOY_SSH_KEY//      - name: Transfer and deploy release
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
+        run: |
+          set -euo pipefail
+          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
+            test -n "${!name}" || { echo "Missing production setting: $name" >&2; exit 1; }
+          done
+          port="${DEPLOY_SSH_PORT:-22}"
+          [[ "$port" =~ ^[0-9]+$ ]] || exit 1
+          archive="$(find "$RUNNER_TEMP/release" -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          test -n "$archive"
+          target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:v79-release-${RELEASE_SHA}.tar.gz"
+          ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+\\r'/}"
+          if [[ "$key" == *'\\n'* && "$key" != *      - name: Transfer and deploy release
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
+        run: |
+          set -euo pipefail
+          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
+            test -n "${!name}" || { echo "Missing production setting: $name" >&2; exit 1; }
+          done
+          port="${DEPLOY_SSH_PORT:-22}"
+          [[ "$port" =~ ^[0-9]+$ ]] || exit 1
+          archive="$(find "$RUNNER_TEMP/release" -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          test -n "$archive"
+          target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:v79-release-${RELEASE_SHA}.tar.gz"
+          ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+\\n'* ]]; then
+            key="${key//\\\\n/      - name: Transfer and deploy release
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
+        run: |
+          set -euo pipefail
+          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
+            test -n "${!name}" || { echo "Missing production setting: $name" >&2; exit 1; }
+          done
+          port="${DEPLOY_SSH_PORT:-22}"
+          [[ "$port" =~ ^[0-9]+$ ]] || exit 1
+          archive="$(find "$RUNNER_TEMP/release" -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          test -n "$archive"
+          target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:v79-release-${RELEASE_SHA}.tar.gz"
+          ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+\\n'}"
+          fi
+          if [[ "$key" != -----BEGIN* ]]; then
+            decoded="$(printf '%s' "$key" | base64 -d 2>/dev/null || true)"
+            if [[ "$decoded" == -----BEGIN* ]]; then
+              key="$decoded"
+            fi
+          fi
+
+          hosts="${DEPLOY_KNOWN_HOSTS//      - name: Transfer and deploy release
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
+        run: |
+          set -euo pipefail
+          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
+            test -n "${!name}" || { echo "Missing production setting: $name" >&2; exit 1; }
+          done
+          port="${DEPLOY_SSH_PORT:-22}"
+          [[ "$port" =~ ^[0-9]+$ ]] || exit 1
+          archive="$(find "$RUNNER_TEMP/release" -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          test -n "$archive"
+          target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:v79-release-${RELEASE_SHA}.tar.gz"
+          ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+\\r'/}"
+          if [[ "$hosts" == *'\\n'* && "$hosts" != *      - name: Transfer and deploy release
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
+        run: |
+          set -euo pipefail
+          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
+            test -n "${!name}" || { echo "Missing production setting: $name" >&2; exit 1; }
+          done
+          port="${DEPLOY_SSH_PORT:-22}"
+          [[ "$port" =~ ^[0-9]+$ ]] || exit 1
+          archive="$(find "$RUNNER_TEMP/release" -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          test -n "$archive"
+          target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:v79-release-${RELEASE_SHA}.tar.gz"
+          ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+\\n'* ]]; then
+            hosts="${hosts//\\\\n/      - name: Transfer and deploy release
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
+        run: |
+          set -euo pipefail
+          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
+            test -n "${!name}" || { echo "Missing production setting: $name" >&2; exit 1; }
+          done
+          port="${DEPLOY_SSH_PORT:-22}"
+          [[ "$port" =~ ^[0-9]+$ ]] || exit 1
+          archive="$(find "$RUNNER_TEMP/release" -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          test -n "$archive"
+          target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:v79-release-${RELEASE_SHA}.tar.gz"
+          ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+\\n'}"
+          fi
+
+          printf '%s\n' "$key" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
-          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+
+          if ! ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null 2>&1; then
+            echo "DEPLOY_SSH_KEY is not a valid unencrypted SSH private key after normalization." >&2
+            echo "Store the complete private key, not the .pub key, in the GitHub DEPLOY_SSH_KEY secret." >&2
+            exit 1
+          fi
       - name: Transfer and deploy release
         shell: bash
         env:
