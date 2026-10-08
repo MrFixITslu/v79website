@@ -12,6 +12,7 @@ import compression from "compression";
 import { crmStorage } from "./server/crm_storage";
 import { pingOllama, analyzeBusinessWithAI } from "./server/crm_engine";
 import { deliverPlatformEvent, hubEventsConfigured, hubOrganizationRef } from "./server/platformEvents";
+import { generateAiPromptGuidePdf } from "./server/aiPromptGuidePdf";
 
 // Configure environment variable definitions
 dotenv.config();
