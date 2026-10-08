@@ -85,7 +85,6 @@ jobs:
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-          ping: ${{ secrets.DEPLOY_HOST }}
 
       - name: Configure pinned SSH host
         shell: bash
