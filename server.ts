@@ -2247,6 +2247,34 @@ async function startServer() {
   });
 
   // --- Free Newsletter / Lead Magnet Endpoints ---
+  // Generate the premium guide on demand so production does not depend on a
+  // committed binary asset. Cache the generated PDF in memory after the first request.
+  let aiPromptGuidePdfCache: Buffer | null = null;
+  app.get("/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf", (_req, res) => {
+    try {
+      if (!aiPromptGuidePdfCache) {
+        const clientDist = path.resolve(process.env.CLIENT_DIST || path.join(process.cwd(), "dist/client"));
+        const logoCandidates = [
+          path.join(clientDist, "v79-official-logo.png"),
+          path.join(process.cwd(), "public", "v79-official-logo.png"),
+        ];
+        const logoPath = logoCandidates.find((candidate) => fs.existsSync(candidate)) || logoCandidates[0];
+        aiPromptGuidePdfCache = generateAiPromptGuidePdf(logoPath);
+      }
+
+      res.status(200).set({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": 'attachment; filename="V79_AI_Prompting_Guide.pdf"',
+        "Content-Length": String(aiPromptGuidePdfCache.length),
+        "Cache-Control": "private, max-age=0, must-revalidate",
+        "X-Content-Type-Options": "nosniff",
+      }).send(aiPromptGuidePdfCache);
+    } catch (error) {
+      console.error("[AI Prompt Guide] Failed to generate PDF:", error);
+      res.status(500).json({ error: "The guide could not be generated. Please try again." });
+    }
+  });
+
   app.post("/api/newsletter/subscribe", newsletterLimiter, (req, res) => {
     const { firstName, email, consent, source, pageOrigin, website } = req.body || {};
 
