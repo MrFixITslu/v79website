@@ -87,47 +87,66 @@ jobs:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           ping: ${{ secrets.DEPLOY_HOST }}
 
-      - name: Configure pinned SSH host
+      - name: Configure deployment transport
         shell: bash
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_SSH_KEY" && test -n "$DEPLOY_KNOWN_HOSTS"
+          test -n "$DEPLOY_HOST" && test -n "$DEPLOY_USER"
           install -d -m 700 "$HOME/.ssh"
 
-          printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$RUNNER_TEMP/deploy-key.raw"
-          if grep -Fq '\\n' "$RUNNER_TEMP/deploy-key.raw"; then
-            printf '%b\n' "$(cat "$RUNNER_TEMP/deploy-key.raw")" > "$HOME/.ssh/id_ed25519"
-          else
-            cat "$RUNNER_TEMP/deploy-key.raw" > "$HOME/.ssh/id_ed25519"
-            printf '\n' >> "$HOME/.ssh/id_ed25519"
-          fi
-
-          if ! grep -q '^-----BEGIN .*PRIVATE KEY-----$' "$HOME/.ssh/id_ed25519"; then
-            if base64 -d "$HOME/.ssh/id_ed25519" > "$RUNNER_TEMP/deploy-key.decoded" 2>/dev/null \
-               && grep -q '^-----BEGIN .*PRIVATE KEY-----$' "$RUNNER_TEMP/deploy-key.decoded"; then
-              mv "$RUNNER_TEMP/deploy-key.decoded" "$HOME/.ssh/id_ed25519"
+          ssh_ready=false
+          if [ -n "${DEPLOY_SSH_KEY:-}" ] && [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
+            printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$RUNNER_TEMP/deploy-key.raw"
+            if grep -Fq '\\n' "$RUNNER_TEMP/deploy-key.raw"; then
+              printf '%b\n' "$(cat "$RUNNER_TEMP/deploy-key.raw")" > "$HOME/.ssh/id_ed25519"
+            else
+              cat "$RUNNER_TEMP/deploy-key.raw" > "$HOME/.ssh/id_ed25519"
               printf '\n' >> "$HOME/.ssh/id_ed25519"
+            fi
+
+            if ! grep -q '^-----BEGIN .*PRIVATE KEY-----$' "$HOME/.ssh/id_ed25519"; then
+              if base64 -d "$HOME/.ssh/id_ed25519" > "$RUNNER_TEMP/deploy-key.decoded" 2>/dev/null \
+                 && grep -q '^-----BEGIN .*PRIVATE KEY-----$' "$RUNNER_TEMP/deploy-key.decoded"; then
+                mv "$RUNNER_TEMP/deploy-key.decoded" "$HOME/.ssh/id_ed25519"
+                printf '\n' >> "$HOME/.ssh/id_ed25519"
+              fi
+            fi
+
+            printf '%s' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$RUNNER_TEMP/known-hosts.raw"
+            if grep -Fq '\\n' "$RUNNER_TEMP/known-hosts.raw"; then
+              printf '%b\n' "$(cat "$RUNNER_TEMP/known-hosts.raw")" > "$HOME/.ssh/known_hosts"
+            else
+              cat "$RUNNER_TEMP/known-hosts.raw" > "$HOME/.ssh/known_hosts"
+              printf '\n' >> "$HOME/.ssh/known_hosts"
+            fi
+            chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+            if ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null 2>&1; then
+              ssh_ready=true
             fi
           fi
 
-          printf '%s' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$RUNNER_TEMP/known-hosts.raw"
-          if grep -Fq '\\n' "$RUNNER_TEMP/known-hosts.raw"; then
-            printf '%b\n' "$(cat "$RUNNER_TEMP/known-hosts.raw")" > "$HOME/.ssh/known_hosts"
-          else
-            cat "$RUNNER_TEMP/known-hosts.raw" > "$HOME/.ssh/known_hosts"
-            printf '\n' >> "$HOME/.ssh/known_hosts"
+          if [ "$ssh_ready" = true ]; then
+            echo "DEPLOY_TRANSPORT=ssh" >> "$GITHUB_ENV"
+            echo "Using pinned OpenSSH deployment transport."
+            exit 0
           fi
 
-          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
-
-          if ! ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null 2>&1; then
-            echo "DEPLOY_SSH_KEY is not a valid unencrypted SSH private key after normalization." >&2
-            echo "Store the complete private key, not the .pub key, in the GitHub DEPLOY_SSH_KEY secret." >&2
-            exit 1
+          echo "Stored DEPLOY_SSH_KEY is unusable; testing Tailscale SSH fallback."
+          if timeout 20s tailscale ssh "${DEPLOY_USER}@${DEPLOY_HOST}" true; then
+            echo "DEPLOY_TRANSPORT=tailscale" >> "$GITHUB_ENV"
+            echo "Using Tailscale SSH deployment transport."
+            exit 0
           fi
+
+          echo "No usable deployment transport is available." >&2
+          echo "Either replace DEPLOY_SSH_KEY with the complete unencrypted private key, or enable/allow Tailscale SSH for the deployment identity." >&2
+          exit 1
 
       - name: Transfer and deploy release
         shell: bash
@@ -140,13 +159,21 @@ jobs:
           DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
         run: |
           set -euo pipefail
-          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
+          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT DEPLOY_TRANSPORT; do
             test -n "${!name}" || { echo "Missing production setting: $name" >&2; exit 1; }
           done
-          port="${DEPLOY_SSH_PORT:-22}"
-          [[ "$port" =~ ^[0-9]+$ ]] || exit 1
           archive="$(find "$RUNNER_TEMP/release" -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
           test -n "$archive"
           target="${DEPLOY_USER}@${DEPLOY_HOST}"
-          scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:v79-release-${RELEASE_SHA}.tar.gz"
-          ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+          remote_archive="v79-release-${RELEASE_SHA}.tar.gz"
+
+          if [ "$DEPLOY_TRANSPORT" = "tailscale" ]; then
+            cat "$archive" | tailscale ssh "$target" "cat > $remote_archive"
+            printf -v remote_cmd 'bash -s -- %q %q %q %q' "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website"
+            tailscale ssh "$target" "$remote_cmd" < scripts/deploy-server.sh
+          else
+            port="${DEPLOY_SSH_PORT:-22}"
+            [[ "$port" =~ ^[0-9]+$ ]] || exit 1
+            scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:$remote_archive"
+            ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+          fi
