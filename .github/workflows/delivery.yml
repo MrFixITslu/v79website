@@ -135,8 +135,8 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
-          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
-          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT || '/home/firelion/website2026' }}
+          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT || 'website2026' }}
         run: |
           set -euo pipefail
           for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
