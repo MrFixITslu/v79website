@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, Calendar, User, Tag, BookOpen, ArrowRight } from "lucide-react";
+import { ArrowLeft, Calendar, User, Tag, BookOpen, ArrowRight, Download, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { BlogArticle } from "../types";
 import { ArticleCardSkeleton } from "./ui/Skeleton";
@@ -206,6 +206,34 @@ export default function ResourcesPage({ onNavigate, onSelectArticle }: Resources
       </motion.section>
 
       <section className="px-6 lg:px-8 max-w-7xl mx-auto">
+        <a
+          href="/free-ai-prompting-guide"
+          className="group relative overflow-hidden block rounded-2xl border border-v79-teal/25 bg-gradient-to-r from-v79-teal/10 via-indigo-500/10 to-transparent p-5 sm:p-6 mb-8 no-underline"
+        >
+          <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-v79-teal/10 blur-3xl pointer-events-none" />
+          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-xl bg-v79-teal/10 border border-v79-teal/20 flex items-center justify-center text-v79-teal shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-[10px] font-mono font-bold uppercase tracking-[0.18em] text-v79-teal">Free Resource</div>
+                <h2 className="mt-1 text-lg sm:text-xl font-extrabold font-display text-app-text dark:text-white">
+                  Free AI Prompting Guide + 10 Prompts You Can Copy
+                </h2>
+                <p className="mt-1.5 text-xs sm:text-sm text-app-text-sec max-w-2xl leading-relaxed">
+                  Join the free V79 Digital newsletter and get the printable guide with our 5-part prompt formula,
+                  copy-and-use templates and AI verification tips.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex items-center justify-center gap-2 rounded-xl bg-v79-teal text-v79-navy-dark px-4 py-2.5 text-xs font-extrabold shrink-0 group-hover:brightness-110 transition">
+              <Download className="w-4 h-4" />
+              Get the Free Guide
+            </span>
+          </div>
+        </a>
+
         {loading ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {[1, 2, 3].map((n) => <ArticleCardSkeleton key={n} />)}
