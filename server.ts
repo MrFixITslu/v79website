@@ -12,6 +12,7 @@ import compression from "compression";
 import { crmStorage } from "./server/crm_storage";
 import { pingOllama, analyzeBusinessWithAI } from "./server/crm_engine";
 import { deliverPlatformEvent, hubEventsConfigured, hubOrganizationRef } from "./server/platformEvents";
+import { generateAiPromptGuidePdf } from "./server/aiPromptGuidePdf";
 
 // Configure environment variable definitions
 dotenv.config();
@@ -420,9 +421,10 @@ const JSON_FEEDBACK_FILE = path.join(DATA_DIR, "vision79_feedback.json");
 const JSON_EXAM_ATTEMPTS_FILE = path.join(DATA_DIR, "vision79_exam_attempts.json");
 const JSON_INSTRUCTORS_FILE = path.join(DATA_DIR, "vision79_instructors.json");
 const JSON_LEADS_FILE = path.join(DATA_DIR, "vision79_leads.json");
+const JSON_NEWSLETTER_FILE = path.join(DATA_DIR, "vision79_newsletter.json");
 
 // Import legacy root files only if present. The persistence layer archives originals securely.
-for (const file of [JSON_DB_FILE, JSON_ADS_FILE, JSON_FEEDBACK_FILE, JSON_EXAM_ATTEMPTS_FILE, JSON_INSTRUCTORS_FILE, JSON_LEADS_FILE]) {
+for (const file of [JSON_DB_FILE, JSON_ADS_FILE, JSON_FEEDBACK_FILE, JSON_EXAM_ATTEMPTS_FILE, JSON_INSTRUCTORS_FILE, JSON_LEADS_FILE, JSON_NEWSLETTER_FILE]) {
   const rootFile=path.join(process.cwd(), path.basename(file));
   if (fs.existsSync(rootFile)) readJSON(rootFile, []);
 }
@@ -2236,6 +2238,108 @@ async function startServer() {
     message: { error: "Too many requests. Please try again later or contact us directly." },
   });
 
+  const newsletterLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many signup attempts. Please wait a few minutes and try again." },
+  });
+
+  // --- Free Newsletter / Lead Magnet Endpoints ---
+  app.post("/api/newsletter/subscribe", newsletterLimiter, (req, res) => {
+    const { firstName, email, consent, source, pageOrigin, website } = req.body || {};
+
+    // Honeypot: real visitors never fill this field. Return a generic success
+    // response so automated form fillers do not learn how the trap works.
+    if (typeof website === "string" && website.trim().length > 0) {
+      return res.status(200).json({
+        success: true,
+        downloadUrl: "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf",
+      });
+    }
+
+    if (consent !== true) {
+      return res.status(400).json({ error: "Please confirm that you want to join the free V79 Digital newsletter." });
+    }
+
+    const safeFirstName = typeof firstName === "string" ? firstName.trim() : "";
+    const safeEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const safeSource = typeof source === "string" ? source.trim().slice(0, 200) : "Website Newsletter";
+    const safePageOrigin = typeof pageOrigin === "string" ? pageOrigin.trim().slice(0, 200) : "/free-ai-prompting-guide";
+
+    if (safeFirstName.length > 80) {
+      return res.status(400).json({ error: "First name is too long." });
+    }
+    if (!safeEmail || safeEmail.length > 250 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
+      return res.status(400).json({ error: "Please enter a valid email address." });
+    }
+
+    try {
+      const subscribers = readJSON<any[]>(JSON_NEWSLETTER_FILE, []);
+      const emailHash = crypto.createHash("sha256").update(safeEmail).digest("hex");
+      const now = new Date().toISOString();
+      const existingIndex = subscribers.findIndex((subscriber: any) => subscriber.emailHash === emailHash);
+      const alreadySubscribed = existingIndex >= 0 && subscribers[existingIndex]?.status === "active";
+
+      if (existingIndex >= 0) {
+        subscribers[existingIndex] = {
+          ...subscribers[existingIndex],
+          firstName: safeFirstName ? encryptPII(safeFirstName) : subscribers[existingIndex].firstName,
+          email: encryptPII(safeEmail),
+          status: "active",
+          source: safeSource || subscribers[existingIndex].source,
+          pageOrigin: safePageOrigin || subscribers[existingIndex].pageOrigin,
+          consent: true,
+          consentVersion: "2026-10-ai-guide-v1",
+          updatedAt: now,
+        };
+      } else {
+        const nextId = subscribers.reduce((max: number, subscriber: any) => Math.max(max, Number(subscriber.id) || 0), 0) + 1;
+        subscribers.push({
+          id: nextId,
+          firstName: encryptPII(safeFirstName),
+          email: encryptPII(safeEmail),
+          emailHash,
+          status: "active",
+          source: safeSource,
+          pageOrigin: safePageOrigin,
+          consent: true,
+          consentVersion: "2026-10-ai-guide-v1",
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      writeJSON(JSON_NEWSLETTER_FILE, subscribers);
+
+      return res.status(alreadySubscribed ? 200 : 201).json({
+        success: true,
+        alreadySubscribed,
+        downloadUrl: "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf",
+      });
+    } catch (error) {
+      console.error("[Newsletter] Failed to save subscriber:", error);
+      return res.status(500).json({ error: "We could not complete your signup. Please try again." });
+    }
+  });
+
+  app.get("/api/admin/newsletter/subscribers", requireAdmin, (_req, res) => {
+    try {
+      const subscribers = readJSON<any[]>(JSON_NEWSLETTER_FILE, [])
+        .map((subscriber: any) => ({
+          ...subscriber,
+          firstName: decryptPII(subscriber.firstName || ""),
+          email: decryptPII(subscriber.email || ""),
+        }))
+        .sort((a: any, b: any) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+      res.json(subscribers);
+    } catch (error) {
+      console.error("[Newsletter] Failed to load subscribers:", error);
+      res.status(500).json({ error: "Failed to load newsletter subscribers." });
+    }
+  });
+
   // --- Leads API Endpoints ---
   app.post("/api/leads", leadsLimiter, async (req, res) => {
     const { name, company, email, phone, employees, biggestChallenge, serviceRequested, message, pageOrigin, leadSource, location, recaptchaToken } = req.body;
@@ -2779,6 +2883,10 @@ async function startServer() {
           title: "ICT Resources & Business Technology Guides | V79 Digital",
           description: "Practical technology guidance for Saint Lucia and Caribbean businesses covering IT support, networks, cloud, cybersecurity, software, and digital operations.",
         },
+        "/free-ai-prompting-guide": {
+          title: "Free AI Prompting Guide + 10 Copyable Prompts | V79 Digital",
+          description: "Join the free V79 Digital newsletter and download a practical AI prompting guide with a five-part formula, 10 copyable prompts, writing tips, and verification questions.",
+        },
         "/contact": {
           title: "Contact V79 Digital | Business Technology Support Saint Lucia",
           description: "Contact V79 Digital to discuss managed IT, cloud, cybersecurity, networking, business software, automation, training, or a scoped technology assessment.",
@@ -2830,6 +2938,11 @@ async function startServer() {
           heading: "ICT Resources & Business Technology Guides",
           summary: "Practical guidance for Caribbean businesses covering IT operations, cybersecurity, networks, cloud, software, and digital resilience.",
           points: ["Managed IT guidance", "Cybersecurity", "Cloud and backup", "Networking", "Business software", "Digital operations"],
+        },
+        "/free-ai-prompting-guide": {
+          heading: "Free AI Prompting Guide",
+          summary: "A beginner-friendly guide to getting better results from AI with clearer instructions, reusable prompt templates, and practical verification habits.",
+          points: ["5-part prompt formula", "10 copyable prompts", "Natural writing prompt", "AI verification questions", "Free V79 Digital newsletter"],
         },
         "/contact": {
           heading: "Contact V79 Digital",
@@ -3171,6 +3284,12 @@ ${fields.content || ""}`;
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>${domain}/free-ai-prompting-guide</loc>
+    <lastmod>${nowIso}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>${domain}/contact</loc>
     <lastmod>${nowIso}</lastmod>
     <changefreq>monthly</changefreq>
@@ -3212,7 +3331,7 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
-    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/privacy', '/terms', '/data-deletion', '/admin'];
+    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });
@@ -3222,7 +3341,7 @@ ${articlesXml}</urlset>`;
       const url = req.originalUrl || req.url;
       const accept = req.headers.accept || "";
       const isHtmlReq = req.method === "GET" && 
-        (accept.includes("text/html") || typeof req.query.article === "string" || url === "/" || url.startsWith("/resources")) &&
+        (accept.includes("text/html") || typeof req.query.article === "string" || url === "/" || url.startsWith("/resources") || url.startsWith("/free-ai-prompting-guide")) &&
         !url.startsWith("/src/") && !url.startsWith("/@") && !url.startsWith("/node_modules/") && !url.startsWith("/api/") && !url.includes(".");
 
       if (isHtmlReq && viteInstance) {

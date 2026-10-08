@@ -15,6 +15,7 @@ import { V79OfficialLogo } from "./components/V79OfficialLogo";
 import { SectionLoadingFallback } from "./components/ui/Skeleton";
 import { CLIENT_STORIES } from "./data/testimonials";
 import LegalPage from "./components/LegalPage";
+import AIPromptGuideLandingPage from "./components/AIPromptGuideLandingPage";
 
 const ResourcesPage = lazy(() => import("./components/ResourcesPage"));
 const ArticleDetailPage = lazy(() =>
@@ -335,6 +336,7 @@ export default function App() {
   if (normalizedPath === "/privacy") return <LegalPage type="privacy" />;
   if (normalizedPath === "/terms") return <LegalPage type="terms" />;
   if (normalizedPath === "/data-deletion") return <LegalPage type="data-deletion" />;
+  if (normalizedPath === "/free-ai-prompting-guide") return <AIPromptGuideLandingPage />;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -852,6 +854,7 @@ export default function App() {
                   <button onClick={() => scrollTo(s.id)} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">{s.label}</button>
                 </li>
               ))}
+              <li><a href="/free-ai-prompting-guide" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Free AI Prompt Guide</a></li>
               <li>Castries, Saint Lucia</li>
             </ul>
           </div>
