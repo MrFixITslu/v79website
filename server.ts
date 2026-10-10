@@ -3027,7 +3027,9 @@ async function startServer() {
         ].map(([href, label]) => `<a href="${href}" style="color:#0f766e;margin-right:16px">${label}</a>`).join("");
         const points = fallback.points.map(point => `<li>${escapeAttr(point)}</li>`).join("");
         const fallbackHtml = `<main style="max-width:960px;margin:0 auto;padding:56px 24px;font-family:Inter,Arial,sans-serif;line-height:1.6;color:#132238"><p style="font-weight:700;color:#0f766e">V79 Digital · Saint Lucia</p><h1 style="font-size:clamp(2rem,5vw,3.5rem);line-height:1.05">${escapeAttr(fallback.heading)}</h1><p style="font-size:1.1rem;max-width:760px">${escapeAttr(fallback.summary)}</p><ul>${points}</ul><nav aria-label="Primary">${pageLinks}</nav><p><a href="/contact" style="display:inline-block;margin-top:18px;color:#0f766e;font-weight:700">Book an ICT consultation</a></p></main>`;
-        result = result.replace('<div id="root"></div>', `<div id="root">${fallbackHtml}</div>`);
+        // Preserve non-JavaScript SEO content without painting a temporary
+        // unstyled page into the React root during hydration.
+        result = result.replace('<div id="root"></div>', `<div id="root"></div><noscript>${fallbackHtml}</noscript>`);
       }
       return result;
     } catch (err) {
