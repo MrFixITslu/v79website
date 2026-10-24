@@ -1,0 +1,58 @@
+name: One-time website dependency security refresh (review branch only)
+on:
+  push:
+    branches: [feature/website-security-deps-20261024]
+    paths:
+      - '.github/workflows/one-time-security-deps-refresh.yml'
+permissions:
+  contents: write
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/feature/website-security-deps-20261024'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/website-security-deps-20261024
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Generate patched package manifest and npm lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pkg set 'dependencies.multer=^2.5.0' 'overrides.body-parser=^2.4.0'
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          node - <<'NODE'
+          const l=require('./package-lock.json');
+          const bp=l.packages['node_modules/body-parser'];
+          const m=l.packages['node_modules/multer'];
+          if(!bp || !m || bp.version!=='2.4.0' || m.version!=='2.5.0'){
+            console.error('STOP_UNPATCHED_LOCK',bp?.version,m?.version);process.exit(1);
+          }
+          if(l.packages[''].dependencies.multer!=='^2.5.0'){
+            throw Error('Manifest and lockfile mismatch');
+          }
+          console.log('PATCHED_DEPENDENCIES_CONFIRMED',bp.version,m.version);
+          NODE
+          git diff --check
+      - name: Verify patched dependency audit and application behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm audit --omit=dev --audit-level=moderate
+          npm run lint
+          npm run build
+          npm test
+      - name: Commit only the reviewed branch dependency manifest and lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/feature/website-security-deps-20261024'
+          git add -- package.json package-lock.json
+          test "$(git diff --cached --name-only | wc -l)" -eq 2
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix: update patched body-parser and multer dependency locks'
+          git push origin 'HEAD:refs/heads/feature/website-security-deps-20261024'
