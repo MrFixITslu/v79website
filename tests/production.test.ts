@@ -96,6 +96,33 @@ await test('production regression suite',{timeout:30000},async t=>{
  const first=await anon.call('/api/leads','POST',request,headers),second=await anon.call('/api/leads','POST',request,headers);assert.equal(first.status,201);assert.equal(second.status,200);assert.equal(first.data.id,second.data.id);
  const counter=await anon.call('/api/apps/increment','POST',{id:71});assert.equal(counter.status,200);assert.equal(counter.text.includes('correctAnswer'),false);
  });
+ await t.test('campaign contact and AI guide routes preserve UTM attribution into CRM',async()=>{
+  // All requests target a disposable production test process, not live customer data.
+  for(const route of ['/contact?utm_source=facebook&utm_medium=organic_social&utm_campaign=vision79_ict_oct26','/free-ai-prompting-guide']){
+   const response=await anon.call(route);
+   assert.equal(response.status,200,route);
+   assert.ok(response.text.includes('<div id="root">'),route);
+  }
+  const original='/contact?utm_source=facebook&utm_medium=organic_social&utm_campaign=vision79_ict_oct26&utm_content=post_20261026';
+  const attribution='Website Contact Form (facebook / organic_social / vision79_ict_oct26)';
+  const payload={name:'Marketing Attribution Tester',company:'Synthetic Vision79 Lead',email:'utm-lead@example.test',phone:'0000000000',serviceRequested:'Free ICT consultation',leadSource:attribution,pageOrigin:original};
+  const key={'Idempotency-Key':crypto.randomUUID()};
+  const first=await anon.call('/api/leads','POST',payload,key);
+  assert.equal(first.status,201);
+  const repeated=await anon.call('/api/leads','POST',payload,key);
+  assert.equal(repeated.status,200);
+  assert.equal(repeated.data.id,first.data.id);
+  const stored=(await admin.call('/api/admin/leads')).data.find((x:any)=>x.id===first.data.id);
+  assert.ok(stored);
+  assert.equal(stored.leadSource,attribution);
+  assert.equal(stored.pageOrigin,original);
+  const crmResponse=await admin.call('/api/admin/crm/leads');
+  const crmList=Array.isArray(crmResponse.data)?crmResponse.data:crmResponse.data.leads;
+  const crmLead=crmList.find((x:any)=>x.email===payload.email);
+  assert.ok(crmLead);
+  assert.equal(crmLead.leadSource,attribution);
+  assert.equal(crmLead.pageOrigin,original);
+ });
  await t.test('no public answers, history or client-forged passes' ,async()=>{const r=await anon.call('/api/apps');assert.equal(r.status,200);assert.ok(!r.text.includes('correctAnswer'));assert.equal((await anon.call('/api/exam/attempts')).status,401);assert.equal((await anon.call('/api/exam/attempt','POST',{appId:71,passed:true,score:'100/100'})).status,401);});
  await t.test('learner enrollment, grading, persistence, paid approval and recovery',async()=>{let r=await student.call('/api/student/register','POST',{name:'Test Learner',email:'learner@example.test',password:'Learner-password-123!'});assert.equal(r.status,201);const recovery=r.data.recoveryCode,id=r.data.id;assert.equal((await student.call('/api/student/courses/71/enroll','POST')).status,200);assert.equal((await student.call('/api/student/courses/71/progress','PUT',{completed:{lesson1:true},note:'Private note'})).status,200);r=await student.call('/api/exam/attempt','POST',{appId:71,answers:[1],passed:false});assert.equal(r.status,201);assert.equal(r.data.passed,true);assert.ok(r.data.certificate.id);assert.equal((await anon.call('/api/certificates/'+r.data.certificate.id)).data.valid,true);r=await student.call('/api/student/courses/72/enroll','POST');assert.equal(r.data.state.enrolled,false);assert.equal((await student.call('/api/student/courses/72')).text.includes('https://example.test/lesson.mp4'),false);assert.equal((await admin.call('/api/admin/enrollments','POST',{studentId:id,courseId:72})).status,200);assert.equal((await student.call('/api/student/courses/72')).text.includes('https://example.test/lesson.mp4'),true);await stop();await start();assert.equal((await student.call('/api/student/courses/71')).data.state.note,'Private note');assert.equal((await student.call('/api/student/recover','POST',{email:'learner@example.test',recoveryCode:recovery,password:'Recovered-password-123!'})).status,200);});
  await t.test('migration encrypts contact data and retains encrypted originals',()=>{const data=path.join(tmp,'data');assert.ok(fs.existsSync(path.join(data,'website.db')));assert.ok(fs.existsSync(path.join(data,'vision79_saas.json.migrated.enc')));assert.equal(fs.existsSync(path.join(data,'vision79_saas.json')),false);for(const name of fs.readdirSync(data).filter(x=>x.endsWith('.db')||x.endsWith('-wal')||x.endsWith('.enc')))assert.equal(fs.readFileSync(path.join(data,name)).includes(Buffer.from('contact@example.test')),false);});
