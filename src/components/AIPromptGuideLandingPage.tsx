@@ -14,6 +14,8 @@ type SubscribeResponse = {
   success?: boolean;
   alreadySubscribed?: boolean;
   downloadUrl?: string;
+  unsubscribeUrl?: string;
+  subscriptionStatus?: string;
   error?: string;
 };
 
@@ -25,6 +27,7 @@ export default function AIPromptGuideLandingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState("");
+  const [unsubscribeUrl, setUnsubscribeUrl] = useState("");
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -56,8 +59,11 @@ export default function AIPromptGuideLandingPage() {
       }
 
       setDownloadUrl(data.downloadUrl || "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf");
+      setUnsubscribeUrl(data.unsubscribeUrl || "");
       setMessage(
-        data.alreadySubscribed
+        data.subscriptionStatus === "unsubscribed"
+          ? "Your guide is ready. Your newsletter opt-out remains in place."
+          : data.alreadySubscribed
           ? "You are already on the list. Your guide is ready below."
           : "You are subscribed. Your free guide is ready below."
       );
@@ -157,6 +163,12 @@ export default function AIPromptGuideLandingPage() {
                   <p className="text-[11px] text-app-text-muted text-center">
                     Keep this page open until your download starts.
                   </p>
+                  {unsubscribeUrl && (
+                    <p className="text-xs text-app-text-sec text-center">
+                      <a href={unsubscribeUrl} className="text-v79-teal hover:underline">Manage your newsletter subscription</a>
+                      {" "}— save this link to unsubscribe at any time.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -235,7 +247,7 @@ export default function AIPromptGuideLandingPage() {
                   </button>
 
                   <p className="text-[11px] text-app-text-muted text-center leading-relaxed">
-                    Your email is used for the V79 Digital newsletter and delivery of this free resource. Read our{" "}
+                    The guide downloads here immediately after signup. Your email is used for the Vision79 Digital newsletter. Read our{" "}
                     <a href="/privacy" className="text-v79-teal hover:underline">Privacy Policy</a>.
                   </p>
                 </form>
@@ -263,3 +275,4 @@ export default function AIPromptGuideLandingPage() {
     </div>
   );
 }
+

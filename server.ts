@@ -14,6 +14,7 @@ import { pingOllama, analyzeBusinessWithAI } from "./server/crm_engine";
 import { deliverPlatformEvent, hubEventsConfigured, hubOrganizationRef } from "./server/platformEvents";
 import { generateAiPromptGuidePdf } from "./server/aiPromptGuidePdf";
 import { shouldReplayHubLead } from "./server/hub-event-replay";
+import { mountNewsletter, unsubscribeUrl } from "./server/newsletter";
 
 // Configure environment variable definitions
 dotenv.config();
@@ -2244,7 +2245,7 @@ async function startServer() {
     max: 30,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: "Too many signup attempts. Please wait a few minutes and try again." },
+    message: { error: "Too many newsletter requests. Please wait a few minutes and try again." },
   });
 
   // --- Free Newsletter / Lead Magnet Endpoints ---
@@ -2276,82 +2277,11 @@ async function startServer() {
     }
   });
 
-  app.post("/api/newsletter/subscribe", newsletterLimiter, (req, res) => {
-    const { firstName, email, consent, source, pageOrigin, website } = req.body || {};
-
-    // Honeypot: real visitors never fill this field. Return a generic success
-    // response so automated form fillers do not learn how the trap works.
-    if (typeof website === "string" && website.trim().length > 0) {
-      return res.status(200).json({
-        success: true,
-        downloadUrl: "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf",
-      });
-    }
-
-    if (consent !== true) {
-      return res.status(400).json({ error: "Please confirm that you want to join the free V79 Digital newsletter." });
-    }
-
-    const safeFirstName = typeof firstName === "string" ? firstName.trim() : "";
-    const safeEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-    const safeSource = typeof source === "string" ? source.trim().slice(0, 200) : "Website Newsletter";
-    const safePageOrigin = typeof pageOrigin === "string" ? pageOrigin.trim().slice(0, 200) : "/free-ai-prompting-guide";
-
-    if (safeFirstName.length > 80) {
-      return res.status(400).json({ error: "First name is too long." });
-    }
-    if (!safeEmail || safeEmail.length > 250 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
-      return res.status(400).json({ error: "Please enter a valid email address." });
-    }
-
-    try {
-      const subscribers = readJSON<any[]>(JSON_NEWSLETTER_FILE, []);
-      const emailHash = crypto.createHash("sha256").update(safeEmail).digest("hex");
-      const now = new Date().toISOString();
-      const existingIndex = subscribers.findIndex((subscriber: any) => subscriber.emailHash === emailHash);
-      const alreadySubscribed = existingIndex >= 0 && subscribers[existingIndex]?.status === "active";
-
-      if (existingIndex >= 0) {
-        subscribers[existingIndex] = {
-          ...subscribers[existingIndex],
-          firstName: safeFirstName ? encryptPII(safeFirstName) : subscribers[existingIndex].firstName,
-          email: encryptPII(safeEmail),
-          status: "active",
-          source: safeSource || subscribers[existingIndex].source,
-          pageOrigin: safePageOrigin || subscribers[existingIndex].pageOrigin,
-          consent: true,
-          consentVersion: "2026-10-ai-guide-v1",
-          updatedAt: now,
-        };
-      } else {
-        const nextId = subscribers.reduce((max: number, subscriber: any) => Math.max(max, Number(subscriber.id) || 0), 0) + 1;
-        subscribers.push({
-          id: nextId,
-          firstName: encryptPII(safeFirstName),
-          email: encryptPII(safeEmail),
-          emailHash,
-          status: "active",
-          source: safeSource,
-          pageOrigin: safePageOrigin,
-          consent: true,
-          consentVersion: "2026-10-ai-guide-v1",
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-
-      writeJSON(JSON_NEWSLETTER_FILE, subscribers);
-
-      return res.status(alreadySubscribed ? 200 : 201).json({
-        success: true,
-        alreadySubscribed,
-        downloadUrl: "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf",
-      });
-    } catch (error) {
-      console.error("[Newsletter] Failed to save subscriber:", error);
-      return res.status(500).json({ error: "We could not complete your signup. Please try again." });
-    }
-  });
+  mountNewsletter(app, {
+    read: () => readJSON<any[]>(JSON_NEWSLETTER_FILE, []),
+    write: rows => writeJSON(JSON_NEWSLETTER_FILE, rows),
+    transaction, encrypt: encryptPII, key: encryptionKey,
+  }, newsletterLimiter, express.urlencoded({extended: false, limit: "2kb"}));
 
   app.get("/api/admin/newsletter/subscribers", requireAdmin, (_req, res) => {
     try {
@@ -2360,6 +2290,7 @@ async function startServer() {
           ...subscriber,
           firstName: decryptPII(subscriber.firstName || ""),
           email: decryptPII(subscriber.email || ""),
+          unsubscribeUrl: unsubscribeUrl(subscriber, encryptionKey),
         }))
         .sort((a: any, b: any) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
       res.json(subscribers);
@@ -3495,4 +3426,5 @@ startServer().catch((error) => {
   console.error("[Startup] Server failed to start:", error);
   process.exit(1);
 });
+
 
