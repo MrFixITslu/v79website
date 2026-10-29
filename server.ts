@@ -2249,8 +2249,52 @@ async function startServer() {
   // --- Free Newsletter / Lead Magnet Endpoints ---
   // Generate the premium guide on demand so production does not depend on a
   // committed binary asset. Cache the generated PDF in memory after the first request.
+  // Subscriber guide entitlement: 15-minute, signed, tamper-evident link.
+  // The signing key is the app's persistent encryption key; restarting the
+  // server does not invalidate links until they expire. No email is in the URL.
+  const guidePdfPath = "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf";
+  function guideLinkForSubscriber(emailHash: string): string {
+    const payload = Buffer.from(JSON.stringify({
+      v: 1,
+      h: emailHash,
+      exp: Date.now() + 15 * 60_000,
+    }), "utf8").toString("base64url");
+    const signature = crypto.createHmac("sha256", encryptionKey)
+      .update("v79:newsletter-guide:v1:" + payload).digest("base64url");
+    return guidePdfPath + "?token=" + encodeURIComponent(payload + "." + signature);
+  }
+  function hasGuideAccess(token: unknown): boolean {
+    if (typeof token !== "string" || token.length > 1024) return false;
+    const match = /^([A-Za-z0-9_-]{1,650})\.([A-Za-z0-9_-]{43})$/.exec(token);
+    if (!match) return false;
+    const [, payload, submittedSignature] = match;
+    const expectedSignature = crypto.createHmac("sha256", encryptionKey)
+      .update("v79:newsletter-guide:v1:" + payload).digest("base64url");
+    const expectedBytes = Buffer.from(expectedSignature, "utf8");
+    const submittedBytes = Buffer.from(submittedSignature, "utf8");
+    if (expectedBytes.length !== submittedBytes.length ||
+        !crypto.timingSafeEqual(expectedBytes, submittedBytes)) return false;
+    try {
+      const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+      if (claims?.v !== 1 || typeof claims.h !== "string" ||
+          !/^[a-f0-9]{64}$/.test(claims.h) ||
+          !Number.isSafeInteger(claims.exp) ||
+          Date.now() > claims.exp ||
+          claims.exp > Date.now() + 15 * 60_000) return false;
+      const current = readJSON<any[]>(JSON_NEWSLETTER_FILE, []);
+      return current.some((s: any) => s.emailHash === claims.h && s.status === "active" && s.consent === true);
+    } catch {
+      return false;
+    }
+  }
   let aiPromptGuidePdfCache: Buffer | null = null;
-  app.get("/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf", (_req, res) => {
+  app.get("/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf", (req, res) => {
+    if (!hasGuideAccess(req.query.token)) {
+      return res.status(403).set({
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+      }).json({ error: "This guide is available to newsletter subscribers. Please sign up to receive a fresh download link." });
+    }
     try {
       if (!aiPromptGuidePdfCache) {
         const clientDist = path.resolve(process.env.CLIENT_DIST || path.join(process.cwd(), "dist/client"));
@@ -2281,10 +2325,7 @@ async function startServer() {
     // Honeypot: real visitors never fill this field. Return a generic success
     // response so automated form fillers do not learn how the trap works.
     if (typeof website === "string" && website.trim().length > 0) {
-      return res.status(200).json({
-        success: true,
-        downloadUrl: "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf",
-      });
+      return res.status(200).json({ success: true });
     }
 
     if (consent !== true) {
@@ -2344,7 +2385,7 @@ async function startServer() {
       return res.status(alreadySubscribed ? 200 : 201).json({
         success: true,
         alreadySubscribed,
-        downloadUrl: "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf",
+        downloadUrl: guideLinkForSubscriber(emailHash),
       });
     } catch (error) {
       console.error("[Newsletter] Failed to save subscriber:", error);
