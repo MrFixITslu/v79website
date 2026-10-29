@@ -184,7 +184,7 @@ export function OnboardingFeedback({ app, onBack }: OnboardingFeedbackProps) {
             </div>
           </div>
           <p className="text-[10px] text-app-text-muted font-mono uppercase tracking-widest leading-none">
-            {totalCount > 0 ? `${totalCount} Verified Reviews` : "No reviews yet"}
+            {totalCount > 0 ? `${totalCount} Published Reviews` : "No reviews yet"}
           </p>
         </div>
 
@@ -241,7 +241,7 @@ export function OnboardingFeedback({ app, onBack }: OnboardingFeedbackProps) {
                 </div>
                 <p className="text-sm font-bold text-emerald-400">Onboarding Feedback Saved!</p>
                 <p className="text-[11px] text-app-text-sec leading-relaxed">
-                  Thank you! Your suggestions and rating for <strong>{app.name}</strong> have been persisted. The administrator can now review and respond to implemented items.
+                  Thank you! Your feedback was received and is awaiting administrator review. Only reviewed contributions may appear publicly, without identifying contributor names.
                 </p>
                 <button
                   onClick={() => setSubmitSuccess(false)}
@@ -416,7 +416,7 @@ export function OnboardingFeedback({ app, onBack }: OnboardingFeedbackProps) {
               {app.name} Onboarding Suggestions Registry ({totalCount})
             </h4>
             <span className="text-[9px] text-app-text-muted font-mono uppercase tracking-widest">
-              Live updates
+              Reviewed contributions
             </span>
           </div>
 
