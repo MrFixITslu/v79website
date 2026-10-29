@@ -5,7 +5,7 @@ import {
   LayoutDashboard, WalletCards, Megaphone, ShoppingCart,
   GraduationCap, ArrowRight, ShieldCheck, CheckCircle2,
 } from "lucide-react";
-import HomePage from "./components/HomePage";
+import HomePage from "./components/CaribbeanHomePage";
 import AboutPage from "./components/AboutPage";
 import ServicesPage from "./components/ServicesPage";
 import IndustriesPage from "./components/IndustriesPage";
@@ -95,8 +95,8 @@ export default function App() {
   // its (still collapsed) header and making the user click it again.
   const [openServiceId, setOpenServiceId] = useState<string | null>("managed-it");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
-    try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "dark"; }
-    catch { return "dark"; }
+    try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "light"; }
+    catch { return "light"; }
   });
 
   // Legacy course deep-links remain supported, but course discovery now lives in V79 Academy.
