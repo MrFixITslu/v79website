@@ -4,7 +4,7 @@ import {
   Sun, Moon, Menu, X, ChevronDown, Phone, MessageSquare,
   LayoutDashboard, WalletCards, Megaphone, ShoppingCart,
   GraduationCap, ArrowRight, ShieldCheck, CheckCircle2,
-  Youtube, Facebook, Instagram, Linkedin, Music2,
+  Youtube, Facebook, Instagram, Linkedin,
 } from "lucide-react";
 import HomePage from "./components/CaribbeanHomePage";
 import AboutPage from "./components/AboutPage";
@@ -66,12 +66,21 @@ const SECTIONS = [
 // open its card automatically, not just scroll to its still-collapsed header.
 const SERVICE_ACCORDION_IDS = ["digital-transformation", "ai-automation", "software", "networking", "managed-it", "cybersecurity", "cloud"];
 
+/** Compact single-colour TikTok symbol, using currentColor to respect light/dark themes. */
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M16.71 2h-3.16v13.36a3.82 3.82 0 1 1-3.5-3.8V8.38a7.04 7.04 0 1 0 6.66 6.98V8.73a9.15 9.15 0 0 0 5.29 1.69V7.26A5.95 5.95 0 0 1 16.71 2Z" />
+    </svg>
+  );
+}
+
 /** Verified V79 account handles. Missing official URLs stay non-clickable until confirmed. */
 const V79_SOCIAL_PROFILES = [
   { name: "YouTube", url: null, icon: Youtube },
   { name: "Facebook", url: null, icon: Facebook },
   { name: "Instagram", url: "https://www.instagram.com/vision79sl/", icon: Instagram },
-  { name: "TikTok", url: "https://www.tiktok.com/@firelionslu", icon: Music2 },
+  { name: "TikTok", url: "https://www.tiktok.com/@firelionslu", icon: TikTokIcon },
   { name: "LinkedIn", url: null, icon: Linkedin },
 ] as const;
 
