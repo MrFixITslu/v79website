@@ -75,13 +75,13 @@ function TikTokIcon({ className }: { className?: string }) {
   );
 }
 
-/** Verified V79 account handles. Missing official URLs stay non-clickable until confirmed. */
+/** Founder-provided official V79 social profiles. */
 const V79_SOCIAL_PROFILES = [
-  { name: "YouTube", url: null, icon: Youtube },
-  { name: "Facebook", url: null, icon: Facebook },
+  { name: "YouTube", url: "https://www.youtube.com/@v79digital", icon: Youtube },
+  { name: "Facebook", url: "https://www.facebook.com/Vision79sl/", icon: Facebook },
   { name: "Instagram", url: "https://www.instagram.com/vision79sl/", icon: Instagram },
   { name: "TikTok", url: "https://www.tiktok.com/@firelionslu", icon: TikTokIcon },
-  { name: "LinkedIn", url: null, icon: Linkedin },
+  { name: "LinkedIn", url: "https://www.linkedin.com/company/v79digital", icon: Linkedin },
 ] as const;
 
 
@@ -889,30 +889,17 @@ export default function App() {
           <div className="flex flex-wrap items-center justify-center gap-2" aria-label="V79 Digital social media">
             <span className="mr-1 text-[11px] font-semibold text-slate-600 dark:text-white/65">Follow us</span>
             {V79_SOCIAL_PROFILES.map(({ name, url, icon: Icon }) => (
-              url ? (
-                <a
-                  key={name}
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`V79 Digital on ${name} (opens in a new tab)`}
-                  title={name}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-v79-navy shadow-sm transition hover:-translate-y-0.5 hover:border-v79-teal hover:bg-v79-teal/10 hover:text-v79-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal dark:border-white/15 dark:bg-v79-navy-light dark:text-v79-teal-light dark:hover:border-v79-teal-light"
-                >
-                  <Icon aria-hidden="true" className="h-[19px] w-[19px]" />
-                </a>
-              ) : (
-                <span
-                  key={name}
-                  title={`${name} profile link awaiting confirmation`}
-                  aria-label={`${name} link not yet configured`}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-2.5 text-slate-500 dark:border-white/20 dark:text-white/50"
-                >
-                  <Icon aria-hidden="true" className="h-[17px] w-[17px]" />
-                  <span className="text-[10px]">Pending</span>
-                  <span className="sr-only">{name}</span>
-                </span>
-              )
+              <a
+                key={name}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`V79 Digital on ${name} (opens in a new tab)`}
+                title={name}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-v79-navy shadow-sm transition hover:-translate-y-0.5 hover:border-v79-teal hover:bg-v79-teal/10 hover:text-v79-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal dark:border-white/15 dark:bg-v79-navy-light dark:text-v79-teal-light dark:hover:border-v79-teal-light"
+              >
+                <Icon aria-hidden="true" className="h-[19px] w-[19px]" />
+              </a>
             ))}
           </div>
         </div>
