@@ -1,5 +1,6 @@
 import { cookie, cookieOptions, mountLearners, publicCourse, learner } from "./server/learners";
 import express from "express";
+import { BUSINESS_FAQS } from "./src/data/faqs";
 import { atomicWrite, encryptionKey, seal, unseal, readJSON, writeJSON, transaction, storageReady } from "./server/persistence";
 import path from "path";
 import fs from "fs";
@@ -2916,6 +2917,10 @@ async function startServer() {
           title: "Free AI Prompting Guide + 10 Copyable Prompts | V79 Digital",
           description: "Join the free V79 Digital newsletter and download a practical AI prompting guide with a five-part formula, 10 copyable prompts, writing tips, and verification questions.",
         },
+        "/faq": {
+          title: "AI & Business Technology FAQ | V79 Digital",
+          description: "Practical answers to ten business questions about AI costs, training, data, digitisation, integration and ongoing support. Discover how V79 Digital can help.",
+        },
         "/contact": {
           title: "Contact V79 Digital | Business Technology Support Saint Lucia",
           description: "Contact V79 Digital to discuss managed IT, cloud, cybersecurity, networking, business software, automation, training, or a scoped technology assessment.",
@@ -2973,6 +2978,11 @@ async function startServer() {
           summary: "A beginner-friendly guide to getting better results from AI with clearer instructions, reusable prompt templates, and practical verification habits.",
           points: ["5-part prompt formula", "10 copyable prompts", "Natural writing prompt", "AI verification questions", "Free V79 Digital newsletter"],
         },
+        "/faq": {
+          heading: "AI questions. Human answers.",
+          summary: "Practical answers for Caribbean businesses, with clear examples of how V79 Digital can help.",
+          points: BUSINESS_FAQS.map(f => f.question),
+        },
         "/contact": {
           heading: "Contact V79 Digital",
           summary: "Discuss managed IT, cybersecurity, cloud, networking, business software, or a scoped ICT assessment for your organisation.",
@@ -3024,10 +3034,12 @@ async function startServer() {
           ["/about", "About"],
           ["/solutions", "V79 Hub"],
           ["/resources", "Resources"],
+          ["/faq", "FAQ"],
           ["/contact", "Contact"],
         ].map(([href, label]) => `<a href="${href}" style="color:#0f766e;margin-right:16px">${label}</a>`).join("");
         const points = fallback.points.map(point => `<li>${escapeAttr(point)}</li>`).join("");
-        const fallbackHtml = `<main style="max-width:960px;margin:0 auto;padding:56px 24px;font-family:Inter,Arial,sans-serif;line-height:1.6;color:#132238"><p style="font-weight:700;color:#0f766e">V79 Digital · Saint Lucia</p><h1 style="font-size:clamp(2rem,5vw,3.5rem);line-height:1.05">${escapeAttr(fallback.heading)}</h1><p style="font-size:1.1rem;max-width:760px">${escapeAttr(fallback.summary)}</p><ul>${points}</ul><nav aria-label="Primary">${pageLinks}</nav><p><a href="/contact" style="display:inline-block;margin-top:18px;color:#0f766e;font-weight:700">Book an ICT consultation</a></p></main>`;
+        const faqAnswers = normalizedPath === "/faq" ? BUSINESS_FAQS.map(f => `<section id="${f.id}"><h2>${escapeAttr(f.question)}</h2><p>${escapeAttr(f.answer)}</p><h3>How V79 can help</h3><p>${escapeAttr(f.help)}</p><p>${escapeAttr(f.example)}</p><a href="/contact?faq=${f.id}">${escapeAttr(f.cta)}</a></section>`).join("") : "";
+        const fallbackHtml = `<main style="max-width:960px;margin:0 auto;padding:56px 24px;font-family:Inter,Arial,sans-serif;line-height:1.6;color:#132238"><p style="font-weight:700;color:#0f766e">V79 Digital · Saint Lucia</p><h1 style="font-size:clamp(2rem,5vw,3.5rem);line-height:1.05">${escapeAttr(fallback.heading)}</h1><p style="font-size:1.1rem;max-width:760px">${escapeAttr(fallback.summary)}</p><ul>${points}</ul>${faqAnswers}<nav aria-label="Primary">${pageLinks}</nav><p><a href="/contact" style="display:inline-block;margin-top:18px;color:#0f766e;font-weight:700">Book an ICT consultation</a></p></main>`;
         // Preserve non-JavaScript SEO content without painting a temporary
         // unstyled page into the React root during hydration.
         result = result.replace('<div id="root"></div>', `<div id="root"></div><noscript>${fallbackHtml}</noscript>`);
@@ -3321,6 +3333,12 @@ ${fields.content || ""}`;
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>${domain}/faq</loc>
+    <lastmod>${nowIso}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>${domain}/contact</loc>
     <lastmod>${nowIso}</lastmod>
     <changefreq>monthly</changefreq>
@@ -3351,6 +3369,11 @@ ${articlesXml}</urlset>`;
 
   // Vite development vs production serving logic
   app.use('/api', (_req,res)=>res.status(404).json({error:'API route not found'}));
+  app.get('/faq/', (req, res, next) => {
+    if (req.path !== '/faq/') return next();
+    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    return res.redirect(308, '/faq' + query);
+  });
   app.get('/privacy.html', (_req,res)=>res.redirect(308, '/privacy'));
   app.get('/terms.html', (_req,res)=>res.redirect(308, '/terms'));
   app.get('/blog', (_req,res)=>res.redirect(301, '/resources'));
@@ -3362,7 +3385,7 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
-    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
+    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/faq', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });
