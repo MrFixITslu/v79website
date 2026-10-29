@@ -4,6 +4,7 @@ import {
   Sun, Moon, Menu, X, ChevronDown, Phone, MessageSquare,
   LayoutDashboard, WalletCards, Megaphone, ShoppingCart,
   GraduationCap, ArrowRight, ShieldCheck, CheckCircle2,
+  Youtube, Facebook, Instagram, Linkedin, Music2,
 } from "lucide-react";
 import HomePage from "./components/CaribbeanHomePage";
 import AboutPage from "./components/AboutPage";
@@ -64,6 +65,16 @@ const SECTIONS = [
 // content with nothing to expand). Clicking one of these in the nav should
 // open its card automatically, not just scroll to its still-collapsed header.
 const SERVICE_ACCORDION_IDS = ["digital-transformation", "ai-automation", "software", "networking", "managed-it", "cybersecurity", "cloud"];
+
+/** Verified V79 account handles. Missing official URLs stay non-clickable until confirmed. */
+const V79_SOCIAL_PROFILES = [
+  { name: "YouTube", url: null, icon: Youtube },
+  { name: "Facebook", url: null, icon: Facebook },
+  { name: "Instagram", url: "https://www.instagram.com/vision79sl/", icon: Instagram },
+  { name: "TikTok", url: "https://www.tiktok.com/@firelionslu", icon: Music2 },
+  { name: "LinkedIn", url: null, icon: Linkedin },
+] as const;
+
 
 const MARKETING_ROUTE_TO_SECTION: Record<string, string> = {
   "/about": "about",
@@ -861,10 +872,40 @@ export default function App() {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto pt-6 pb-4 flex flex-col sm:flex-row items-center justify-center gap-4 text-xs text-slate-600 dark:text-white/60 font-light border-b border-slate-200 dark:border-white/10">
+        <div className="max-w-7xl mx-auto pt-6 pb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-4 text-xs text-slate-600 dark:text-white/70 font-light border-b border-slate-200 dark:border-white/10">
           <div>Phone: <a href="tel:+17587260035" className="text-v79-teal dark:text-v79-teal-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">+1 758 726 0035</a></div>
-          <span className="hidden sm:block text-slate-300 dark:text-white/20">|</span>
+          <span aria-hidden="true" className="hidden lg:block text-slate-300 dark:text-white/20">|</span>
           <div>Email: <a href="mailto:vision79slu@gmail.com" className="text-v79-teal dark:text-v79-teal-light hover:underline font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">vision79slu@gmail.com</a></div>
+          <span aria-hidden="true" className="hidden lg:block text-slate-300 dark:text-white/20">|</span>
+          <div className="flex flex-wrap items-center justify-center gap-2" aria-label="V79 Digital social media">
+            <span className="mr-1 text-[11px] font-semibold text-slate-600 dark:text-white/65">Follow us</span>
+            {V79_SOCIAL_PROFILES.map(({ name, url, icon: Icon }) => (
+              url ? (
+                <a
+                  key={name}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`V79 Digital on ${name} (opens in a new tab)`}
+                  title={name}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-v79-navy shadow-sm transition hover:-translate-y-0.5 hover:border-v79-teal hover:bg-v79-teal/10 hover:text-v79-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal dark:border-white/15 dark:bg-v79-navy-light dark:text-v79-teal-light dark:hover:border-v79-teal-light"
+                >
+                  <Icon aria-hidden="true" className="h-[19px] w-[19px]" />
+                </a>
+              ) : (
+                <span
+                  key={name}
+                  title={`${name} profile link awaiting confirmation`}
+                  aria-label={`${name} link not yet configured`}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-2.5 text-slate-500 dark:border-white/20 dark:text-white/50"
+                >
+                  <Icon aria-hidden="true" className="h-[17px] w-[17px]" />
+                  <span className="text-[10px]">Pending</span>
+                  <span className="sr-only">{name}</span>
+                </span>
+              )
+            ))}
+          </div>
         </div>
 
         <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-white/50 font-mono">
