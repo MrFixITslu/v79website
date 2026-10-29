@@ -82,6 +82,20 @@ await test('production regression suite',{timeout:30000},async t=>{
     assert.ok(response.text.includes('</noscript>'),route);
   }
  });
+ await t.test('FAQ direct links expose approved answers, canonical metadata and contact context',async()=>{
+  const faq=await anon.call('/faq');
+  assert.equal(faq.status,200);
+  assert.ok(faq.text.includes(`<link rel="canonical" href="${base}/faq" />`));
+  assert.ok(faq.text.includes('AI &amp; Business Technology FAQ | V79 Digital'));
+  assert.equal((faq.text.match(/<section id="q\d+">/g)||[]).length,10);
+  assert.ok(faq.text.includes('How V79 can help'));
+  assert.ok(faq.text.includes('href="/contact?faq=q4"'));
+  const slash=await fetch(base+'/faq/?utm_source=test',{redirect:'manual'});
+  assert.equal(slash.status,308);
+  assert.equal(slash.headers.get('location'),'/faq?utm_source=test');
+  assert.equal((await anon.call('/contact?faq=q4')).status,200);
+  assert.ok((await anon.call('/sitemap.xml')).text.includes(`${base}/faq`));
+ });
  await t.test('admin cookies, forced password change and CSRF',async()=>{let r=await admin.call('/api/admin/login','POST',{password:env.ADMIN_PASSWORD});assert.equal(r.status,200);assert.match(r.headers.get('set-cookie')!,/HttpOnly/);assert.match(r.headers.get('set-cookie')!,/Secure/);assert.equal(r.data.token,'cookie-session');assert.equal((await admin.call('/api/admin/leads')).status,403);r=await admin.call('/api/admin/change-password','POST',{currentPassword:env.ADMIN_PASSWORD,newPassword:'Changed-test-password-456!'});assert.equal(r.status,200);assert.equal((await admin.call('/api/admin/leads')).status,200);assert.equal((await admin.call('/api/admin/logout','POST',{}, {Origin:'https://attacker.test'})).status,403);});
  await t.test('malformed contacts cannot crash; delivery rejection remains failed',async()=>{assert.equal((await anon.call('/api/leads','POST',{name:{},company:'T',email:'x@y.test',phone:'0'})).status,400);assert.equal((await anon.call('/api/health')).status,200);const r=await anon.call('/api/leads','POST',{name:'Test Contact',company:'Test Co',email:'contact@example.test',phone:'000000000'});assert.equal(r.status,201);await new Promise(r=>setTimeout(r,100));const leads=await admin.call('/api/admin/leads');assert.equal(leads.data[0].tiquetSyncStatus,'failed');});
  await t.test('CRM stage and approval are durable and idempotent',async()=>{const leads=await admin.call('/api/admin/crm/leads');const list=Array.isArray(leads.data)?leads.data:leads.data.leads;assert.ok(list?.length);assert.equal((await admin.call(`/api/admin/crm/leads/${list[0].id}/stage`,'PUT',{stage:'Researching'})).status,200);const first=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(first.status,200);const second=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(second.status,200);assert.equal(first.data.id,second.data.id);});
