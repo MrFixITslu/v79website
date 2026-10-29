@@ -44,13 +44,14 @@ const SECTIONS = [
   ]},
   { id: "about", label: "About" },
   { id: "services", label: "Services", subItems: [
-    { id: "managed-it", label: "Managed IT Services" },
-    { id: "cloud", label: "Cloud Solutions" },
-    { id: "software", label: "Custom Software" },
-    { id: "ai-automation", label: "AI Automation" },
-    { id: "networking", label: "Network & VoIP" },
-    { id: "cybersecurity", label: "Cybersecurity" },
-    { id: "assessment", label: "ICT Health Assessment" },
+    { id: "digital-transformation", label: "Digital Transformation" },
+    { id: "ai-automation", label: "AI & Automation" },
+    { id: "software", label: "Software & SaaS" },
+    { id: "networking", label: "Networks & Infrastructure" },
+    { id: "managed-it", label: "Managed ICT Support" },
+    { id: "cybersecurity", label: "Security & Continuity" },
+    { id: "cloud", label: "Cloud Productivity" },
+    { id: "assessment", label: "Business Discovery" },
   ]},
   { id: "industries", label: "Industries" },
   { id: "solutions", label: "Solutions" },
@@ -62,7 +63,7 @@ const SECTIONS = [
 // ServicesPage (as opposed to "assessment", which is always-visible
 // content with nothing to expand). Clicking one of these in the nav should
 // open its card automatically, not just scroll to its still-collapsed header.
-const SERVICE_ACCORDION_IDS = ["managed-it", "cloud", "software", "ai-automation", "networking", "cybersecurity"];
+const SERVICE_ACCORDION_IDS = ["digital-transformation", "ai-automation", "software", "networking", "managed-it", "cybersecurity", "cloud"];
 
 const MARKETING_ROUTE_TO_SECTION: Record<string, string> = {
   "/about": "about",
@@ -93,7 +94,7 @@ export default function App() {
   // specific service in the Services dropdown — e.g. "Cloud Solutions" —
   // can open that exact card automatically, instead of just scrolling to
   // its (still collapsed) header and making the user click it again.
-  const [openServiceId, setOpenServiceId] = useState<string | null>("managed-it");
+  const [openServiceId, setOpenServiceId] = useState<string | null>("digital-transformation");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "light"; }
     catch { return "light"; }
