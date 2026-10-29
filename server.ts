@@ -1016,13 +1016,63 @@ async function startServer() {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
-  app.use("/uploads", (req,res,next)=>{
+  // Uploaded assets are private by default. An unreferenced file must never
+  // become public just because its path is under /uploads. Only intentionally
+  // published assets (article images, public app/ad images, lesson previews)
+  // may be fetched anonymously; non-preview course files require enrollment.
+  app.use("/uploads", (req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return res.status(405).end();
     if (isValidAdminSession(adminCookie(req))) return next();
-    const requested='/uploads'+req.path;
-    const restricted=db.getApps().filter((c:any)=>c.category==='courses' && (Number(c.price)>0 || c.pricingType==='premium')).filter((c:any)=>JSON.parse(c.curriculum||'[]').some((ch:any)=>(ch.lectures||[]).some((l:any)=>!l.freePreview && JSON.stringify(l).includes(requested))));
-    if (restricted.length && !restricted.some((c:any)=>learner(req)?.courses[String(c.id)]?.enrolled)) return res.status(403).json({error:'Enrollment required'});
-    next();
-  }, express.static(uploadsDir, {dotfiles:'deny',index:false}));
+    const basename = path.posix.basename(req.path);
+    if (!basename || basename === "." || req.path !== "/" + basename ||
+        !/^[A-Za-z0-9._-]{1,240}$/.test(basename) || basename.startsWith(".")) {
+      return res.status(404).end();
+    }
+    const requested = "/uploads/" + basename;
+    try {
+      const apps = db.getApps();
+      const publiclyReferencedApp = apps.some((a: any) =>
+        [a.logoUrl, a.coverImage, a.imageUrl, a.thumbnailUrl].some((v: unknown) => v === requested)
+      );
+      const publiclyReferencedAd = db.getAds().some((a: any) =>
+        [a.imageUrl, a.logoUrl, a.thumbnailUrl].some((v: unknown) => v === requested)
+      );
+      if (publiclyReferencedApp || publiclyReferencedAd) return next();
+
+      // Blog covers and inline images explicitly published by the admin.
+      if (fs.existsSync(ARTICLES_DIR)) {
+        const isPublishedArticleAsset = fs.readdirSync(ARTICLES_DIR)
+          .filter((name: string) => /^[A-Za-z0-9_-]+\.md$/.test(name))
+          .some((name: string) => fs.readFileSync(path.join(ARTICLES_DIR, name), "utf8").includes(requested));
+        if (isPublishedArticleAsset) return next();
+      }
+
+      let premiumMedia = false;
+      for (const c of apps) {
+        if (c.category !== "courses") continue;
+        const paid = Number(c.price) > 0 || c.pricingType === "premium";
+        const chapters = JSON.parse(c.curriculum || "[]");
+        for (const chapter of chapters) {
+          for (const lesson of chapter.lectures || []) {
+            if (!JSON.stringify(lesson).includes(requested)) continue;
+            if (!paid || lesson.freePreview) return next();
+            premiumMedia = true;
+            if (learner(req)?.courses[String(c.id)]?.enrolled) return next();
+          }
+        }
+      }
+      if (premiumMedia) return res.status(403).json({ error: "Enrollment required." });
+      return res.status(404).end();
+    } catch (error) {
+      console.error("[Uploads] Asset access policy failed closed:", error);
+      return res.status(503).json({ error: "Asset temporarily unavailable." });
+    }
+  }, express.static(uploadsDir, {dotfiles:'deny',index:false,
+    setHeaders(res) {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    },
+  }));
 
   // Multer Storage Engine for Audio and Video uploads
   const storage = multer.diskStorage({
@@ -1030,7 +1080,7 @@ async function startServer() {
       cb(null, uploadsDir);
     },
     filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const uniqueSuffix = crypto.randomUUID();
       const ext = path.extname(file.originalname);
       const cleanName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
       cb(null, `${path.basename(cleanName, ext)}-${uniqueSuffix}${ext}`);
