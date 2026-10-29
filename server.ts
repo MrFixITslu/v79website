@@ -3361,6 +3361,10 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
+    // Development-only Vite runtime endpoints must reach Vite middleware.
+    // Production's explicit route allowlist is unchanged.
+    if (isDev && req.method === 'GET' &&
+        (req.path.startsWith('/@') || req.path === '/__vite_ping')) return next();
     const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
