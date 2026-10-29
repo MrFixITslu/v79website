@@ -126,7 +126,23 @@ await test('production regression suite',{timeout:30000},async t=>{
   assert.equal(published[0].onboarded,1);
   assert.equal(JSON.stringify(published).includes('Private contributor'),false);
  });
- await t.test('malformed contacts cannot crash; delivery rejection remains failed',async()=>{assert.equal((await anon.call('/api/leads','POST',{name:{},company:'T',email:'x@y.test',phone:'0'})).status,400);assert.equal((await anon.call('/api/health')).status,200);const r=await anon.call('/api/leads','POST',{name:'Test Contact',company:'Test Co',email:'contact@example.test',phone:'000000000'});assert.equal(r.status,201);await new Promise(r=>setTimeout(r,100));const leads=await admin.call('/api/admin/leads');assert.equal(leads.data[0].tiquetSyncStatus,'failed');});
+ await t.test('malformed contacts cannot crash; delivery rejection remains failed',async()=>{assert.equal((await anon.call('/api/leads','POST',{name:{},company:'T',email:'x@y.test',phone:'0'})).status,400);assert.equal((await anon.call('/api/health')).status,200);const r=await anon.call('/api/leads','POST',{name:'Test Contact',company:'Test Co',email:'contact@example.test',phone:'000000000'});assert.equal(r.status,201);
+  // Tiquet delivery runs asynchronously after the HTTP 201 response. A fixed
+  // 100 ms delay races the background worker on slower local machines.
+  // Wait only for this lead, with a strict deadline so real delivery failures
+  // remain visible rather than being silently ignored.
+  let observedStatus = 'missing';
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    const leads = await admin.call('/api/admin/leads');
+    assert.equal(leads.status, 200);
+    const savedLead = leads.data.find((lead:any) => lead.id === r.data.id);
+    observedStatus = savedLead?.tiquetSyncStatus || 'missing';
+    if (observedStatus === 'failed') break;
+    if (observedStatus !== 'pending' && observedStatus !== 'missing') break;
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  assert.equal(observedStatus, 'failed', 'A non-retryable HTTP 401 from Tiquet must eventually mark the specific lead failed.');});
  await t.test('CRM stage and approval are durable and idempotent',async()=>{const leads=await admin.call('/api/admin/crm/leads');const list=Array.isArray(leads.data)?leads.data:leads.data.leads;assert.ok(list?.length);assert.equal((await admin.call(`/api/admin/crm/leads/${list[0].id}/stage`,'PUT',{stage:'Researching'})).status,200);const first=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(first.status,200);const second=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(second.status,200);assert.equal(first.data.id,second.data.id);});
  await t.test('storage failure rolls back lead capture and fails readiness',async()=>{
  const sql=new DatabaseSync(path.join(tmp,'data/website.db'));
