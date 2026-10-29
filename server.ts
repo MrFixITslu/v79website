@@ -2929,28 +2929,28 @@ async function startServer() {
       const normalizedPath = (req.path || "/").replace(/\/+$/, "") || "/";
       const staticPages: Record<string, { title: string; description: string }> = {
         "/": {
-          title: "Managed IT, Cloud & Business Software Saint Lucia | V79 Digital",
-          description: "V79 Digital helps Saint Lucia businesses with managed IT, cloud services, cybersecurity, business software, automation, and practical technology training.",
+          title: "Digital Transformation, AI & ICT for Caribbean Businesses | V79 Digital",
+          description: "V79 Digital helps Caribbean businesses simplify operations through digital transformation, AI automation, business software and dependable ICT services.",
         },
         "/about": {
-          title: "About V79 Digital | Caribbean ICT Experience",
-          description: "Learn about V79 Digital's practical Caribbean ICT and telecommunications experience and its approach to helping Saint Lucia businesses use technology effectively.",
+          title: "About V79 Digital | Caribbean Business Technology Partner",
+          description: "Discover V79 Digital's customer-focused approach to practical digital transformation, ICT services and useful business technology across the Caribbean.",
         },
         "/services": {
-          title: "IT, Cloud, Cybersecurity & Automation Services | V79 Digital",
-          description: "Explore managed IT, cloud, cybersecurity, networking, software development, automation, and scoped ICT assessment services for Saint Lucia businesses.",
+          title: "Digital Transformation, AI & ICT Services | V79 Digital",
+          description: "Explore digital transformation, AI automation, business software, managed ICT and infrastructure services for Caribbean businesses.",
         },
         "/industries": {
-          title: "Technology Services for Saint Lucia Businesses | V79 Digital",
-          description: "See how V79 Digital supports hospitality, retail, professional services, education, and other organisations with practical ICT, cloud, network, security, and software solutions.",
+          title: "Technology Services for Caribbean Businesses | V79 Digital",
+          description: "Explore practical business technology for Caribbean retail, tourism, professional services, healthcare and education organisations.",
         },
         "/solutions": {
           title: "V79 Hub Business Platform & Apps | V79 Digital",
           description: "Explore the V79 Hub business ecosystem: one workspace connecting V79 finance, customer support, marketing, sales tools, and V79 Academy learning.",
         },
         "/resources": {
-          title: "ICT Resources & Business Technology Guides | V79 Digital",
-          description: "Practical technology guidance for Saint Lucia and Caribbean businesses covering IT support, networks, cloud, cybersecurity, software, and digital operations.",
+          title: "Business Technology Resources & Insights | V79 Digital",
+          description: "Practical guides on AI, digital transformation, ICT, cybersecurity and business software for Caribbean businesses. Subscriber guides and V79 Academy learning.",
         },
         "/free-ai-prompting-guide": {
           title: "Free AI Prompting Guide + 10 Copyable Prompts | V79 Digital",
@@ -2979,19 +2979,19 @@ async function startServer() {
       // The copy mirrors the visible sections and is replaced by React on mount.
       const seoFallbacks: Record<string, { heading: string; summary: string; points: string[] }> = {
         "/": {
-          heading: "Managed IT Services & Cybersecurity Built for the Caribbean",
-          summary: "V79 Digital helps Saint Lucia organisations manage, secure, and improve the technology their businesses depend on.",
-          points: ["Managed IT support", "Cybersecurity", "Cloud and backup", "Networks and VoIP", "Business software", "Technology training"],
+          heading: "Better Business Starts with Smarter Technology",
+          summary: "V79 Digital helps Caribbean businesses simplify workflows, strengthen ICT foundations and turn ideas into practical improvements.",
+          points: ["Digital transformation", "AI and automation", "Business software", "ICT infrastructure", "Managed support", "Customer-focused progress"],
         },
         "/about": {
           heading: "About V79 Digital",
-          summary: "Caribbean-rooted ICT and telecommunications experience focused on practical, resilient technology for Saint Lucia businesses.",
-          points: ["More than 20 years of ICT experience", "Telecommunications and fibre", "Enterprise technology", "Business continuity", "Cloud and software"],
+          summary: "Customer-focused digital transformation built on Caribbean telecommunications and ICT experience, practical advice and relationships that create lasting value.",
+          points: ["Customer-first approach", "20+ years of ICT experience", "Caribbean business perspective", "Practical business value", "Responsible technology adoption"],
         },
         "/services": {
-          heading: "IT, Cloud, Cybersecurity & Automation Services",
-          summary: "Managed technology services are V79 Digital's primary offering, with clearly scoped support and response expectations.",
-          points: ["Managed IT support", "Cybersecurity assessments", "Cloud and backup", "Network and VoIP", "Custom software", "Automation and ICT assessments"],
+          heading: "Digital Transformation, AI & ICT Services",
+          summary: "Digital transformation leads V79 Digital's offering, supported by business software, AI, ICT infrastructure and managed services.",
+          points: ["Process improvement", "AI and automation", "Business software", "Network infrastructure", "Managed ICT support", "Business continuity"],
         },
         "/industries": {
           heading: "Technology Services for Saint Lucia Organisations",
@@ -3004,9 +3004,9 @@ async function startServer() {
           points: ["One business workspace", "FFPRO finance", "V79 Tiquet support", "V79 Marketing", "V79 POS", "Connected V79 Academy learning"],
         },
         "/resources": {
-          heading: "ICT Resources & Business Technology Guides",
-          summary: "Practical guidance for Caribbean businesses covering IT operations, cybersecurity, networks, cloud, software, and digital resilience.",
-          points: ["Managed IT guidance", "Cybersecurity", "Cloud and backup", "Networking", "Business software", "Digital operations"],
+          heading: "Practical Business Technology Insights & Subscriber Guides",
+          summary: "Business insights on digital transformation, AI, software and ICT. Downloadable guides are offered through newsletter signup; training resources live in V79 Academy.",
+          points: ["Digital transformation insights", "AI and automation", "ICT and cybersecurity", "Subscriber guides", "Business software", "V79 Academy for training"],
         },
         "/free-ai-prompting-guide": {
           heading: "Free AI Prompting Guide",
