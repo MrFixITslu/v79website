@@ -109,6 +109,23 @@ await test('production regression suite',{timeout:30000},async t=>{
   const altered=response.data.downloadUrl.replace(/.$/, (x:string)=>x==='A'?'B':'A');
   assert.equal((await anon.call(altered)).status,403);
  });
+ await t.test('unreviewed feedback is private and moderated feedback is anonymous',async()=>{
+  const query='/api/feedback?appId=71';
+  assert.equal((await anon.call(query)).data.length,0);
+  const result=await anon.call('/api/feedback','POST',{appId:71,appName:'Forged company',rating:5,comment:'Test contribution',userName:'Private contributor'});
+  assert.equal(result.status,201);
+  assert.equal((await anon.call(query)).data.length,0);
+  const unreviewed=await admin.call('/api/admin/feedback');
+  assert.ok(unreviewed.data.some((v:any)=>v.id===result.data.id && v.userName==='Private contributor'));
+  assert.equal((await admin.call('/api/admin/feedback/'+result.data.id+'/onboard','POST',{onboardedComment:'Reviewed for public display'})).status,200);
+  const published=(await anon.call(query)).data;
+  assert.equal(published.length,1);
+  assert.equal(published[0].userName,'Community member');
+  assert.equal(published[0].appName,'Test course');
+  assert.equal(published[0].comment,'Test contribution');
+  assert.equal(published[0].onboarded,1);
+  assert.equal(JSON.stringify(published).includes('Private contributor'),false);
+ });
  await t.test('malformed contacts cannot crash; delivery rejection remains failed',async()=>{assert.equal((await anon.call('/api/leads','POST',{name:{},company:'T',email:'x@y.test',phone:'0'})).status,400);assert.equal((await anon.call('/api/health')).status,200);const r=await anon.call('/api/leads','POST',{name:'Test Contact',company:'Test Co',email:'contact@example.test',phone:'000000000'});assert.equal(r.status,201);await new Promise(r=>setTimeout(r,100));const leads=await admin.call('/api/admin/leads');assert.equal(leads.data[0].tiquetSyncStatus,'failed');});
  await t.test('CRM stage and approval are durable and idempotent',async()=>{const leads=await admin.call('/api/admin/crm/leads');const list=Array.isArray(leads.data)?leads.data:leads.data.leads;assert.ok(list?.length);assert.equal((await admin.call(`/api/admin/crm/leads/${list[0].id}/stage`,'PUT',{stage:'Researching'})).status,200);const first=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(first.status,200);const second=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(second.status,200);assert.equal(first.data.id,second.data.id);});
  await t.test('storage failure rolls back lead capture and fails readiness',async()=>{
