@@ -93,7 +93,7 @@ await test('production regression suite',{timeout:30000},async t=>{
   assert.equal((await anon.call('/uploads/paid-lesson.mp4')).status,403);
   assert.equal((await admin.call('/uploads/paid-lesson.mp4')).status,200);
   const folder=path.join(tmp,'data/articles');fs.mkdirSync(folder,{recursive:true});
-  fs.writeFileSync(path.join(folder,'published-test.md'),'---\\ntitle: "Published test"\\n---\\n![Cover](/uploads/published-cover.png)');
+  fs.writeFileSync(path.join(folder,'published-test.md'),['---','title: "Published test"','---','![Cover](/uploads/published-cover.png)'].join(String.fromCharCode(10)));
   assert.equal((await anon.call('/uploads/published-cover.png')).status,200);
  });
  await t.test('subscriber download links require signup and reject tampering',async()=>{
@@ -102,10 +102,10 @@ await test('production regression suite',{timeout:30000},async t=>{
   assert.equal((await anon.call('/api/newsletter/subscribe','POST',{email:'reader@example.test',consent:false})).status,400);
   const response=await anon.call('/api/newsletter/subscribe','POST',{firstName:'Reader',email:'reader@example.test',consent:true,website:''});
   assert.equal(response.status,201);
-  assert.match(response.data.downloadUrl,/^\\/downloads\\/V79_AI_Prompting_Guide_Premium_FIXED\\.pdf\\?token=/);
+  assert.ok(response.data.downloadUrl.startsWith(pdfPath+'?token='));
   const signed=await anon.call(response.data.downloadUrl);
   assert.equal(signed.status,200);
-  assert.match(signed.headers.get('content-type')||'',/application\\/pdf/);
+  assert.ok((signed.headers.get('content-type')||'').includes('application/pdf'));
   const altered=response.data.downloadUrl.replace(/.$/, (x:string)=>x==='A'?'B':'A');
   assert.equal((await anon.call(altered)).status,403);
  });
