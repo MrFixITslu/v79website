@@ -570,6 +570,7 @@ class DocumentDatabase {
       rating: Number(feedback.rating),
       comment: feedback.comment || "",
       userName: encryptPII(feedback.userName || "Anonymous"),
+      feedbackType: feedback.feedbackType === "idea" ? "idea" : "feedback",
       onboarded: 0,
       onboardedComment: "",
       createdAt: new Date().toISOString()
@@ -1164,7 +1165,8 @@ async function startServer() {
       // submitted feedback, rather than trusting a static stored number.
       const ratingsByApp = new Map<number, { sum: number; count: number }>();
       for (const f of feedback) {
-        if (!f.rating || !Number.isFinite(Number(f.rating))) continue;
+        // Public ratings must not be altered by unreviewed submissions.
+        if (f.onboarded !== 1 || !f.rating || !Number.isFinite(Number(f.rating))) continue;
         const key = Number(f.appId);
         const entry = ratingsByApp.get(key) || { sum: 0, count: 0 };
         entry.sum += Number(f.rating);
@@ -2033,7 +2035,24 @@ async function startServer() {
   app.get("/api/feedback", async (req, res) => {
     try {
       const appIdQuery = req.query.appId ? Number(req.query.appId) : undefined;
-      const list = await db.getFeedback(appIdQuery);
+      // Contributions are private until a real admin has reviewed and
+      // acknowledged them. Do not publish the contributor's name or any
+      // internal moderation metadata in unauthenticated responses.
+      const list = db.getFeedback(appIdQuery)
+        .filter((f: any) => f.onboarded === 1)
+        .map((f: any) => ({
+          id: f.id,
+          appId: f.appId,
+          appName: f.appName,
+          rating: f.rating,
+          comment: f.comment,
+          userName: "Community member",
+          feedbackType: f.feedbackType || "feedback",
+          onboarded: 1,
+          onboardedComment: f.onboardedComment || "",
+          createdAt: f.createdAt,
+          onboardedAt: f.onboardedAt,
+        }));
       res.json(list);
     } catch (err) {
       console.error("[API] Error fetching feedback:", err);
@@ -2047,7 +2066,8 @@ async function startServer() {
 
     const numericAppId = Number(appId);
     const numericRating = Number(rating);
-    if (!db.getApps().some((a:any)=>a.id===numericAppId)) return res.status(404).json({error:"Application not found"});
+    const feedbackApp = db.getApps().find((a: any) => a.id === numericAppId);
+    if (!feedbackApp) return res.status(404).json({error:"Application not found"});
 
     if (!appId || !Number.isFinite(numericAppId) || !rating || !comment) {
       return res.status(400).json({ error: "Missing required fields (appId, rating, comment) in body" });
@@ -2065,11 +2085,11 @@ async function startServer() {
     try {
       const newFeedback = await db.addFeedback({
         appId: numericAppId,
-        appName,
+        appName: feedbackApp.name,
         rating: numericRating,
         comment,
         userName,
-        feedbackType: feedbackType || "feedback"
+        feedbackType: feedbackType === "idea" ? "idea" : "feedback"
       });
       res.status(201).json(newFeedback);
     } catch (err) {
