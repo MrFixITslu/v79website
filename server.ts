@@ -1071,7 +1071,8 @@ async function startServer() {
   }, express.static(uploadsDir, {dotfiles:'deny',index:false,
     setHeaders(res) {
       res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+      res.setHeader("Cache-Control", "private, no-store, max-age=0");
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
     },
   }));
 
@@ -2380,7 +2381,9 @@ async function startServer() {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="V79_AI_Prompting_Guide.pdf"',
         "Content-Length": String(aiPromptGuidePdfCache.length),
-        "Cache-Control": "private, max-age=0, must-revalidate",
+        "Cache-Control": "private, no-store, max-age=0",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
         "X-Content-Type-Options": "nosniff",
       }).send(aiPromptGuidePdfCache);
     } catch (error) {
@@ -3599,9 +3602,14 @@ ${articlesXml}</urlset>`;
     res.status(Number.isInteger(err.status) && err.status >= 400 && err.status <= 599 ? err.status : 500).json({ error: "Internal server error." });
   });
 
-  // Active listener
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] V79 Digital website running at http://0.0.0.0:${PORT}`);
+  // Local previews should not expose their admin and test data to the LAN.
+  // Production containers still listen internally on all interfaces.
+  const bindHost = cleanEnvValue(process.env.HOST) || (isProduction ? "0.0.0.0" : "127.0.0.1");
+  if (!isProduction && bindHost !== "127.0.0.1" && bindHost !== "localhost" && bindHost !== "::1") {
+    console.warn("[Server] Development server explicitly bound beyond loopback; only do this on a trusted network.");
+  }
+  app.listen(PORT, bindHost, () => {
+    console.log(`[Server] V79 Digital website listening on http://${bindHost}:${PORT}`);
   });
 }
 
