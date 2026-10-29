@@ -1,27 +1,51 @@
 name: Continuous Delivery
 
+# Never auto-deploy on push or a successful CI run. A release requires an
+# authenticated owner dispatch from main and an exact approval phrase.
 on:
-  workflow_run:
-    workflows: ["Production checks"]
-    types: [completed]
   workflow_dispatch:
+    inputs:
+      approval:
+        description: "Type APPROVE_V79_WEBSITE_PRODUCTION to authorise this release"
+        required: true
+        type: string
 
 permissions:
   contents: read
   packages: write
 
 jobs:
+  verify-release:
+    name: Revalidate the approved commit
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_V79_WEBSITE_PRODUCTION' }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=moderate
+
   deliver:
     name: Package and publish
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
+    needs: verify-release
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_V79_WEBSITE_PRODUCTION' }}
     timeout-minutes: 20
 
     steps:
       - name: Check out validated commit
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Create release bundle
         shell: bash
@@ -33,7 +57,7 @@ jobs:
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ github.event.workflow_run.head_sha || github.sha }}
+          name: release-${{ github.sha }}
           path: ${{ runner.temp }}/*.tar.gz
           retention-days: 14
           if-no-files-found: error
@@ -58,7 +82,7 @@ jobs:
         shell: bash
         run: |
           IMAGE="${{ steps.docker.outputs.image }}"
-          COMMIT="${{ github.event.workflow_run.head_sha || github.sha }}"
+          COMMIT="${{ github.sha }}"
           SHORT_SHA="${COMMIT::12}"
           docker build -t "$IMAGE:latest" -t "$IMAGE:$SHORT_SHA" .
           docker push "$IMAGE:latest"
@@ -68,17 +92,17 @@ jobs:
     name: Deploy validated release to server
     runs-on: ubuntu-latest
     needs: deliver
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_V79_WEBSITE_PRODUCTION' }}
     environment: production
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.sha }}
 
       - uses: actions/download-artifact@v4
         with:
-          name: release-${{ github.event.workflow_run.head_sha }}
+          name: release-${{ github.sha }}
           path: ${{ runner.temp }}/release
 
       - name: Join deployment tailnet
@@ -131,7 +155,7 @@ jobs:
       - name: Transfer and deploy release
         shell: bash
         env:
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_SHA: ${{ github.sha }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
