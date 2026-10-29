@@ -10,7 +10,12 @@ import {DatabaseSync} from 'node:sqlite';
 const repo=process.cwd();
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'website-test-'));fs.mkdirSync(path.join(tmp,'data'));
 const course={id:71,name:'Test course',category:'courses',price:0,pricingType:'free',curriculum:JSON.stringify([{title:'Chapter',lectures:[{id:'lesson1',title:'Lesson',videoUrl:'https://example.test/lesson.mp4'}]}]),exam:JSON.stringify([{question:'Test question',options:['A','B'],correctAnswer:1}])};
-fs.writeFileSync(path.join(tmp,'data/vision79_saas.json'),JSON.stringify([course,{...course,id:72,price:10,pricingType:'premium'}]));
+const paidMedia={...course,id:73,price:25,pricingType:'premium',curriculum:JSON.stringify([{title:'Chapter',lectures:[{id:'privateLesson',title:'Private lesson',videoUrl:'/uploads/paid-lesson.mp4'}]}])};
+fs.writeFileSync(path.join(tmp,'data/vision79_saas.json'),JSON.stringify([course,{...course,id:72,price:10,pricingType:'premium'},paidMedia]));
+fs.mkdirSync(path.join(tmp,'uploads'));
+fs.writeFileSync(path.join(tmp,'uploads','unlisted.pdf'),'%PDF-1.4\\nprivate dummy');
+fs.writeFileSync(path.join(tmp,'uploads','paid-lesson.mp4'),'test-paid-media');
+fs.writeFileSync(path.join(tmp,'uploads','published-cover.png'),'test-published-image');
 fs.writeFileSync(path.join(tmp,'data/vision79_crm_prospects.json'),JSON.stringify([{id:'test-prospect',businessName:'Test prospect',description:'Test only',location:'Castries',category:'IT',leadScore:60,workflowStatus:'discovered'}]));
 const gateway=createServer((req,res)=>{req.resume();res.writeHead(401,{'Content-Type':'application/json'});res.end('{"error":"test rejection"}');});
 await new Promise<void>(r=>gateway.listen(0,'127.0.0.1',r));
@@ -41,8 +46,8 @@ await test('production regression suite',{timeout:30000},async t=>{
   const services=await anon.call('/services');
   assert.equal(services.status,200);
   assert.ok(services.text.includes(`<link rel="canonical" href="${base}/services" />`));
-  assert.ok(services.text.includes('IT, Cloud, Cybersecurity &amp; Automation Services | V79 Digital'));
-  assert.ok(services.text.includes('Managed technology services are V79 Digital'));
+  assert.ok(services.text.includes('Digital Transformation, AI &amp; ICT Services | V79 Digital'));
+  assert.ok(services.text.includes('Digital transformation leads V79 Digital'));
   assert.ok(services.text.includes('href="/contact"'));
   const blog=await fetch(base+'/blog',{redirect:'manual'});
   assert.equal(blog.status,301);
@@ -83,6 +88,27 @@ await test('production regression suite',{timeout:30000},async t=>{
   }
  });
  await t.test('admin cookies, forced password change and CSRF',async()=>{let r=await admin.call('/api/admin/login','POST',{password:env.ADMIN_PASSWORD});assert.equal(r.status,200);assert.match(r.headers.get('set-cookie')!,/HttpOnly/);assert.match(r.headers.get('set-cookie')!,/Secure/);assert.equal(r.data.token,'cookie-session');assert.equal((await admin.call('/api/admin/leads')).status,403);r=await admin.call('/api/admin/change-password','POST',{currentPassword:env.ADMIN_PASSWORD,newPassword:'Changed-test-password-456!'});assert.equal(r.status,200);assert.equal((await admin.call('/api/admin/leads')).status,200);assert.equal((await admin.call('/api/admin/logout','POST',{}, {Origin:'https://attacker.test'})).status,403);});
+ await t.test('uploaded assets are private by default and paid lessons require enrollment',async()=>{
+  assert.equal((await anon.call('/uploads/unlisted.pdf')).status,404);
+  assert.equal((await anon.call('/uploads/paid-lesson.mp4')).status,403);
+  assert.equal((await admin.call('/uploads/paid-lesson.mp4')).status,200);
+  const folder=path.join(tmp,'data/articles');fs.mkdirSync(folder,{recursive:true});
+  fs.writeFileSync(path.join(folder,'published-test.md'),'---\\ntitle: "Published test"\\n---\\n![Cover](/uploads/published-cover.png)');
+  assert.equal((await anon.call('/uploads/published-cover.png')).status,200);
+ });
+ await t.test('subscriber download links require signup and reject tampering',async()=>{
+  const pdfPath='/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf';
+  assert.equal((await anon.call(pdfPath)).status,403);
+  assert.equal((await anon.call('/api/newsletter/subscribe','POST',{email:'reader@example.test',consent:false})).status,400);
+  const response=await anon.call('/api/newsletter/subscribe','POST',{firstName:'Reader',email:'reader@example.test',consent:true,website:''});
+  assert.equal(response.status,201);
+  assert.match(response.data.downloadUrl,/^\\/downloads\\/V79_AI_Prompting_Guide_Premium_FIXED\\.pdf\\?token=/);
+  const signed=await anon.call(response.data.downloadUrl);
+  assert.equal(signed.status,200);
+  assert.match(signed.headers.get('content-type')||'',/application\\/pdf/);
+  const altered=response.data.downloadUrl.replace(/.$/, (x:string)=>x==='A'?'B':'A');
+  assert.equal((await anon.call(altered)).status,403);
+ });
  await t.test('malformed contacts cannot crash; delivery rejection remains failed',async()=>{assert.equal((await anon.call('/api/leads','POST',{name:{},company:'T',email:'x@y.test',phone:'0'})).status,400);assert.equal((await anon.call('/api/health')).status,200);const r=await anon.call('/api/leads','POST',{name:'Test Contact',company:'Test Co',email:'contact@example.test',phone:'000000000'});assert.equal(r.status,201);await new Promise(r=>setTimeout(r,100));const leads=await admin.call('/api/admin/leads');assert.equal(leads.data[0].tiquetSyncStatus,'failed');});
  await t.test('CRM stage and approval are durable and idempotent',async()=>{const leads=await admin.call('/api/admin/crm/leads');const list=Array.isArray(leads.data)?leads.data:leads.data.leads;assert.ok(list?.length);assert.equal((await admin.call(`/api/admin/crm/leads/${list[0].id}/stage`,'PUT',{stage:'Researching'})).status,200);const first=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(first.status,200);const second=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(second.status,200);assert.equal(first.data.id,second.data.id);});
  await t.test('storage failure rolls back lead capture and fails readiness',async()=>{
@@ -97,7 +123,7 @@ await test('production regression suite',{timeout:30000},async t=>{
  const counter=await anon.call('/api/apps/increment','POST',{id:71});assert.equal(counter.status,200);assert.equal(counter.text.includes('correctAnswer'),false);
  });
  await t.test('no public answers, history or client-forged passes' ,async()=>{const r=await anon.call('/api/apps');assert.equal(r.status,200);assert.ok(!r.text.includes('correctAnswer'));assert.equal((await anon.call('/api/exam/attempts')).status,401);assert.equal((await anon.call('/api/exam/attempt','POST',{appId:71,passed:true,score:'100/100'})).status,401);});
- await t.test('learner enrollment, grading, persistence, paid approval and recovery',async()=>{let r=await student.call('/api/student/register','POST',{name:'Test Learner',email:'learner@example.test',password:'Learner-password-123!'});assert.equal(r.status,201);const recovery=r.data.recoveryCode,id=r.data.id;assert.equal((await student.call('/api/student/courses/71/enroll','POST')).status,200);assert.equal((await student.call('/api/student/courses/71/progress','PUT',{completed:{lesson1:true},note:'Private note'})).status,200);r=await student.call('/api/exam/attempt','POST',{appId:71,answers:[1],passed:false});assert.equal(r.status,201);assert.equal(r.data.passed,true);assert.ok(r.data.certificate.id);assert.equal((await anon.call('/api/certificates/'+r.data.certificate.id)).data.valid,true);r=await student.call('/api/student/courses/72/enroll','POST');assert.equal(r.data.state.enrolled,false);assert.equal((await student.call('/api/student/courses/72')).text.includes('https://example.test/lesson.mp4'),false);assert.equal((await admin.call('/api/admin/enrollments','POST',{studentId:id,courseId:72})).status,200);assert.equal((await student.call('/api/student/courses/72')).text.includes('https://example.test/lesson.mp4'),true);await stop();await start();assert.equal((await student.call('/api/student/courses/71')).data.state.note,'Private note');assert.equal((await student.call('/api/student/recover','POST',{email:'learner@example.test',recoveryCode:recovery,password:'Recovered-password-123!'})).status,200);});
+ await t.test('learner enrollment, grading, persistence, paid approval and recovery',async()=>{let r=await student.call('/api/student/register','POST',{name:'Test Learner',email:'learner@example.test',password:'Learner-password-123!'});assert.equal(r.status,201);const recovery=r.data.recoveryCode,id=r.data.id;assert.equal((await student.call('/api/student/courses/71/enroll','POST')).status,200);assert.equal((await student.call('/api/student/courses/71/progress','PUT',{completed:{lesson1:true},note:'Private note'})).status,200);r=await student.call('/api/exam/attempt','POST',{appId:71,answers:[1],passed:false});assert.equal(r.status,201);assert.equal(r.data.passed,true);assert.ok(r.data.certificate.id);assert.equal((await anon.call('/api/certificates/'+r.data.certificate.id)).data.valid,true);r=await student.call('/api/student/courses/72/enroll','POST');assert.equal(r.data.state.enrolled,false);assert.equal((await student.call('/api/student/courses/72')).text.includes('https://example.test/lesson.mp4'),false);assert.equal((await admin.call('/api/admin/enrollments','POST',{studentId:id,courseId:72})).status,200);assert.equal((await student.call('/api/student/courses/72')).text.includes('https://example.test/lesson.mp4'),true);const paidRequest=await student.call('/api/student/courses/73/enroll','POST');assert.equal(paidRequest.data.state.enrolled,false);assert.equal((await student.call('/uploads/paid-lesson.mp4')).status,403);assert.equal((await admin.call('/api/admin/enrollments','POST',{studentId:id,courseId:73})).status,200);assert.equal((await student.call('/uploads/paid-lesson.mp4')).status,200);await stop();await start();assert.equal((await student.call('/api/student/courses/71')).data.state.note,'Private note');assert.equal((await student.call('/api/student/recover','POST',{email:'learner@example.test',recoveryCode:recovery,password:'Recovered-password-123!'})).status,200);});
  await t.test('migration encrypts contact data and retains encrypted originals',()=>{const data=path.join(tmp,'data');assert.ok(fs.existsSync(path.join(data,'website.db')));assert.ok(fs.existsSync(path.join(data,'vision79_saas.json.migrated.enc')));assert.equal(fs.existsSync(path.join(data,'vision79_saas.json')),false);for(const name of fs.readdirSync(data).filter(x=>x.endsWith('.db')||x.endsWith('-wal')||x.endsWith('.enc')))assert.equal(fs.readFileSync(path.join(data,name)).includes(Buffer.from('contact@example.test')),false);});
  await t.test('account isolation and server-enforced failed-attempt cooldown',async()=>{
  const other=new Client();assert.equal((await other.call('/api/student/register','POST',{name:'Other Learner',email:'other@example.test',password:'Different-password-123!'})).status,201);
