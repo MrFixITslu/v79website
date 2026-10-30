@@ -79,13 +79,13 @@ await test('production regression suite',{timeout:30000},async t=>{
   // Match the actual public marketing routes. Do not index admin, CRM, API,
   // private lessons, or signed downloads; no fabricated daily lastmod dates.
   const paths=['/','/services','/about','/industries','/solutions','/resources','/free-ai-prompting-guide','/faq','/contact','/privacy','/terms','/data-deletion'];
-  const locs=[...sitemap.text.matchAll(/<loc>([^<]+)<\\/loc>/g)].map(m=>m[1]);
+  const locs=[...sitemap.text.matchAll(/<loc>([^<]+)<[/]loc>/g)].map(m=>m[1]);
   assert.deepEqual(locs.slice(0,paths.length),paths.map(p=>base+p));
-  assert.equal(locs.some(loc=>/\\/(?:admin|crm|api|uploads|course|unsubscribe)(?:\\/|\\?|$)/.test(loc)),false);
+  assert.equal(locs.some(loc=>/[/](?:admin|crm|api|uploads|course|unsubscribe)(?:[/]|[?]|$)/.test(loc)),false);
   assert.equal(sitemap.text.includes(`<loc>${base}/</loc><lastmod>`),false);
   assert.ok(locs.some(loc=>loc.startsWith(base+'/resources?article=')));
   const fallback=fs.readFileSync(path.join(repo,'public/sitemap.xml'),'utf8');
-  const staticLocs=[...fallback.matchAll(/<loc>([^<]+)<\\/loc>/g)].map(m=>m[1]);
+  const staticLocs=[...fallback.matchAll(/<loc>([^<]+)<[/]loc>/g)].map(m=>m[1]);
   assert.deepEqual(staticLocs,paths.map(p=>'https://v79sl.com'+p));
  });
  await t.test('server SEO fallback does not flash into JavaScript app root',async()=>{
