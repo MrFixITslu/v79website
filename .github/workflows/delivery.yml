@@ -1,175 +1,27 @@
-name: Continuous Delivery
+name: Production deployment — safety lock
 
-# Never auto-deploy on push or a successful CI run. A release requires an
-# authenticated owner dispatch from main and an exact approval phrase.
+# Production site is running the image-only release from commit
+# 2133eadc4bbc30a7f1136221748dd7d5c01d9224.
+# Do not trigger on CI completion, push, PR, or schedule.
+# A real production release must use an independently reviewed, guarded
+# image-only cutover with pinned image identity, validated backups,
+# isolated smoke tests, unchanged mounts/env/networks, and rollback.
+# The previous workflow_run -> scripts/deploy-server.sh path is retired.
 on:
   workflow_dispatch:
-    inputs:
-      approval:
-        description: "Type APPROVE_V79_WEBSITE_PRODUCTION to authorise this release"
-        required: true
-        type: string
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  verify-release:
-    name: Revalidate the approved commit
+  deployment-locked:
+    name: Deployment locked — no production actions
     runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'MrFixITslu' && inputs.approval == 'APPROVE_V79_WEBSITE_PRODUCTION' }}
-    timeout-minutes: 25
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run build
-      - run: npm test
-      - run: npm audit --omit=dev --audit-level=moderate
-
-  deliver:
-    name: Package and publish
-    runs-on: ubuntu-latest
-    needs: verify-release
-    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'MrFixITslu' && inputs.approval == 'APPROVE_V79_WEBSITE_PRODUCTION' }}
-    timeout-minutes: 20
-
-    steps:
-      - name: Check out validated commit
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Create release bundle
+      - name: Explain release hold
         shell: bash
         run: |
-          tar --exclude=.git --exclude=node_modules --exclude=.env --exclude='.env.*' \
-              --exclude=data --exclude=uploads --exclude=backups --exclude=dist --exclude='*.tar.gz' \
-              -czf "${RUNNER_TEMP}/${GITHUB_REPOSITORY##*/}-${GITHUB_SHA::12}.tar.gz" .
-
-      - name: Upload release bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-${{ github.sha }}
-          path: ${{ runner.temp }}/*.tar.gz
-          retention-days: 14
-          if-no-files-found: error
-
-      - name: Detect Dockerfile
-        id: docker
-        shell: bash
-        run: |
-          if [ -f Dockerfile ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Log in to GHCR
-        if: ${{ steps.docker.outputs.enabled == 'true' }}
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-
-      - name: Publish validated Docker image
-        if: ${{ steps.docker.outputs.enabled == 'true' }}
-        shell: bash
-        run: |
-          IMAGE="${{ steps.docker.outputs.image }}"
-          COMMIT="${{ github.sha }}"
-          SHORT_SHA="${COMMIT::12}"
-          docker build -t "$IMAGE:latest" -t "$IMAGE:$SHORT_SHA" .
-          docker push "$IMAGE:latest"
-          docker push "$IMAGE:$SHORT_SHA"
-
-  deploy:
-    name: Deploy validated release to server
-    runs-on: ubuntu-latest
-    needs: deliver
-    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'MrFixITslu' && inputs.approval == 'APPROVE_V79_WEBSITE_PRODUCTION' }}
-    environment: production
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-${{ github.sha }}
-          path: ${{ runner.temp }}/release
-
-      - name: Join deployment tailnet
-        uses: tailscale/github-action@v4
-        with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-
-      - name: Configure pinned SSH host
-        shell: bash
-        env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          test -n "$DEPLOY_SSH_KEY" && test -n "$DEPLOY_KNOWN_HOSTS"
-          install -d -m 700 "$HOME/.ssh"
-
-          printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$RUNNER_TEMP/deploy-key.raw"
-          if grep -Fq '\\n' "$RUNNER_TEMP/deploy-key.raw"; then
-            printf '%b\n' "$(cat "$RUNNER_TEMP/deploy-key.raw")" > "$HOME/.ssh/id_ed25519"
-          else
-            cat "$RUNNER_TEMP/deploy-key.raw" > "$HOME/.ssh/id_ed25519"
-            printf '\n' >> "$HOME/.ssh/id_ed25519"
-          fi
-
-          if ! grep -q '^-----BEGIN .*PRIVATE KEY-----$' "$HOME/.ssh/id_ed25519"; then
-            if base64 -d "$HOME/.ssh/id_ed25519" > "$RUNNER_TEMP/deploy-key.decoded" 2>/dev/null \
-               && grep -q '^-----BEGIN .*PRIVATE KEY-----$' "$RUNNER_TEMP/deploy-key.decoded"; then
-              mv "$RUNNER_TEMP/deploy-key.decoded" "$HOME/.ssh/id_ed25519"
-              printf '\n' >> "$HOME/.ssh/id_ed25519"
-            fi
-          fi
-
-          printf '%s' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$RUNNER_TEMP/known-hosts.raw"
-          if grep -Fq '\\n' "$RUNNER_TEMP/known-hosts.raw"; then
-            printf '%b\n' "$(cat "$RUNNER_TEMP/known-hosts.raw")" > "$HOME/.ssh/known_hosts"
-          else
-            cat "$RUNNER_TEMP/known-hosts.raw" > "$HOME/.ssh/known_hosts"
-            printf '\n' >> "$HOME/.ssh/known_hosts"
-          fi
-
-          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
-
-          if ! ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null 2>&1; then
-            echo "DEPLOY_SSH_KEY is not a valid unencrypted SSH private key after normalization." >&2
-            echo "Store the complete private key, not the .pub key, in the GitHub DEPLOY_SSH_KEY secret." >&2
-            exit 1
-          fi
-
-      - name: Transfer and deploy release
-        shell: bash
-        env:
-          RELEASE_SHA: ${{ github.sha }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
-          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT || '/home/firelion/website2026' }}
-          DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT || 'website2026' }}
-        run: |
-          set -euo pipefail
-          for name in RELEASE_SHA DEPLOY_HOST DEPLOY_USER DEPLOY_ROOT DEPLOY_PROJECT; do
-            test -n "${!name}" || { echo "Missing production setting: $name" >&2; exit 1; }
-          done
-          port="${DEPLOY_SSH_PORT:-22}"
-          [[ "$port" =~ ^[0-9]+$ ]] || exit 1
-          archive="$(find "$RUNNER_TEMP/release" -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
-          test -n "$archive"
-          target="${DEPLOY_USER}@${DEPLOY_HOST}"
-          scp -P "$port" -o StrictHostKeyChecking=yes "$archive" "$target:v79-release-${RELEASE_SHA}.tar.gz"
-          ssh -p "$port" -o StrictHostKeyChecking=yes "$target" bash -s -- "$RELEASE_SHA" "$DEPLOY_ROOT" "$DEPLOY_PROJECT" "V79website" < scripts/deploy-server.sh
+          echo "::notice title=Production safety lock::Website deployment from GitHub Actions is disabled."
+          echo "No Docker image is published and no live server is contacted."
+          echo "Use a separately reviewed guarded release procedure and explicit owner approval."
