@@ -3312,107 +3312,43 @@ ${fields.content || ""}`;
     );
   });
 
-  app.get("/sitemap.xml", (req, res) => {
-    res.type("application/xml");
-    const domain = PRIMARY_CANONICAL_DOMAIN;
-    const nowIso = new Date().toISOString().split("T")[0];
-    
-    let articlesXml = "";
+  // XML sitemap is generated here before the static-file middleware.
+  // Keep the public/sitemap.xml fallback aligned with this route list.
+  app.get("/sitemap.xml", (_req, res) => {
+    const domain = PRIMARY_CANONICAL_DOMAIN.replace(/\\/+$/, "");
+    const escapeXml = (value: string) => value.replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+    // Only public, indexable marketing and legal pages; never admin, API,
+    // download tokens, CRM, learner accounts or private course pages.
+    const publicPaths = [
+      "/", "/services", "/about", "/industries", "/solutions",
+      "/resources", "/free-ai-prompting-guide", "/faq", "/contact",
+      "/privacy", "/terms", "/data-deletion"
+    ];
+    const locations = publicPaths.map(p =>
+      `  <url><loc>${escapeXml(domain + p)}</loc></url>`).join("\n");
+    const articles: string[] = [];
     try {
       if (fs.existsSync(ARTICLES_DIR)) {
-        const files = fs.readdirSync(ARTICLES_DIR).filter(f => f.endsWith(".md"));
-        files.forEach(file => {
-          const slug = file.replace(".md", "");
+        // Article identifiers match the public /api/articles/:slug validator.
+        for (const file of fs.readdirSync(ARTICLES_DIR).sort()) {
+          if (!/^[a-zA-Z0-9_-]+\\.md$/.test(file)) continue;
+          const slug = file.slice(0, -3);
           const filePath = path.join(ARTICLES_DIR, file);
-          let fileDate = nowIso;
-          try {
-            const stat = fs.statSync(filePath);
-            fileDate = stat.mtime.toISOString().split("T")[0];
-          } catch {}
-          articlesXml += `  <url>\n    <loc>${domain}/resources?article=${slug}</loc>\n    <lastmod>${fileDate}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
-        });
+          if (!fs.statSync(filePath).isFile()) continue;
+          const lastmod = fs.statSync(filePath).mtime.toISOString().slice(0, 10);
+          const loc = escapeXml(`${domain}/resources?article=${encodeURIComponent(slug)}`);
+          articles.push(`  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`);
+        }
       }
     } catch (err) {
       console.error("Error generating sitemap articles:", err);
     }
-
-    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>${domain}/</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>${domain}/services</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>${domain}/about</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>${domain}/industries</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>${domain}/solutions</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>${domain}/resources</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>${domain}/free-ai-prompting-guide</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>${domain}/faq</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>${domain}/contact</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>${domain}/privacy</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.4</priority>
-  </url>
-  <url>
-    <loc>${domain}/terms</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.4</priority>
-  </url>
-  <url>
-    <loc>${domain}/data-deletion</loc>
-    <lastmod>${nowIso}</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
-  </url>
-${articlesXml}</urlset>`;
-    
-    res.send(sitemap);
+    // Avoid claiming that all marketing pages were changed today. Supply
+    // lastmod only for articles where a real filesystem modification time exists.
+    res.type("application/xml").set("Cache-Control", "public, max-age=900");
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${locations}\n${articles.join("\n")}\n</urlset>\n`);
   });
 
   // Vite development vs production serving logic
