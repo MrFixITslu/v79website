@@ -3315,7 +3315,7 @@ ${fields.content || ""}`;
   // XML sitemap is generated here before the static-file middleware.
   // Keep the public/sitemap.xml fallback aligned with this route list.
   app.get("/sitemap.xml", (_req, res) => {
-    const domain = PRIMARY_CANONICAL_DOMAIN.replace(/\\/+$/, "");
+    const domain = PRIMARY_CANONICAL_DOMAIN.replace(/[/]+$/, "");
     const escapeXml = (value: string) => value.replace(/&/g, "&amp;")
       .replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
@@ -3333,7 +3333,7 @@ ${fields.content || ""}`;
       if (fs.existsSync(ARTICLES_DIR)) {
         // Article identifiers match the public /api/articles/:slug validator.
         for (const file of fs.readdirSync(ARTICLES_DIR).sort()) {
-          if (!/^[a-zA-Z0-9_-]+\\.md$/.test(file)) continue;
+          if (!/^[a-zA-Z0-9_-]+[.]md$/.test(file)) continue;
           const slug = file.slice(0, -3);
           const filePath = path.join(ARTICLES_DIR, file);
           if (!fs.statSync(filePath).isFile()) continue;
