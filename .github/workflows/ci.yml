@@ -16,6 +16,7 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm audit --omit=dev --audit-level=moderate
+      - run: npm audit --audit-level=moderate
       - run: docker build -t website2026:test .
       - name: Smoke test production container
         run: |

@@ -4,8 +4,9 @@ import {
   Sun, Moon, Menu, X, ChevronDown, Phone, MessageSquare,
   LayoutDashboard, WalletCards, Megaphone, ShoppingCart,
   GraduationCap, ArrowRight, ShieldCheck, CheckCircle2,
+  Youtube, Facebook, Instagram, Linkedin,
 } from "lucide-react";
-import HomePage from "./components/HomePage";
+import HomePage from "./components/CaribbeanHomePage";
 import AboutPage from "./components/AboutPage";
 import ServicesPage from "./components/ServicesPage";
 import IndustriesPage from "./components/IndustriesPage";
@@ -16,6 +17,8 @@ import { SectionLoadingFallback } from "./components/ui/Skeleton";
 import { CLIENT_STORIES } from "./data/testimonials";
 import LegalPage from "./components/LegalPage";
 import AIPromptGuideLandingPage from "./components/AIPromptGuideLandingPage";
+
+const FAQPage = lazy(() => import("./components/FAQPage"));
 
 const ResourcesPage = lazy(() => import("./components/ResourcesPage"));
 const ArticleDetailPage = lazy(() =>
@@ -44,17 +47,19 @@ const SECTIONS = [
   ]},
   { id: "about", label: "About" },
   { id: "services", label: "Services", subItems: [
-    { id: "managed-it", label: "Managed IT Services" },
-    { id: "cloud", label: "Cloud Solutions" },
-    { id: "software", label: "Custom Software" },
-    { id: "ai-automation", label: "AI Automation" },
-    { id: "networking", label: "Network & VoIP" },
-    { id: "cybersecurity", label: "Cybersecurity" },
-    { id: "assessment", label: "ICT Health Assessment" },
+    { id: "digital-transformation", label: "Digital Transformation" },
+    { id: "ai-automation", label: "AI & Automation" },
+    { id: "software", label: "Software & SaaS" },
+    { id: "networking", label: "Networks & Infrastructure" },
+    { id: "managed-it", label: "Managed ICT Support" },
+    { id: "cybersecurity", label: "Security & Continuity" },
+    { id: "cloud", label: "Cloud Productivity" },
+    { id: "assessment", label: "Business Discovery" },
   ]},
   { id: "industries", label: "Industries" },
   { id: "solutions", label: "Solutions" },
   { id: "resources", label: "Resources" },
+  { id: "faq", label: "FAQ" },
   { id: "contact", label: "Contact" },
 ];
 
@@ -62,7 +67,26 @@ const SECTIONS = [
 // ServicesPage (as opposed to "assessment", which is always-visible
 // content with nothing to expand). Clicking one of these in the nav should
 // open its card automatically, not just scroll to its still-collapsed header.
-const SERVICE_ACCORDION_IDS = ["managed-it", "cloud", "software", "ai-automation", "networking", "cybersecurity"];
+const SERVICE_ACCORDION_IDS = ["digital-transformation", "ai-automation", "software", "networking", "managed-it", "cybersecurity", "cloud"];
+
+/** Compact single-colour TikTok symbol, using currentColor to respect light/dark themes. */
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M16.71 2h-3.16v13.36a3.82 3.82 0 1 1-3.5-3.8V8.38a7.04 7.04 0 1 0 6.66 6.98V8.73a9.15 9.15 0 0 0 5.29 1.69V7.26A5.95 5.95 0 0 1 16.71 2Z" />
+    </svg>
+  );
+}
+
+/** Founder-provided official V79 social profiles. */
+const V79_SOCIAL_PROFILES = [
+  { name: "YouTube", url: "https://www.youtube.com/@v79digital", icon: Youtube },
+  { name: "Facebook", url: "https://www.facebook.com/Vision79sl/", icon: Facebook },
+  { name: "Instagram", url: "https://www.instagram.com/vision79sl/", icon: Instagram },
+  { name: "TikTok", url: "https://www.tiktok.com/@firelionslu", icon: TikTokIcon },
+  { name: "LinkedIn", url: "https://www.linkedin.com/company/v79digital", icon: Linkedin },
+] as const;
+
 
 const MARKETING_ROUTE_TO_SECTION: Record<string, string> = {
   "/about": "about",
@@ -71,10 +95,12 @@ const MARKETING_ROUTE_TO_SECTION: Record<string, string> = {
   "/solutions": "solutions",
   "/resources": "resources",
   "/contact": "contact",
+  "/faq": "faq",
 };
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState("home");
+  const [isFaqPage, setIsFaqPage] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/faq");
+  const [activeSection, setActiveSection] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/faq" ? "faq" : "home");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Which top-level nav item's sub-menu is currently open (desktop dropdown
   // or mobile accordion) — null means none open. Only one at a time.
@@ -93,10 +119,10 @@ export default function App() {
   // specific service in the Services dropdown — e.g. "Cloud Solutions" —
   // can open that exact card automatically, instead of just scrolling to
   // its (still collapsed) header and making the user click it again.
-  const [openServiceId, setOpenServiceId] = useState<string | null>("managed-it");
+  const [openServiceId, setOpenServiceId] = useState<string | null>("digital-transformation");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
-    try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "dark"; }
-    catch { return "dark"; }
+    try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "light"; }
+    catch { return "light"; }
   });
 
   // Legacy course deep-links remain supported, but course discovery now lives in V79 Academy.
@@ -120,9 +146,11 @@ export default function App() {
       setSelectedArticleSlug(article);
       if (article) return;
       const path = window.location.pathname.replace(/\/+$/, "") || "/";
+      setIsFaqPage(path === "/faq");
       const target = path === "/" ? "home" : MARKETING_ROUTE_TO_SECTION[path];
       if (!target) return;
       setActiveSection(target);
+      if (target === "faq") { window.scrollTo(0, 0); return; }
       window.setTimeout(() => {
         const el = document.getElementById(target);
         if (el) window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 110);
@@ -157,6 +185,7 @@ export default function App() {
     const target = MARKETING_ROUTE_TO_SECTION[path];
     if (!target) return;
     setActiveSection(target);
+    if (target === "faq") return;
     const timer = window.setTimeout(() => {
       const el = document.getElementById(target);
       if (el) {
@@ -206,8 +235,10 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePop);
   }, [apps]);
 
-  // Keep nav highlight in sync while the user scrolls, not just on click
+  // The standalone FAQ keeps the shared shell without mounting the long homepage.
+  // Reattach section tracking after returning from it.
   useEffect(() => {
+    if (isFaqPage) return;
     const sectionEls = SECTIONS
       .map(s => document.getElementById(s.id))
       .filter((el): el is HTMLElement => el !== null);
@@ -224,7 +255,7 @@ export default function App() {
     );
     sectionEls.forEach(el => observer.observe(el));
     return () => observer.disconnect();
-  }, []);
+  }, [isFaqPage, selectedArticleSlug]);
 
   // Close an open dropdown when clicking outside it, or pressing Escape
   useEffect(() => {
@@ -255,6 +286,19 @@ export default function App() {
   const navTransitionSeq = useRef(0);
 
   const scrollTo = (id: string, parentId?: string) => {
+    if (id === "faq") {
+      // This is a dedicated document route, with server-provided share metadata.
+      const url = new URL(window.location.href);
+      url.searchParams.delete("article"); url.searchParams.delete("faq");
+      window.location.assign("/faq" + url.search);
+      return;
+    }
+    if (isFaqPage) {
+      const target = parentId || id;
+      const route = target === "home" ? "/" : `/${target}`;
+      window.location.assign(route + (id !== target ? `#${id}` : ""));
+      return;
+    }
     if (selectedArticleSlug) {
       setSelectedArticleSlug(null);
       const url = new URL(window.location.href);
@@ -601,6 +645,17 @@ export default function App() {
             />
           </Suspense>
         </main>
+      ) : isFaqPage ? (
+        <main id="main-content" tabIndex={-1} className="flex-1 pt-28 focus:outline-none">
+          <Suspense fallback={<SectionLoadingFallback />}>
+            <FAQPage onEnquire={(questionId) => {
+              const params = new URLSearchParams(window.location.search);
+              params.delete("article");
+              if (questionId) params.set("faq", questionId); else params.delete("faq");
+              window.location.assign("/contact" + (params.size ? "?" + params.toString() : ""));
+            }} />
+          </Suspense>
+        </main>
       ) : (
         /* Continuous One-Page Apple-Inspired Flow */
         <main id="main-content" tabIndex={-1} className="flex-1 space-y-32 pb-24 pt-28 focus:outline-none">
@@ -849,7 +904,7 @@ export default function App() {
           <div className="space-y-2 text-xs">
             <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono text-[11px]">Company</div>
             <ul className="space-y-1.5 text-slate-600 dark:text-white/60 font-light">
-              {SECTIONS.filter(s => ["about", "resources", "contact"].includes(s.id)).map(s => (
+              {SECTIONS.filter(s => ["about", "resources", "faq", "contact"].includes(s.id)).map(s => (
                 <li key={s.id}>
                   <button onClick={() => scrollTo(s.id)} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">{s.label}</button>
                 </li>
@@ -860,10 +915,27 @@ export default function App() {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto pt-6 pb-4 flex flex-col sm:flex-row items-center justify-center gap-4 text-xs text-slate-600 dark:text-white/60 font-light border-b border-slate-200 dark:border-white/10">
+        <div className="max-w-7xl mx-auto pt-6 pb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-4 text-xs text-slate-600 dark:text-white/70 font-light border-b border-slate-200 dark:border-white/10">
           <div>Phone: <a href="tel:+17587260035" className="text-v79-teal dark:text-v79-teal-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">+1 758 726 0035</a></div>
-          <span className="hidden sm:block text-slate-300 dark:text-white/20">|</span>
+          <span aria-hidden="true" className="hidden lg:block text-slate-300 dark:text-white/20">|</span>
           <div>Email: <a href="mailto:vision79slu@gmail.com" className="text-v79-teal dark:text-v79-teal-light hover:underline font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">vision79slu@gmail.com</a></div>
+          <span aria-hidden="true" className="hidden lg:block text-slate-300 dark:text-white/20">|</span>
+          <div className="flex flex-wrap items-center justify-center gap-2" aria-label="V79 Digital social media">
+            <span className="mr-1 text-[11px] font-semibold text-slate-600 dark:text-white/65">Follow us</span>
+            {V79_SOCIAL_PROFILES.map(({ name, url, icon: Icon }) => (
+              <a
+                key={name}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`V79 Digital on ${name} (opens in a new tab)`}
+                title={name}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-v79-navy shadow-sm transition hover:-translate-y-0.5 hover:border-v79-teal hover:bg-v79-teal/10 hover:text-v79-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal dark:border-white/15 dark:bg-v79-navy-light dark:text-v79-teal-light dark:hover:border-v79-teal-light"
+              >
+                <Icon aria-hidden="true" className="h-[19px] w-[19px]" />
+              </a>
+            ))}
+          </div>
         </div>
 
         <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-white/50 font-mono">

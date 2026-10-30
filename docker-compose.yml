@@ -29,6 +29,7 @@ services:
       V79_HUB_EVENT_URL: ${V79_HUB_EVENT_URL:-http://v79-hub:3040/api/platform/events}
       V79_HUB_EVENT_SECRET: ${V79_HUB_EVENT_SECRET:-}
       V79_HUB_ORGANIZATION_REF: ${V79_HUB_ORGANIZATION_REF:-}
+      V79_HUB_EVENT_REPLAY_LEAD_IDS: ${V79_HUB_EVENT_REPLAY_LEAD_IDS:-}
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
