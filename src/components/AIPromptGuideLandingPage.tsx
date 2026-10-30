@@ -58,7 +58,10 @@ export default function AIPromptGuideLandingPage() {
         throw new Error(data.error || "We could not complete your signup. Please try again.");
       }
 
-      setDownloadUrl(data.downloadUrl || "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf");
+      if (!data.success || !data.downloadUrl) {
+        throw new Error("We couldn't issue a subscriber download link. Please try again.");
+      }
+      setDownloadUrl(data.downloadUrl);
       setUnsubscribeUrl(data.unsubscribeUrl || "");
       setMessage(
         data.subscriptionStatus === "unsubscribed"
@@ -161,7 +164,7 @@ export default function AIPromptGuideLandingPage() {
                     Download the PDF Guide
                   </a>
                   <p className="text-[11px] text-app-text-muted text-center">
-                    Keep this page open until your download starts.
+                    Your secure download link expires after 15 minutes. You can sign up again to request a fresh link.
                   </p>
                   {unsubscribeUrl && (
                     <p className="text-xs text-app-text-sec text-center">

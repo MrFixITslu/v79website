@@ -112,7 +112,7 @@ function page(kind: 'confirm' | 'done' | 'invalid', token = ''): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${title} | Vision79 Digital</title></head><body><main><p>Vision79 Digital</p><h1>${title}</h1>${content}<p><a href="/free-ai-prompting-guide">Free AI prompting guide</a> · <a href="/privacy">Privacy policy</a></p></main></body></html>`;
 }
 
-export function mountNewsletter(app: Express, store: NewsletterStore, limiter: RequestHandler, formParser: RequestHandler) {
+export function mountNewsletter(app: Express, store: NewsletterStore, limiter: RequestHandler, formParser: RequestHandler, guideLink: (hash: string) => string = () => GUIDE_DOWNLOAD) {
   const privatePage: RequestHandler = (_req, res, next) => {
     res.set({'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex, nofollow'});
     next();
@@ -123,7 +123,12 @@ export function mountNewsletter(app: Express, store: NewsletterStore, limiter: R
     }
     try {
       const {status, ...body} = subscribe(store, req.body || {});
-      return res.status(status).json(body);
+      const email = String(req.body.email).trim().toLowerCase();
+      const hash = crypto.createHash('sha256').update(email).digest('hex');
+      return res.status(status).json({
+        ...body,
+        downloadUrl: guideLink(hash)
+      });
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
       const messages: Record<string, string> = {

@@ -44,7 +44,8 @@ test('built newsletter HTTP flow: consent, scanner-safe link, form POST, restart
     const created = await post(signup);
     assert.equal(created.status, 201);
     const data = await created.json() as {unsubscribeUrl: string; downloadUrl: string};
-    assert.equal(data.downloadUrl, '/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf');
+    assert.ok(data.downloadUrl.startsWith('/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf?token='));
+    assert.equal((await fetch(base + data.downloadUrl)).status, 200);
     const confirmation = await fetch(base + data.unsubscribeUrl);
     assert.equal(confirmation.status, 200);
     assert.equal(confirmation.headers.get('referrer-policy'), 'no-referrer');
@@ -66,7 +67,8 @@ test('built newsletter HTTP flow: consent, scanner-safe link, form POST, restart
     await start();
     const retry = await (await post(signup)).json() as any;
     assert.equal(retry.subscriptionStatus, 'unsubscribed');
-    assert.equal(retry.downloadUrl, data.downloadUrl);
+    assert.ok(retry.downloadUrl.startsWith('/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf?token='));
+    assert.equal((await fetch(base + retry.downloadUrl)).status, 200);
     assert.equal(retry.unsubscribeUrl, undefined);
     assert.equal((await form(base)).status, 200);
     assert.equal((await fetch(base + '/newsletter/unsubscribe?token=forged')).status, 400);

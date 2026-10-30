@@ -4,8 +4,9 @@ import {
   Sun, Moon, Menu, X, ChevronDown, Phone, MessageSquare,
   LayoutDashboard, WalletCards, Megaphone, ShoppingCart,
   GraduationCap, ArrowRight, ShieldCheck, CheckCircle2,
+  Youtube, Facebook, Instagram, Linkedin,
 } from "lucide-react";
-import HomePage from "./components/HomePage";
+import HomePage from "./components/CaribbeanHomePage";
 import AboutPage from "./components/AboutPage";
 import ServicesPage from "./components/ServicesPage";
 import IndustriesPage from "./components/IndustriesPage";
@@ -46,13 +47,14 @@ const SECTIONS = [
   ]},
   { id: "about", label: "About" },
   { id: "services", label: "Services", subItems: [
-    { id: "managed-it", label: "Managed IT Services" },
-    { id: "cloud", label: "Cloud Solutions" },
-    { id: "software", label: "Custom Software" },
-    { id: "ai-automation", label: "AI Automation" },
-    { id: "networking", label: "Network & VoIP" },
-    { id: "cybersecurity", label: "Cybersecurity" },
-    { id: "assessment", label: "ICT Health Assessment" },
+    { id: "digital-transformation", label: "Digital Transformation" },
+    { id: "ai-automation", label: "AI & Automation" },
+    { id: "software", label: "Software & SaaS" },
+    { id: "networking", label: "Networks & Infrastructure" },
+    { id: "managed-it", label: "Managed ICT Support" },
+    { id: "cybersecurity", label: "Security & Continuity" },
+    { id: "cloud", label: "Cloud Productivity" },
+    { id: "assessment", label: "Business Discovery" },
   ]},
   { id: "industries", label: "Industries" },
   { id: "solutions", label: "Solutions" },
@@ -65,7 +67,26 @@ const SECTIONS = [
 // ServicesPage (as opposed to "assessment", which is always-visible
 // content with nothing to expand). Clicking one of these in the nav should
 // open its card automatically, not just scroll to its still-collapsed header.
-const SERVICE_ACCORDION_IDS = ["managed-it", "cloud", "software", "ai-automation", "networking", "cybersecurity"];
+const SERVICE_ACCORDION_IDS = ["digital-transformation", "ai-automation", "software", "networking", "managed-it", "cybersecurity", "cloud"];
+
+/** Compact single-colour TikTok symbol, using currentColor to respect light/dark themes. */
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M16.71 2h-3.16v13.36a3.82 3.82 0 1 1-3.5-3.8V8.38a7.04 7.04 0 1 0 6.66 6.98V8.73a9.15 9.15 0 0 0 5.29 1.69V7.26A5.95 5.95 0 0 1 16.71 2Z" />
+    </svg>
+  );
+}
+
+/** Founder-provided official V79 social profiles. */
+const V79_SOCIAL_PROFILES = [
+  { name: "YouTube", url: "https://www.youtube.com/@v79digital", icon: Youtube },
+  { name: "Facebook", url: "https://www.facebook.com/Vision79sl/", icon: Facebook },
+  { name: "Instagram", url: "https://www.instagram.com/vision79sl/", icon: Instagram },
+  { name: "TikTok", url: "https://www.tiktok.com/@firelionslu", icon: TikTokIcon },
+  { name: "LinkedIn", url: "https://www.linkedin.com/company/v79digital", icon: Linkedin },
+] as const;
+
 
 const MARKETING_ROUTE_TO_SECTION: Record<string, string> = {
   "/about": "about",
@@ -98,10 +119,10 @@ export default function App() {
   // specific service in the Services dropdown — e.g. "Cloud Solutions" —
   // can open that exact card automatically, instead of just scrolling to
   // its (still collapsed) header and making the user click it again.
-  const [openServiceId, setOpenServiceId] = useState<string | null>("managed-it");
+  const [openServiceId, setOpenServiceId] = useState<string | null>("digital-transformation");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
-    try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "dark"; }
-    catch { return "dark"; }
+    try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "light"; }
+    catch { return "light"; }
   });
 
   // Legacy course deep-links remain supported, but course discovery now lives in V79 Academy.
@@ -894,10 +915,27 @@ export default function App() {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto pt-6 pb-4 flex flex-col sm:flex-row items-center justify-center gap-4 text-xs text-slate-600 dark:text-white/60 font-light border-b border-slate-200 dark:border-white/10">
+        <div className="max-w-7xl mx-auto pt-6 pb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-4 text-xs text-slate-600 dark:text-white/70 font-light border-b border-slate-200 dark:border-white/10">
           <div>Phone: <a href="tel:+17587260035" className="text-v79-teal dark:text-v79-teal-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">+1 758 726 0035</a></div>
-          <span className="hidden sm:block text-slate-300 dark:text-white/20">|</span>
+          <span aria-hidden="true" className="hidden lg:block text-slate-300 dark:text-white/20">|</span>
           <div>Email: <a href="mailto:vision79slu@gmail.com" className="text-v79-teal dark:text-v79-teal-light hover:underline font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">vision79slu@gmail.com</a></div>
+          <span aria-hidden="true" className="hidden lg:block text-slate-300 dark:text-white/20">|</span>
+          <div className="flex flex-wrap items-center justify-center gap-2" aria-label="V79 Digital social media">
+            <span className="mr-1 text-[11px] font-semibold text-slate-600 dark:text-white/65">Follow us</span>
+            {V79_SOCIAL_PROFILES.map(({ name, url, icon: Icon }) => (
+              <a
+                key={name}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`V79 Digital on ${name} (opens in a new tab)`}
+                title={name}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-v79-navy shadow-sm transition hover:-translate-y-0.5 hover:border-v79-teal hover:bg-v79-teal/10 hover:text-v79-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal dark:border-white/15 dark:bg-v79-navy-light dark:text-v79-teal-light dark:hover:border-v79-teal-light"
+              >
+                <Icon aria-hidden="true" className="h-[19px] w-[19px]" />
+              </a>
+            ))}
+          </div>
         </div>
 
         <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-white/50 font-mono">

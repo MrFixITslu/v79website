@@ -573,6 +573,7 @@ class DocumentDatabase {
       rating: Number(feedback.rating),
       comment: feedback.comment || "",
       userName: encryptPII(feedback.userName || "Anonymous"),
+      feedbackType: feedback.feedbackType === "idea" ? "idea" : "feedback",
       onboarded: 0,
       onboardedComment: "",
       createdAt: new Date().toISOString()
@@ -1019,13 +1020,64 @@ async function startServer() {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
-  app.use("/uploads", (req,res,next)=>{
+  // Uploaded assets are private by default. An unreferenced file must never
+  // become public just because its path is under /uploads. Only intentionally
+  // published assets (article images, public app/ad images, lesson previews)
+  // may be fetched anonymously; non-preview course files require enrollment.
+  app.use("/uploads", (req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return res.status(405).end();
     if (isValidAdminSession(adminCookie(req))) return next();
-    const requested='/uploads'+req.path;
-    const restricted=db.getApps().filter((c:any)=>c.category==='courses' && (Number(c.price)>0 || c.pricingType==='premium')).filter((c:any)=>JSON.parse(c.curriculum||'[]').some((ch:any)=>(ch.lectures||[]).some((l:any)=>!l.freePreview && JSON.stringify(l).includes(requested))));
-    if (restricted.length && !restricted.some((c:any)=>learner(req)?.courses[String(c.id)]?.enrolled)) return res.status(403).json({error:'Enrollment required'});
-    next();
-  }, express.static(uploadsDir, {dotfiles:'deny',index:false}));
+    const basename = path.posix.basename(req.path);
+    if (!basename || basename === "." || req.path !== "/" + basename ||
+        !/^[A-Za-z0-9._-]{1,240}$/.test(basename) || basename.startsWith(".")) {
+      return res.status(404).end();
+    }
+    const requested = "/uploads/" + basename;
+    try {
+      const apps = db.getApps();
+      const publiclyReferencedApp = apps.some((a: any) =>
+        [a.logoUrl, a.coverImage, a.imageUrl, a.thumbnailUrl].some((v: unknown) => v === requested)
+      );
+      const publiclyReferencedAd = db.getAds().some((a: any) =>
+        [a.imageUrl, a.logoUrl, a.thumbnailUrl].some((v: unknown) => v === requested)
+      );
+      if (publiclyReferencedApp || publiclyReferencedAd) return next();
+
+      // Blog covers and inline images explicitly published by the admin.
+      if (fs.existsSync(ARTICLES_DIR)) {
+        const isPublishedArticleAsset = fs.readdirSync(ARTICLES_DIR)
+          .filter((name: string) => /^[A-Za-z0-9_-]+\.md$/.test(name))
+          .some((name: string) => fs.readFileSync(path.join(ARTICLES_DIR, name), "utf8").includes(requested));
+        if (isPublishedArticleAsset) return next();
+      }
+
+      let premiumMedia = false;
+      for (const c of apps) {
+        if (c.category !== "courses") continue;
+        const paid = Number(c.price) > 0 || c.pricingType === "premium";
+        const chapters = JSON.parse(c.curriculum || "[]");
+        for (const chapter of chapters) {
+          for (const lesson of chapter.lectures || []) {
+            if (!JSON.stringify(lesson).includes(requested)) continue;
+            if (!paid || lesson.freePreview) return next();
+            premiumMedia = true;
+            if (learner(req)?.courses[String(c.id)]?.enrolled) return next();
+          }
+        }
+      }
+      if (premiumMedia) return res.status(403).json({ error: "Enrollment required." });
+      return res.status(404).end();
+    } catch (error) {
+      console.error("[Uploads] Asset access policy failed closed:", error);
+      return res.status(503).json({ error: "Asset temporarily unavailable." });
+    }
+  }, express.static(uploadsDir, {dotfiles:'deny',index:false,
+    setHeaders(res) {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-store, max-age=0");
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    },
+  }));
 
   // Multer Storage Engine for Audio and Video uploads
   const storage = multer.diskStorage({
@@ -1033,7 +1085,7 @@ async function startServer() {
       cb(null, uploadsDir);
     },
     filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const uniqueSuffix = crypto.randomUUID();
       const ext = path.extname(file.originalname);
       const cleanName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
       cb(null, `${path.basename(cleanName, ext)}-${uniqueSuffix}${ext}`);
@@ -1117,7 +1169,8 @@ async function startServer() {
       // submitted feedback, rather than trusting a static stored number.
       const ratingsByApp = new Map<number, { sum: number; count: number }>();
       for (const f of feedback) {
-        if (!f.rating || !Number.isFinite(Number(f.rating))) continue;
+        // Public ratings must not be altered by unreviewed submissions.
+        if (f.onboarded !== 1 || !f.rating || !Number.isFinite(Number(f.rating))) continue;
         const key = Number(f.appId);
         const entry = ratingsByApp.get(key) || { sum: 0, count: 0 };
         entry.sum += Number(f.rating);
@@ -1986,7 +2039,24 @@ async function startServer() {
   app.get("/api/feedback", async (req, res) => {
     try {
       const appIdQuery = req.query.appId ? Number(req.query.appId) : undefined;
-      const list = await db.getFeedback(appIdQuery);
+      // Contributions are private until a real admin has reviewed and
+      // acknowledged them. Do not publish the contributor's name or any
+      // internal moderation metadata in unauthenticated responses.
+      const list = db.getFeedback(appIdQuery)
+        .filter((f: any) => f.onboarded === 1)
+        .map((f: any) => ({
+          id: f.id,
+          appId: f.appId,
+          appName: f.appName,
+          rating: f.rating,
+          comment: f.comment,
+          userName: "Community member",
+          feedbackType: f.feedbackType || "feedback",
+          onboarded: 1,
+          onboardedComment: f.onboardedComment || "",
+          createdAt: f.createdAt,
+          onboardedAt: f.onboardedAt,
+        }));
       res.json(list);
     } catch (err) {
       console.error("[API] Error fetching feedback:", err);
@@ -2000,7 +2070,8 @@ async function startServer() {
 
     const numericAppId = Number(appId);
     const numericRating = Number(rating);
-    if (!db.getApps().some((a:any)=>a.id===numericAppId)) return res.status(404).json({error:"Application not found"});
+    const feedbackApp = db.getApps().find((a: any) => a.id === numericAppId);
+    if (!feedbackApp) return res.status(404).json({error:"Application not found"});
 
     if (!appId || !Number.isFinite(numericAppId) || !rating || !comment) {
       return res.status(400).json({ error: "Missing required fields (appId, rating, comment) in body" });
@@ -2018,11 +2089,11 @@ async function startServer() {
     try {
       const newFeedback = await db.addFeedback({
         appId: numericAppId,
-        appName,
+        appName: feedbackApp.name,
         rating: numericRating,
         comment,
         userName,
-        feedbackType: feedbackType || "feedback"
+        feedbackType: feedbackType === "idea" ? "idea" : "feedback"
       });
       res.status(201).json(newFeedback);
     } catch (err) {
@@ -2252,8 +2323,52 @@ async function startServer() {
   // --- Free Newsletter / Lead Magnet Endpoints ---
   // Generate the premium guide on demand so production does not depend on a
   // committed binary asset. Cache the generated PDF in memory after the first request.
+  // Subscriber guide entitlement: 15-minute, signed, tamper-evident link.
+  // The signing key is the app's persistent encryption key; restarting the
+  // server does not invalidate links until they expire. No email is in the URL.
+  const guidePdfPath = "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf";
+  function guideLinkForSubscriber(emailHash: string): string {
+    const payload = Buffer.from(JSON.stringify({
+      v: 1,
+      h: emailHash,
+      exp: Date.now() + 15 * 60_000,
+    }), "utf8").toString("base64url");
+    const signature = crypto.createHmac("sha256", encryptionKey)
+      .update("v79:newsletter-guide:v1:" + payload).digest("base64url");
+    return guidePdfPath + "?token=" + encodeURIComponent(payload + "." + signature);
+  }
+  function hasGuideAccess(token: unknown): boolean {
+    if (typeof token !== "string" || token.length > 1024) return false;
+    const match = /^([A-Za-z0-9_-]{1,650})\.([A-Za-z0-9_-]{43})$/.exec(token);
+    if (!match) return false;
+    const [, payload, submittedSignature] = match;
+    const expectedSignature = crypto.createHmac("sha256", encryptionKey)
+      .update("v79:newsletter-guide:v1:" + payload).digest("base64url");
+    const expectedBytes = Buffer.from(expectedSignature, "utf8");
+    const submittedBytes = Buffer.from(submittedSignature, "utf8");
+    if (expectedBytes.length !== submittedBytes.length ||
+        !crypto.timingSafeEqual(expectedBytes, submittedBytes)) return false;
+    try {
+      const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+      if (claims?.v !== 1 || typeof claims.h !== "string" ||
+          !/^[a-f0-9]{64}$/.test(claims.h) ||
+          !Number.isSafeInteger(claims.exp) ||
+          Date.now() > claims.exp ||
+          claims.exp > Date.now() + 15 * 60_000) return false;
+      const current = readJSON<any[]>(JSON_NEWSLETTER_FILE, []);
+      return current.some((s: any) => s.emailHash === claims.h);
+    } catch {
+      return false;
+    }
+  }
   let aiPromptGuidePdfCache: Buffer | null = null;
-  app.get("/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf", (_req, res) => {
+  app.get("/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf", (req, res) => {
+    if (!hasGuideAccess(req.query.token)) {
+      return res.status(403).set({
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+      }).json({ error: "This guide is available to newsletter subscribers. Please sign up to receive a fresh download link." });
+    }
     try {
       if (!aiPromptGuidePdfCache) {
         const clientDist = path.resolve(process.env.CLIENT_DIST || path.join(process.cwd(), "dist/client"));
@@ -2269,7 +2384,9 @@ async function startServer() {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="V79_AI_Prompting_Guide.pdf"',
         "Content-Length": String(aiPromptGuidePdfCache.length),
-        "Cache-Control": "private, max-age=0, must-revalidate",
+        "Cache-Control": "private, no-store, max-age=0",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
         "X-Content-Type-Options": "nosniff",
       }).send(aiPromptGuidePdfCache);
     } catch (error) {
@@ -2282,7 +2399,7 @@ async function startServer() {
     read: () => readJSON<any[]>(JSON_NEWSLETTER_FILE, []),
     write: rows => writeJSON(JSON_NEWSLETTER_FILE, rows),
     transaction, encrypt: encryptPII, key: encryptionKey,
-  }, newsletterLimiter, express.urlencoded({extended: false, limit: "2kb"}));
+  }, newsletterLimiter, express.urlencoded({extended: false, limit: "2kb"}), guideLinkForSubscriber);
 
   app.get("/api/admin/newsletter/subscribers", requireAdmin, (_req, res) => {
     try {
@@ -2821,28 +2938,28 @@ async function startServer() {
       const normalizedPath = (req.path || "/").replace(/\/+$/, "") || "/";
       const staticPages: Record<string, { title: string; description: string }> = {
         "/": {
-          title: "Managed IT, Cloud & Business Software Saint Lucia | V79 Digital",
-          description: "V79 Digital helps Saint Lucia businesses with managed IT, cloud services, cybersecurity, business software, automation, and practical technology training.",
+          title: "Digital Transformation, AI & ICT for Caribbean Businesses | V79 Digital",
+          description: "V79 Digital helps Caribbean businesses simplify operations through digital transformation, AI automation, business software and dependable ICT services.",
         },
         "/about": {
-          title: "About V79 Digital | Caribbean ICT Experience",
-          description: "Learn about V79 Digital's practical Caribbean ICT and telecommunications experience and its approach to helping Saint Lucia businesses use technology effectively.",
+          title: "About V79 Digital | Caribbean Business Technology Partner",
+          description: "Discover V79 Digital's customer-focused approach to practical digital transformation, ICT services and useful business technology across the Caribbean.",
         },
         "/services": {
-          title: "IT, Cloud, Cybersecurity & Automation Services | V79 Digital",
-          description: "Explore managed IT, cloud, cybersecurity, networking, software development, automation, and scoped ICT assessment services for Saint Lucia businesses.",
+          title: "Digital Transformation, AI & ICT Services | V79 Digital",
+          description: "Explore digital transformation, AI automation, business software, managed ICT and infrastructure services for Caribbean businesses.",
         },
         "/industries": {
-          title: "Technology Services for Saint Lucia Businesses | V79 Digital",
-          description: "See how V79 Digital supports hospitality, retail, professional services, education, and other organisations with practical ICT, cloud, network, security, and software solutions.",
+          title: "Technology Services for Caribbean Businesses | V79 Digital",
+          description: "Explore practical business technology for Caribbean retail, tourism, professional services, healthcare and education organisations.",
         },
         "/solutions": {
           title: "V79 Hub Business Platform & Apps | V79 Digital",
           description: "Explore the V79 Hub business ecosystem: one workspace connecting V79 finance, customer support, marketing, sales tools, and V79 Academy learning.",
         },
         "/resources": {
-          title: "ICT Resources & Business Technology Guides | V79 Digital",
-          description: "Practical technology guidance for Saint Lucia and Caribbean businesses covering IT support, networks, cloud, cybersecurity, software, and digital operations.",
+          title: "Business Technology Resources & Insights | V79 Digital",
+          description: "Practical guides on AI, digital transformation, ICT, cybersecurity and business software for Caribbean businesses. Subscriber guides and V79 Academy learning.",
         },
         "/free-ai-prompting-guide": {
           title: "Free AI Prompting Guide + 10 Copyable Prompts | V79 Digital",
@@ -2875,19 +2992,19 @@ async function startServer() {
       // The copy mirrors the visible sections and is replaced by React on mount.
       const seoFallbacks: Record<string, { heading: string; summary: string; points: string[] }> = {
         "/": {
-          heading: "Managed IT Services & Cybersecurity Built for the Caribbean",
-          summary: "V79 Digital helps Saint Lucia organisations manage, secure, and improve the technology their businesses depend on.",
-          points: ["Managed IT support", "Cybersecurity", "Cloud and backup", "Networks and VoIP", "Business software", "Technology training"],
+          heading: "Better Business Starts with Smarter Technology",
+          summary: "V79 Digital helps Caribbean businesses simplify workflows, strengthen ICT foundations and turn ideas into practical improvements.",
+          points: ["Digital transformation", "AI and automation", "Business software", "ICT infrastructure", "Managed support", "Customer-focused progress"],
         },
         "/about": {
           heading: "About V79 Digital",
-          summary: "Caribbean-rooted ICT and telecommunications experience focused on practical, resilient technology for Saint Lucia businesses.",
-          points: ["More than 20 years of ICT experience", "Telecommunications and fibre", "Enterprise technology", "Business continuity", "Cloud and software"],
+          summary: "Customer-focused digital transformation built on Caribbean telecommunications and ICT experience, practical advice and relationships that create lasting value.",
+          points: ["Customer-first approach", "20+ years of ICT experience", "Caribbean business perspective", "Practical business value", "Responsible technology adoption"],
         },
         "/services": {
-          heading: "IT, Cloud, Cybersecurity & Automation Services",
-          summary: "Managed technology services are V79 Digital's primary offering, with clearly scoped support and response expectations.",
-          points: ["Managed IT support", "Cybersecurity assessments", "Cloud and backup", "Network and VoIP", "Custom software", "Automation and ICT assessments"],
+          heading: "Digital Transformation, AI & ICT Services",
+          summary: "Digital transformation leads V79 Digital's offering, supported by business software, AI, ICT infrastructure and managed services.",
+          points: ["Process improvement", "AI and automation", "Business software", "Network infrastructure", "Managed ICT support", "Business continuity"],
         },
         "/industries": {
           heading: "Technology Services for Saint Lucia Organisations",
@@ -2900,9 +3017,9 @@ async function startServer() {
           points: ["One business workspace", "FFPRO finance", "V79 Tiquet support", "V79 Marketing", "V79 POS", "Connected V79 Academy learning"],
         },
         "/resources": {
-          heading: "ICT Resources & Business Technology Guides",
-          summary: "Practical guidance for Caribbean businesses covering IT operations, cybersecurity, networks, cloud, software, and digital resilience.",
-          points: ["Managed IT guidance", "Cybersecurity", "Cloud and backup", "Networking", "Business software", "Digital operations"],
+          heading: "Practical Business Technology Insights & Subscriber Guides",
+          summary: "Business insights on digital transformation, AI, software and ICT. Downloadable guides are offered through newsletter signup; training resources live in V79 Academy.",
+          points: ["Digital transformation insights", "AI and automation", "ICT and cybersecurity", "Subscriber guides", "Business software", "V79 Academy for training"],
         },
         "/free-ai-prompting-guide": {
           heading: "Free AI Prompting Guide",
@@ -3316,6 +3433,10 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
+    // Development-only Vite runtime endpoints must reach Vite middleware.
+    // Production's explicit route allowlist is unchanged.
+    if (isDev && req.method === 'GET' &&
+        (req.path.startsWith('/@') || req.path === '/__vite_ping')) return next();
     const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/faq', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
@@ -3439,9 +3560,14 @@ ${articlesXml}</urlset>`;
     res.status(Number.isInteger(err.status) && err.status >= 400 && err.status <= 599 ? err.status : 500).json({ error: "Internal server error." });
   });
 
-  // Active listener
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] V79 Digital website running at http://0.0.0.0:${PORT}`);
+  // Local previews should not expose their admin and test data to the LAN.
+  // Production containers still listen internally on all interfaces.
+  const bindHost = cleanEnvValue(process.env.HOST) || (isProduction ? "0.0.0.0" : "127.0.0.1");
+  if (!isProduction && bindHost !== "127.0.0.1" && bindHost !== "localhost" && bindHost !== "::1") {
+    console.warn("[Server] Development server explicitly bound beyond loopback; only do this on a trusted network.");
+  }
+  app.listen(PORT, bindHost, () => {
+    console.log(`[Server] V79 Digital website listening on http://${bindHost}:${PORT}`);
   });
 }
 
