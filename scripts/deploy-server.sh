@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Website source replacement and in-place Docker rebuild are retired.
+# Refuse website deployment before touching an archive, files, or Docker.
+# Use only a separately reviewed, image-only release with rollback.
+if [[ "${4:-}" == "V79website" ]]; then
+  echo "DEPLOY_DENIED: V79website must use a guarded image-only cutover; this legacy script is unsafe." >&2
+  exit 78
+fi
+
 sha="${1:?Missing validated commit SHA}"
 root="${2:?Missing absolute deployment directory}"
 project="${3:?Missing existing Compose project name}"
