@@ -2745,10 +2745,38 @@ async function startServer() {
     }
   });
 
-  app.post('/api/admin/crm/directory',requireAdmin,(req,res)=>{
-    const entries=req.body.entries;
-    if(!Array.isArray(entries)||entries.length>500||entries.some(e=>!e||typeof e.businessName!=='string'||!e.businessName.trim()||e.businessName.length>200||Object.values(e).some(v=>typeof v!=='string'||v.length>4000)))return res.status(400).json({error:'Provide up to 500 business records with text fields and a businessName.'});
-    writeJSON('business-directory.json',entries);res.json({count:entries.length});
+  app.post('/api/admin/crm/directory', requireAdmin, (req, res) => {
+    const entries = req.body?.entries;
+    const allowed = new Set(["businessName", "category", "industry", "location", "phone",
+      "email", "website", "facebookUrl", "instagramUrl", "linkedinUrl", "description", "sourceUrl"]);
+    if (!Array.isArray(entries) || entries.length === 0 || entries.length > 500 ||
+        entries.some(e => !e || typeof e !== "object" || Array.isArray(e) ||
+          typeof e.businessName !== "string" || !e.businessName.trim() || e.businessName.length > 200 ||
+          Object.entries(e).some(([k,v]) => !allowed.has(k) || typeof v !== "string" || v.length > 4000))) {
+      return res.status(400).json({error:"Provide up to 500 valid business records, with a businessName and supported text fields."});
+    }
+    try {
+      const result = transaction(() => {
+        const current = readJSON<any[]>("business-directory.json", []);
+        const known = new Set(current.map(e => e.businessName?.trim().toLowerCase()).filter(Boolean));
+        const additions: any[] = [];
+        for (const record of entries) {
+          const name = record.businessName.trim().toLowerCase();
+          if (known.has(name)) continue;
+          known.add(name);
+          additions.push({ ...record, businessName: record.businessName.trim() });
+        }
+        if (current.length + additions.length > 5000) {
+          throw Object.assign(new Error("The local directory limit is 5000 businesses."), { status: 413 });
+        }
+        writeJSON("business-directory.json", current.concat(additions));
+        return { count: additions.length, skipped: entries.length - additions.length, total: current.length + additions.length };
+      });
+      res.json(result);
+    } catch (e) {
+      const status = Number((e as { status?: number }).status);
+      res.status(status === 413 ? 413 : 500).json({ error: (e as Error).message || "Directory import failed." });
+    }
   });
   app.get("/api/admin/crm/prospects/history", requireAdmin, (req, res) => {
     try {
