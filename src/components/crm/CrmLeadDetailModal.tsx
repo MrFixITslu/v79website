@@ -72,11 +72,28 @@ export function CrmLeadDetailModal({
     e.preventDefault();
     if (!noteText.trim()) return;
     setAddingNote(true);
+    setNotesStatus("");
     try {
-      await onAddActivity(lead.id, "note", "Note Added", noteText.trim());
-      setNoteText("");
+      if (await onAddActivity(lead.id, "note", "Note Added", noteText.trim())) {
+        setNoteText("");
+        setNotesStatus("Timeline note saved.");
+      } else {
+        setNotesStatus("Note could not be saved. The draft is preserved.");
+      }
     } finally {
       setAddingNote(false);
+    }
+  };
+
+  const saveAdminNotes = async () => {
+    setSavingAdminNotes(true);
+    setNotesStatus("");
+    try {
+      setNotesStatus(await onSaveAdminNotes(lead.id, adminNotesDraft)
+        ? "Customer notes saved."
+        : "Could not save customer notes. Your draft is preserved.");
+    } finally {
+      setSavingAdminNotes(false);
     }
   };
 
