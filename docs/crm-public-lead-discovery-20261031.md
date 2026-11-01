@@ -1,26 +1,32 @@
-# CRM Public Lead Finder — development candidate (31 October 2026)
+# CRM owner-admin AI Lead Finder — development/release gate (31 October 2026)
 
-## Scope and behaviour
-- Existing **website admin → CRM → Prospect Finder** remains the single CRM.
-- The source selector offers an imported directory (unchanged) or an explicitly requested public lookup.
-- Public lookup uses OpenStreetMap's Overpass API with fixed Saint Lucia bounds, a capped response, 25-second cooldown, 18-second request timeout and a strict 20-business limit.
-- Extract only fields published in business map tags: name, industry, location, business phone/email, website, Facebook, Instagram and LinkedIn. Each prospect retains a clickable OpenStreetMap source URL. Missing values remain blank.
-- An owner-initiated search writes *prospects* only, not leads. Duplicate candidate names are checked against stored prospects and CRM leads. The operator must approve prospects before they enter the pipeline.
-- The first two new public prospects are offered to the configured local Ollama model for analysis; the deterministic scorer remains the fallback and other records can be re-scored by the existing admin button. AI is not the source of contact details.
-- Failed lookups show an error in the admin UI. The existing stale search-result assignment bug is corrected.
+## Current delivery
+- Single website-admin CRM remains authoritative. No Hub/Tiquet lead, customer, subscription or payment semantics changed.
+- Three selectable discovery sources:
+  1. **Export Saint Lucia public business directory** (default UI selection): fixed `https://exportsaintlucia.org/directories/`, cached 10 minutes, capped to 20 source-linked company listings per query. Public name, category, location and company telephone are extracted. No guessed email/website/social profiles.
+  2. **OpenStreetMap public listing discovery** (optional/best effort): fixed Saint Lucia bounding box, 20-result limit, 25-second cooldown, 18-second timeout, HTTPS and source links. Public endpoints currently timed out in actual Dell probes; do not claim availability.
+  3. **Imported local business directory** (existing): unchanged import API and directory search.
+- Ollama is a local *analysis* engine, not a public search index. The first two newly found public businesses are offered for AI scoring (heuristic fallback if needed), and the existing per-prospect button can re-score.
+- Each prospect presents the public business phone/email, website, Facebook, Instagram, LinkedIn and source link **where actually supplied**. Missing data are shown as missing. External/social URLs pass an explicit allowlist/protocol check.
+- **Find contact info:** admin-triggered, per-company profile lookup for a link under `https://exportsaintlucia.org/directories/<slug>/` only, with strict origin/path restriction, no redirects, 10-second timeout, 180-kB response limit, 3-second request interval and 24-hour in-memory cache. Parse only the company's Contact Info area; NEVER attribute Export Saint Lucia's footer emails or social profiles to that business. Preserve existing operator data and record `contactCheckedAt`.
+- Search staging and search logs now use a synchronous atomic transaction after asynchronous model calls. Concurrent new prospects/leads cannot be overwritten by a stale AI snapshot. Admin approval is still required before CRM lead creation.
+- Business analysis calls possible needs *hypotheses*, not verified problems. Missing directory website metadata is not proof of no website.
 
-## Deployment and safety
-- **Feature flag default OFF:** `CRM_PUBLIC_DISCOVERY_ENABLED=false`. Do not enable, merge or deploy until an owner-approved release and a fresh isolated browser/backend validation.
-- Public service dependency: Overpass API. Its availability and map contact coverage are not guaranteed. Public listings are *not* verified business contact details or a complete directory.
-- No platform login, social scraping, site crawling, CAPTCHA circumvention, private contact enrichment, emails, calls, lead conversion, or automatic campaigns.
-- The AI analysis reflects potential *hypotheses*, not verified customer needs. Review before contact.
-- This first implementation is **Saint Lucia only**. Caribbean expansion should use country-scoped public data or a licensed search provider (for example Brave Search), a provenance ledger, and source-specific verification.
-- Before release verify the configured Ollama network address from the running website container; never assume `localhost:11434` inside Docker points at the host.
-- Preserve the existing encrypted website SQLite database and website / Hub / Tiquet lead event paths. Create a scoped rollback checkpoint at release time.
+## Source and security constraints
+- All public search/enrichment routes require owner admin and `CRM_PUBLIC_DISCOVERY_ENABLED=true`. Default is **false**.
+- Business profile information is public; it can be outdated. Review before outreach. No automatic emails, bulk contact harvesting, private information, direct social scraping, CAPTCHA bypass, headless browser or unsolicited social messaging.
+- Export Saint Lucia `robots.txt` allows the public directories path, and a bounded read-only GET from the Dell returned HTTP 200 (~197 kB). Public facts may be compiled for preliminary research subject to source terms, applicable law and responsible contact policies; confirm any necessary permissions for ongoing commercial reuse before promotion.
+- OpenStreetMap data are subject to ODbL and attribution requirements; public servers lack SLAs. OpenStreetMap links and attribution are displayed in Prospect Finder.
+- No general-purpose arbitrary URL fetch: public endpoints and profile hostname/path are fixed.
+- No default customer-tenant exposure. Future multitenancy requires explicit access boundary, per-tenant rate limits, source licensing and opt-in.
+- Do not write to production until a human-approved guarded release. Keep old website image, persisted encrypted SQLite records/config and rollback manifest; do not repeat already-verified off-host restores.
 
-## /REDTEAM gaps for the next iteration
-1. Sparse OpenStreetMap contact tags mean some businesses have no email or website. Never synthesize one.
-2. Overpass may return incomplete or truncated lists. Treat search as bounded discovery, not a complete census.
-3. Individual public OSM details may be stale or user-entered. Keep original source and operator review.
-4. Public data could include malicious social links or prompt-injection text; only send data to local inference and never grant the model tools. Add source-domain verification and stronger de-duplication before general release.
-5. Do not reuse this website-owner feature for multi-tenant Hub users without explicit tenant scoping and quotas.
+## Recorded evidence
+- Website container → `http://ollama:11434/api/tags` over `proxy_network`: HTTP 200, models `qwen2.5:1.5b` and `qwen2.5:3b`. **Inference execution and resource budget remain unverified.**
+- Overpass public endpoints: query timeouts on host (both IPv4 and IPv6 on alternative service); **NOT release-ready** as a primary source.
+- Export Saint Lucia directory parsed in a networkless Node parser after fetching public HTML: **47 business listings, 47 listed telephones, 47 source permalinks; 0 emails on the summary page**.
+- One sample company profile's Contact Info parser returned a business phone and email, and excluded Export Saint Lucia's own footer address.
+- GitHub CI checks passed on earlier branch heads, covering TypeScript, build, tests, audit, Docker image and smoke. Always inspect checks at the **latest** head; older success is not release clearance.
+- Expected final acceptance: browser login, search/empty/timeout and source choice, company detail lookup, email/phone/website/social source presence or correct blanks, admin approval, CRM persistence, red-team safeguards, and rollback plan.
+
+**Release status: DRAFT, feature OFF, no merge, no deploy, no automated customer contact.**
