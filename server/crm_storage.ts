@@ -540,9 +540,9 @@ export class CRMStorage {
       const normalizedName = b.businessName.trim().toLocaleLowerCase("en");
       if (preparedNames.has(normalizedName)) continue;
       preparedNames.add(normalizedName);
-      const analysis = source !== "directory" && prepared.length < 2
-        ? await analyzeBusinessWithAI(b)
-        : calculateDeterministicAnalysis(b);
+      // Keep discovery responsive and protect the Dell's CPU. An operator
+      // can explicitly request local Ollama analysis on each prospect card.
+      const analysis = calculateDeterministicAnalysis(b);
       prepared.push({
         id: "prospect-" + crypto.randomUUID(),
         businessName: b.businessName.trim(),
