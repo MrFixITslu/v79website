@@ -75,7 +75,8 @@ try {
   const card = page.locator("div.glass").filter({ has: page.getByText(company, { exact: true }) }).last();
   await page.locator('a[href="mailto:company@example.test"]').waitFor();
   await page.locator('a[href="tel:+1 758 555 0101"]').waitFor();
-  await page.locator('a[href="https://example.com/"]').waitFor();
+  await page.getByRole("link", { name: "Website", exact: true }).waitFor();
+  await page.getByRole("link", { name: "Source", exact: true }).waitFor();
   await page.locator('a[href="https://facebook.com/examplecompany"]').waitFor();
   await page.locator('a[href="https://instagram.com/examplecompany"]').waitFor();
   await page.locator('a[href="https://linkedin.com/company/examplecompany"]').waitFor();
