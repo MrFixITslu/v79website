@@ -1,6 +1,7 @@
 import { readJSON, writeJSON, transaction } from "./persistence";
 import { discoverPublicBusinesses } from "./crm_public_discovery";
 import { discoverExportSaintLucia } from "./crm_export_directory";
+import { discoverGeoapifyBusinesses } from "./crm_geoapify";
 import { getExportProfileContact } from "./crm_export_profile";
 import fs from "fs";
 import path from "path";
@@ -502,14 +503,16 @@ export class CRMStorage {
     category?: string;
     query?: string;
     searchProviderKey?: string;
-    source?: "directory" | "public" | "exports";
+    source?: "directory" | "public" | "exports" | "geoapify";
     limit?: number;
   }): Promise<{ discovered: Prospect[]; duplicatesCount: number; newCount: number }> {
     const limit = Math.max(1, Math.min(20, Number(params.limit) || 10));
-    const source = params.source === "public" ? "public" : params.source === "exports" ? "exports" : "directory";
+    const source = params.source === "geoapify" ? "geoapify" : params.source === "public" ? "public" : params.source === "exports" ? "exports" : "directory";
 
     // Public discovery is opt-in; preserve the existing imported-directory mode.
-    let candidates = source === "public"
+    let candidates = source === "geoapify"
+      ? await discoverGeoapifyBusinesses({ location: params.location, category: params.category, query: params.query, limit })
+      : source === "public"
       ? await discoverPublicBusinesses({ location: params.location, category: params.category, query: params.query, limit })
       : source === "exports"
         ? await discoverExportSaintLucia({ location: params.location, category: params.category, query: params.query, limit })
@@ -560,6 +563,7 @@ export class CRMStorage {
         sourceUrl: b.sourceUrl || b.website || b.facebookUrl || "",
         discoveredAt: new Date().toISOString(),
         workflowStatus: "discovered",
+        sourceProvider: source === "geoapify" ? "geoapify" : undefined,
         aiAnalysis: analysis,
         leadScore: analysis.leadScore,
         scoreCategory: analysis.scoreCategory
@@ -598,7 +602,7 @@ export class CRMStorage {
         duplicates: duplicatesCount,
         approvedCount: 0,
         rejectedCount: 0,
-        searchProvider: source === "public" ? "OpenStreetMap public listings + optional local Ollama" : source === "exports" ? "Export Saint Lucia public directory + optional local Ollama" : "Curated local directory (not a live web search)",
+        searchProvider: source === "geoapify" ? "Geoapify Places (OpenStreetMap ODbL)" : source === "public" ? "OpenStreetMap public listings + optional local Ollama" : source === "exports" ? "Export Saint Lucia public directory + optional local Ollama" : "Curated local directory (not a live web search)",
         timestamp: new Date().toISOString()
       });
       writeJSON(CRM_PROSPECTS_FILE, existingProspects);
