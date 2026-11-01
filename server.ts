@@ -2713,18 +2713,23 @@ async function startServer() {
 
   app.get("/api/admin/crm/discovery-capabilities", requireAdmin, (_req, res) => {
     const publicEnabled = process.env.CRM_PUBLIC_DISCOVERY_ENABLED === "true";
+    const geoapifyEnabled = process.env.CRM_GEOAPIFY_DISCOVERY_ENABLED === "true" && Boolean(process.env.GEOAPIFY_API_KEY?.trim());
     res.json({
       directory: true,
       exports: publicEnabled,
-      osm: publicEnabled && process.env.CRM_OSM_DISCOVERY_ENABLED === "true"
+      osm: publicEnabled && process.env.CRM_OSM_DISCOVERY_ENABLED === "true",
+      geoapify: geoapifyEnabled
     });
   });
 
   app.post("/api/admin/crm/prospects/search", requireAdmin, async (req, res) => {
     try {
-      const source = req.body?.source === "public" ? "public" : req.body?.source === "exports" ? "exports" : "directory";
-      if (source !== "directory" && process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
+      const source = req.body?.source === "geoapify" ? "geoapify" : req.body?.source === "public" ? "public" : req.body?.source === "exports" ? "exports" : "directory";
+      if (source !== "directory" && source !== "geoapify" && process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
         return res.status(503).json({ error: "Public business discovery is not enabled on this server." });
+      }
+      if (source === "geoapify" && !(process.env.CRM_GEOAPIFY_DISCOVERY_ENABLED === "true" && process.env.GEOAPIFY_API_KEY?.trim())) {
+        return res.status(503).json({ error: "Geoapify discovery requires a server-configured API key." });
       }
       if (source === "public" && process.env.CRM_OSM_DISCOVERY_ENABLED !== "true") {
         return res.status(503).json({ error: "OpenStreetMap public discovery is not configured for commercial use." });
