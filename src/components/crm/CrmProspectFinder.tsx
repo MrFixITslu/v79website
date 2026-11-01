@@ -5,13 +5,14 @@ import { Prospect, ProspectSearchLog, SAINT_LUCIA_LOCATIONS } from "../../crm/ty
 interface CrmProspectFinderProps {
   prospects: Prospect[];
   searchHistory: ProspectSearchLog[];
-  onRunSearch: (params: { location?: string; category?: string; query?: string; limit?: number }) => Promise<void>;
+  onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public"; limit?: number }) => Promise<void>;
   onAnalyzeProspect: (prospectId: string) => Promise<void>;
   onApproveProspect: (prospectId: string) => Promise<void>;
   onBulkApprove: (ids: string[]) => Promise<void>;
   onRejectProspect: (prospectId: string) => Promise<void>;
   onBulkReject: (ids: string[]) => Promise<void>;
   isSearching: boolean;
+  searchError?: string | null;
 }
 
 const CATEGORIES = [
@@ -38,9 +39,11 @@ export function CrmProspectFinder({
   onBulkApprove,
   onRejectProspect,
   onBulkReject,
-  isSearching
+  isSearching,
+  searchError
 }: CrmProspectFinderProps) {
   const [activeSubTab, setActiveSubTab] = useState<"catalog" | "history">("catalog");
+  const [source, setSource] = useState<"directory" | "public">("public");
   const [location, setLocation] = useState("all");
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
@@ -52,6 +55,7 @@ export function CrmProspectFinder({
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await onRunSearch({
+      source,
       location: location === "all" ? undefined : location,
       category: category === "all" ? undefined : category,
       query: query.trim() || undefined,
@@ -131,11 +135,11 @@ export function CrmProspectFinder({
             <div className="flex items-center gap-2">
               <Search className="w-5 h-5 text-sky-500" />
               <h2 className="text-base font-bold text-app-text font-display">
-                Saint Lucia Business Directory
+                AI Business Prospect Finder
               </h2>
             </div>
             <p className="text-xs text-app-text-sec mt-0.5">
-              Search the curated local directory and add prospects to your CRM. This is not a live Facebook, Instagram or LinkedIn search. Suggestions are estimates to verify before outreach.
+              Find businesses from public listings or your imported directory, then analyse them using local Ollama. Public contact details may be incomplete.
             </p>
           </div>
 
@@ -163,6 +167,12 @@ export function CrmProspectFinder({
         {/* Discovery Query Form */}
         {activeSubTab === "catalog" && (
           <form onSubmit={handleSearchSubmit} className="space-y-3 pt-2 border-t border-app-border/40">
+            <label className="block text-xs text-app-text-sec">Discovery source
+              <select value={source} onChange={(e) => setSource(e.target.value as "directory" | "public")} className="block mt-1 w-full sm:w-80 bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+                <option value="public">Public listings (Saint Lucia; OpenStreetMap)</option>
+                <option value="directory">My imported business directory</option>
+              </select>
+            </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div>
                 <label className="text-[10px] font-mono uppercase text-app-text-muted block mb-1">
@@ -231,18 +241,19 @@ export function CrmProspectFinder({
                   className="flex-1 py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
                 >
                   <Search className={`w-4 h-4 ${isSearching ? "animate-spin" : ""}`} />
-                  <span>{isSearching ? "Searching..." : "Search directory"}</span>
+                  <span>{isSearching ? "Searching..." : "Find businesses"}</span>
                 </button>
               </div>
             </div>
           </form>
         )}
+        {searchError && <p role="alert" className="text-xs text-red-500">{searchError}</p>}
 
         {/* Compliance & Policy Footer */}
         <div className="pt-2 flex items-center gap-2 text-[11px] text-app-text-sec">
           <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
           <span>
-            Compliant Public Discovery: Gathers verified public business contact points. Strictly adheres to robots.txt, terms of service, with zero scraping or CAPTCHA circumvention.
+            Public-source discovery only. Listings are unverified until checked; no login-based social scraping or automated outreach.
           </span>
         </div>
       </div>
@@ -281,7 +292,7 @@ export function CrmProspectFinder({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {prospects.length === 0 ? (
               <div className="col-span-2 glass p-12 text-center text-xs text-app-text-muted rounded-2xl border border-app-border">
-                No prospects in current pool. Search the local directory above.
+                No prospects yet. Choose a discovery source and search above.
               </div>
             ) : (
               prospects.map((p) => {
@@ -358,12 +369,18 @@ export function CrmProspectFinder({
 
                     {/* Contact points discovered */}
                     <div className="flex items-center flex-wrap gap-2 text-[11px]">
-                      {p.phone && (
+                      {p.phone ? (
                         <a href={`tel:${p.phone}`} className="flex items-center gap-1 text-app-text font-mono hover:text-sky-500">
                           <Phone className="w-3 h-3 text-emerald-500" />
                           <span>{p.phone}</span>
                         </a>
-                      )}
+                      ) : <span className="text-app-text-muted">Phone not listed</span>}
+                      {p.email ? (
+                        <a href={`mailto:${p.email}`} className="flex items-center gap-1 text-app-text hover:text-sky-500">
+                          <Mail className="w-3 h-3 text-emerald-500" />
+                          <span>{p.email}</span>
+                        </a>
+                      ) : <span className="text-app-text-muted">Email not listed</span>}
                       {p.website ? (
                         <a href={p.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-500 hover:underline truncate max-w-[150px]">
                           <Globe className="w-3 h-3" />
@@ -373,8 +390,17 @@ export function CrmProspectFinder({
                         <span className="text-amber-500 font-mono text-[10px]">No website listed</span>
                       )}
                       {p.facebookUrl && (
-                        <a href={p.facebookUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">
-                          Facebook
+                        <a href={p.facebookUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Facebook</a>
+                      )}
+                      {p.instagramUrl && (
+                        <a href={p.instagramUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Instagram</a>
+                      )}
+                      {p.linkedinUrl && (
+                        <a href={p.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">LinkedIn</a>
+                      )}
+                      {p.sourceUrl && (
+                        <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-app-text-sec hover:underline flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3" /> Source
                         </a>
                       )}
                     </div>
