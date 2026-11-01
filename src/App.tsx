@@ -17,6 +17,8 @@ import { CLIENT_STORIES } from "./data/testimonials";
 import LegalPage from "./components/LegalPage";
 import AIPromptGuideLandingPage from "./components/AIPromptGuideLandingPage";
 
+const FAQPage = lazy(() => import("./components/FAQPage"));
+
 const ResourcesPage = lazy(() => import("./components/ResourcesPage"));
 const ArticleDetailPage = lazy(() =>
   import("./components/ArticleDetailPage").then(m => ({ default: m.ArticleDetailPage }))
@@ -55,6 +57,7 @@ const SECTIONS = [
   { id: "industries", label: "Industries" },
   { id: "solutions", label: "Solutions" },
   { id: "resources", label: "Resources" },
+  { id: "faq", label: "FAQ" },
   { id: "contact", label: "Contact" },
 ];
 
@@ -71,10 +74,12 @@ const MARKETING_ROUTE_TO_SECTION: Record<string, string> = {
   "/solutions": "solutions",
   "/resources": "resources",
   "/contact": "contact",
+  "/faq": "faq",
 };
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState("home");
+  const [isFaqPage, setIsFaqPage] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/faq");
+  const [activeSection, setActiveSection] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/faq" ? "faq" : "home");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Which top-level nav item's sub-menu is currently open (desktop dropdown
   // or mobile accordion) — null means none open. Only one at a time.
@@ -120,9 +125,11 @@ export default function App() {
       setSelectedArticleSlug(article);
       if (article) return;
       const path = window.location.pathname.replace(/\/+$/, "") || "/";
+      setIsFaqPage(path === "/faq");
       const target = path === "/" ? "home" : MARKETING_ROUTE_TO_SECTION[path];
       if (!target) return;
       setActiveSection(target);
+      if (target === "faq") { window.scrollTo(0, 0); return; }
       window.setTimeout(() => {
         const el = document.getElementById(target);
         if (el) window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 110);
@@ -157,6 +164,7 @@ export default function App() {
     const target = MARKETING_ROUTE_TO_SECTION[path];
     if (!target) return;
     setActiveSection(target);
+    if (target === "faq") return;
     const timer = window.setTimeout(() => {
       const el = document.getElementById(target);
       if (el) {
@@ -206,8 +214,10 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePop);
   }, [apps]);
 
-  // Keep nav highlight in sync while the user scrolls, not just on click
+  // The standalone FAQ keeps the shared shell without mounting the long homepage.
+  // Reattach section tracking after returning from it.
   useEffect(() => {
+    if (isFaqPage) return;
     const sectionEls = SECTIONS
       .map(s => document.getElementById(s.id))
       .filter((el): el is HTMLElement => el !== null);
@@ -224,7 +234,7 @@ export default function App() {
     );
     sectionEls.forEach(el => observer.observe(el));
     return () => observer.disconnect();
-  }, []);
+  }, [isFaqPage, selectedArticleSlug]);
 
   // Close an open dropdown when clicking outside it, or pressing Escape
   useEffect(() => {
@@ -255,6 +265,19 @@ export default function App() {
   const navTransitionSeq = useRef(0);
 
   const scrollTo = (id: string, parentId?: string) => {
+    if (id === "faq") {
+      // This is a dedicated document route, with server-provided share metadata.
+      const url = new URL(window.location.href);
+      url.searchParams.delete("article"); url.searchParams.delete("faq");
+      window.location.assign("/faq" + url.search);
+      return;
+    }
+    if (isFaqPage) {
+      const target = parentId || id;
+      const route = target === "home" ? "/" : `/${target}`;
+      window.location.assign(route + (id !== target ? `#${id}` : ""));
+      return;
+    }
     if (selectedArticleSlug) {
       setSelectedArticleSlug(null);
       const url = new URL(window.location.href);
@@ -601,6 +624,17 @@ export default function App() {
             />
           </Suspense>
         </main>
+      ) : isFaqPage ? (
+        <main id="main-content" tabIndex={-1} className="flex-1 pt-28 focus:outline-none">
+          <Suspense fallback={<SectionLoadingFallback />}>
+            <FAQPage onEnquire={(questionId) => {
+              const params = new URLSearchParams(window.location.search);
+              params.delete("article");
+              if (questionId) params.set("faq", questionId); else params.delete("faq");
+              window.location.assign("/contact" + (params.size ? "?" + params.toString() : ""));
+            }} />
+          </Suspense>
+        </main>
       ) : (
         /* Continuous One-Page Apple-Inspired Flow */
         <main id="main-content" tabIndex={-1} className="flex-1 space-y-32 pb-24 pt-28 focus:outline-none">
@@ -849,7 +883,7 @@ export default function App() {
           <div className="space-y-2 text-xs">
             <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono text-[11px]">Company</div>
             <ul className="space-y-1.5 text-slate-600 dark:text-white/60 font-light">
-              {SECTIONS.filter(s => ["about", "resources", "contact"].includes(s.id)).map(s => (
+              {SECTIONS.filter(s => ["about", "resources", "faq", "contact"].includes(s.id)).map(s => (
                 <li key={s.id}>
                   <button onClick={() => scrollTo(s.id)} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">{s.label}</button>
                 </li>

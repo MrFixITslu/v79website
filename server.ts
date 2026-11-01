@@ -1,5 +1,6 @@
 import { cookie, cookieOptions, mountLearners, publicCourse, learner } from "./server/learners";
 import express from "express";
+import { BUSINESS_FAQS } from "./src/data/faqs";
 import { atomicWrite, encryptionKey, seal, unseal, readJSON, writeJSON, transaction, storageReady } from "./server/persistence";
 import path from "path";
 import fs from "fs";
@@ -13,6 +14,8 @@ import { crmStorage } from "./server/crm_storage";
 import { pingOllama, analyzeBusinessWithAI } from "./server/crm_engine";
 import { deliverPlatformEvent, hubEventsConfigured, hubOrganizationRef } from "./server/platformEvents";
 import { generateAiPromptGuidePdf } from "./server/aiPromptGuidePdf";
+import { shouldReplayHubLead } from "./server/hub-event-replay";
+import { mountNewsletter, unsubscribeUrl } from "./server/newsletter";
 
 // Configure environment variable definitions
 dotenv.config();
@@ -718,7 +721,7 @@ class DocumentDatabase {
 
   getPendingHubLeadEvents(): any[] {
     return this.readLeads()
-      .filter(l => ["pending", "disabled"].includes(l.hubEventStatus) && l.hubEventId)
+      .filter(l => shouldReplayHubLead(l) && l.hubEventId)
       .map(l => ({
         ...l,
         name: decryptPII(l.name),
@@ -2243,7 +2246,7 @@ async function startServer() {
     max: 30,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: "Too many signup attempts. Please wait a few minutes and try again." },
+    message: { error: "Too many newsletter requests. Please wait a few minutes and try again." },
   });
 
   // --- Free Newsletter / Lead Magnet Endpoints ---
@@ -2275,82 +2278,11 @@ async function startServer() {
     }
   });
 
-  app.post("/api/newsletter/subscribe", newsletterLimiter, (req, res) => {
-    const { firstName, email, consent, source, pageOrigin, website } = req.body || {};
-
-    // Honeypot: real visitors never fill this field. Return a generic success
-    // response so automated form fillers do not learn how the trap works.
-    if (typeof website === "string" && website.trim().length > 0) {
-      return res.status(200).json({
-        success: true,
-        downloadUrl: "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf",
-      });
-    }
-
-    if (consent !== true) {
-      return res.status(400).json({ error: "Please confirm that you want to join the free V79 Digital newsletter." });
-    }
-
-    const safeFirstName = typeof firstName === "string" ? firstName.trim() : "";
-    const safeEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-    const safeSource = typeof source === "string" ? source.trim().slice(0, 200) : "Website Newsletter";
-    const safePageOrigin = typeof pageOrigin === "string" ? pageOrigin.trim().slice(0, 200) : "/free-ai-prompting-guide";
-
-    if (safeFirstName.length > 80) {
-      return res.status(400).json({ error: "First name is too long." });
-    }
-    if (!safeEmail || safeEmail.length > 250 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
-      return res.status(400).json({ error: "Please enter a valid email address." });
-    }
-
-    try {
-      const subscribers = readJSON<any[]>(JSON_NEWSLETTER_FILE, []);
-      const emailHash = crypto.createHash("sha256").update(safeEmail).digest("hex");
-      const now = new Date().toISOString();
-      const existingIndex = subscribers.findIndex((subscriber: any) => subscriber.emailHash === emailHash);
-      const alreadySubscribed = existingIndex >= 0 && subscribers[existingIndex]?.status === "active";
-
-      if (existingIndex >= 0) {
-        subscribers[existingIndex] = {
-          ...subscribers[existingIndex],
-          firstName: safeFirstName ? encryptPII(safeFirstName) : subscribers[existingIndex].firstName,
-          email: encryptPII(safeEmail),
-          status: "active",
-          source: safeSource || subscribers[existingIndex].source,
-          pageOrigin: safePageOrigin || subscribers[existingIndex].pageOrigin,
-          consent: true,
-          consentVersion: "2026-10-ai-guide-v1",
-          updatedAt: now,
-        };
-      } else {
-        const nextId = subscribers.reduce((max: number, subscriber: any) => Math.max(max, Number(subscriber.id) || 0), 0) + 1;
-        subscribers.push({
-          id: nextId,
-          firstName: encryptPII(safeFirstName),
-          email: encryptPII(safeEmail),
-          emailHash,
-          status: "active",
-          source: safeSource,
-          pageOrigin: safePageOrigin,
-          consent: true,
-          consentVersion: "2026-10-ai-guide-v1",
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-
-      writeJSON(JSON_NEWSLETTER_FILE, subscribers);
-
-      return res.status(alreadySubscribed ? 200 : 201).json({
-        success: true,
-        alreadySubscribed,
-        downloadUrl: "/downloads/V79_AI_Prompting_Guide_Premium_FIXED.pdf",
-      });
-    } catch (error) {
-      console.error("[Newsletter] Failed to save subscriber:", error);
-      return res.status(500).json({ error: "We could not complete your signup. Please try again." });
-    }
-  });
+  mountNewsletter(app, {
+    read: () => readJSON<any[]>(JSON_NEWSLETTER_FILE, []),
+    write: rows => writeJSON(JSON_NEWSLETTER_FILE, rows),
+    transaction, encrypt: encryptPII, key: encryptionKey,
+  }, newsletterLimiter, express.urlencoded({extended: false, limit: "2kb"}));
 
   app.get("/api/admin/newsletter/subscribers", requireAdmin, (_req, res) => {
     try {
@@ -2359,6 +2291,7 @@ async function startServer() {
           ...subscriber,
           firstName: decryptPII(subscriber.firstName || ""),
           email: decryptPII(subscriber.email || ""),
+          unsubscribeUrl: unsubscribeUrl(subscriber, encryptionKey),
         }))
         .sort((a: any, b: any) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
       res.json(subscribers);
@@ -2543,6 +2476,10 @@ async function startServer() {
 
   app.put("/api/admin/crm/leads/:id", requireAdmin, (req, res) => {
     try {
+      if (req.body?.adminNotes !== undefined &&
+          (typeof req.body.adminNotes !== "string" || req.body.adminNotes.length > 10000)) {
+        return res.status(400).json({ error: "Internal notes must be text under 10,000 characters." });
+      }
       const updated = transaction(() => crmStorage.updateLead(Number(String(req.params.id)), req.body, "Admin"));
       res.json(updated);
     } catch (e) {
@@ -2619,8 +2556,16 @@ async function startServer() {
 
   app.post("/api/admin/crm/leads/:id/activities", requireAdmin, (req, res) => {
     try {
+      const leadId = Number(String(req.params.id));
+      if (!Number.isInteger(leadId) || !crmStorage.getLeadById(leadId)) {
+        return res.status(404).json({ error: "CRM lead not found." });
+      }
+      if (typeof req.body?.description !== "string" || !req.body.description.trim() ||
+          req.body.description.length > 10000) {
+        return res.status(400).json({ error: "Notes must contain 1–10,000 characters." });
+      }
       const act = crmStorage.addActivity({
-        leadId: Number(String(req.params.id)),
+        leadId,
         type: req.body.type || "note",
         title: req.body.title || "Note Added",
         description: req.body.description || "",
@@ -2711,27 +2656,96 @@ async function startServer() {
     }
   });
 
+  app.get("/api/admin/crm/discovery-capabilities", requireAdmin, (_req, res) => {
+    const publicEnabled = process.env.CRM_PUBLIC_DISCOVERY_ENABLED === "true";
+    const geoapifyEnabled = process.env.CRM_GEOAPIFY_DISCOVERY_ENABLED === "true" && Boolean(process.env.GEOAPIFY_API_KEY?.trim());
+    res.json({
+      directory: true,
+      exports: publicEnabled,
+      osm: publicEnabled && process.env.CRM_OSM_DISCOVERY_ENABLED === "true",
+      geoapify: geoapifyEnabled
+    });
+  });
+
   app.post("/api/admin/crm/prospects/search", requireAdmin, async (req, res) => {
     try {
+      const source = req.body?.source === "geoapify" ? "geoapify" : req.body?.source === "public" ? "public" : req.body?.source === "exports" ? "exports" : "directory";
+      if (source !== "directory" && source !== "geoapify" && process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
+        return res.status(503).json({ error: "Public business discovery is not enabled on this server." });
+      }
+      if (source === "geoapify" && !(process.env.CRM_GEOAPIFY_DISCOVERY_ENABLED === "true" && process.env.GEOAPIFY_API_KEY?.trim())) {
+        return res.status(503).json({ error: "Geoapify discovery requires a server-configured API key." });
+      }
+      if (source === "public" && process.env.CRM_OSM_DISCOVERY_ENABLED !== "true") {
+        return res.status(503).json({ error: "OpenStreetMap public discovery is not configured for commercial use." });
+      }
       const result = await crmStorage.runProspectSearch({
-        location: req.body.location,
-        category: req.body.category,
-        query: req.body.query,
-        searchProviderKey: process.env.SEARCH_PROVIDER_API_KEY,
-        limit: req.body.limit || 10
+        location: typeof req.body?.location === "string" ? req.body.location.slice(0, 80) : undefined,
+        category: typeof req.body?.category === "string" ? req.body.category.slice(0, 80) : undefined,
+        query: typeof req.body?.query === "string" ? req.body.query.slice(0, 100) : undefined,
+        source,
+        limit: Math.max(1, Math.min(20, Number(req.body?.limit) || 10))
       });
       res.json(result);
     } catch (e) {
-      console.error("[CRM Prospect Search Error]:", e);
-      res.status(500).json({ error: "Prospect search failed." });
+      console.error("[CRM Prospect Search Error]:", (e as Error)?.message);
+      const status = Number((e as { status?: number })?.status);
+      res.status([429, 502, 503].includes(status) ? status : 500)
+        .json({ error: (e as Error)?.message || "Prospect search failed." });
     }
   });
 
-  app.post('/api/admin/crm/directory',requireAdmin,(req,res)=>{
-    const entries=req.body.entries;
-    if(!Array.isArray(entries)||entries.length>500||entries.some(e=>!e||typeof e.businessName!=='string'||!e.businessName.trim()||e.businessName.length>200||Object.values(e).some(v=>typeof v!=='string'||v.length>4000)))return res.status(400).json({error:'Provide up to 500 business records with text fields and a businessName.'});
-    writeJSON('business-directory.json',entries);res.json({count:entries.length});
+  app.post('/api/admin/crm/directory', requireAdmin, (req, res) => {
+    const entries = req.body?.entries;
+    const allowed = new Set(["businessName", "category", "industry", "location", "phone",
+      "email", "website", "facebookUrl", "instagramUrl", "linkedinUrl", "description", "sourceUrl"]);
+    if (!Array.isArray(entries) || entries.length === 0 || entries.length > 500 ||
+        entries.some(e => !e || typeof e !== "object" || Array.isArray(e) ||
+          typeof e.businessName !== "string" || !e.businessName.trim() || e.businessName.length > 200 ||
+          Object.entries(e).some(([k,v]) => !allowed.has(k) || typeof v !== "string" || v.length > 4000))) {
+      return res.status(400).json({error:"Provide up to 500 valid business records, with a businessName and supported text fields."});
+    }
+    try {
+      const result = transaction(() => {
+        const current = readJSON<any[]>("business-directory.json", []);
+        const known = new Set(current.map(e => e.businessName?.trim().toLowerCase()).filter(Boolean));
+        const additions: any[] = [];
+        for (const record of entries) {
+          const name = record.businessName.trim().toLowerCase();
+          if (known.has(name)) continue;
+          known.add(name);
+          additions.push({ ...record, businessName: record.businessName.trim() });
+        }
+        if (current.length + additions.length > 5000) {
+          throw Object.assign(new Error("The local directory limit is 5000 businesses."), { status: 413 });
+        }
+        writeJSON("business-directory.json", current.concat(additions));
+        const review = crmStorage.stageImportedDirectoryProspects();
+        return {
+          count: additions.length,
+          skipped: entries.length - additions.length,
+          total: current.length + additions.length,
+          staged: review.staged,
+          reviewTotal: review.total
+        };
+      });
+      res.json(result);
+    } catch (e) {
+      const status = Number((e as { status?: number }).status);
+      res.status(status === 413 ? 413 : 500).json({ error: (e as Error).message || "Directory import failed." });
+    }
   });
+  // Idempotent backfill for directories imported before automatic staging.
+  // This creates review candidates only, never customer leads.
+  app.post("/api/admin/crm/directory/sync", requireAdmin, (_req, res) => {
+    try {
+      res.json(crmStorage.stageImportedDirectoryProspects());
+    } catch (e) {
+      const status = Number((e as { status?: number }).status);
+      res.status(status === 413 ? 413 : 500).json({ error: (e as Error).message || "Could not stage imported businesses." });
+    }
+  });
+
   app.get("/api/admin/crm/prospects/history", requireAdmin, (req, res) => {
     try {
       const history = crmStorage.getSearchHistory();
@@ -2741,12 +2755,26 @@ async function startServer() {
     }
   });
 
+  app.post("/api/admin/crm/prospects/:id/enrich", requireAdmin, async (req, res) => {
+    try {
+      if (process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
+        return res.status(503).json({ error: "Public contact enrichment is not enabled." });
+      }
+      const prospect = await crmStorage.enrichPublicProspect(String(req.params.id));
+      res.json(prospect);
+    } catch (e) {
+      const status = Number((e as { status?: number })?.status);
+      res.status([400, 404, 409, 429, 502, 503].includes(status) ? status : 500)
+        .json({ error: (e as Error)?.message || "Unable to verify public contact details." });
+    }
+  });
+
   app.post("/api/admin/crm/prospects/:id/analyze", requireAdmin, async (req, res) => {
     try {
       const updated = await crmStorage.analyzeProspect(
         String(req.params.id),
         process.env.OLLAMA_BASE_URL,
-        req.body.model || process.env.OLLAMA_MODEL
+        process.env.OLLAMA_CRM_MODEL || "qwen2.5:1.5b"
       );
       res.json(updated);
     } catch (e) {
@@ -2783,6 +2811,16 @@ async function startServer() {
     }
   });
 
+  app.post("/api/admin/crm/prospects/:id/restore", requireAdmin, (req, res) => {
+    try {
+      const restored = crmStorage.restoreArchivedProspect(String(req.params.id));
+      if (!restored) return res.status(409).json({ error: "Only archived prospects can be restored." });
+      res.json(restored);
+    } catch {
+      res.status(500).json({ error: "Unable to restore archived prospect." });
+    }
+  });
+
   app.post("/api/admin/crm/prospects/bulk-reject", requireAdmin, (req, res) => {
     try {
       const ids: string[] = req.body.prospectIds || req.body.ids || [];
@@ -2799,7 +2837,7 @@ async function startServer() {
       const analysis = await analyzeBusinessWithAI(
         businessData,
         process.env.OLLAMA_BASE_URL,
-        req.body.model || process.env.OLLAMA_MODEL
+        process.env.OLLAMA_CRM_MODEL || "qwen2.5:1.5b"
       );
       res.json(analysis);
     } catch (e) {
@@ -2915,6 +2953,10 @@ async function startServer() {
           title: "Free AI Prompting Guide + 10 Copyable Prompts | V79 Digital",
           description: "Join the free V79 Digital newsletter and download a practical AI prompting guide with a five-part formula, 10 copyable prompts, writing tips, and verification questions.",
         },
+        "/faq": {
+          title: "AI & Business Technology FAQ | V79 Digital",
+          description: "Practical answers to ten business questions about AI costs, training, data, digitisation, integration and ongoing support. Discover how V79 Digital can help.",
+        },
         "/contact": {
           title: "Contact V79 Digital | Business Technology Support Saint Lucia",
           description: "Contact V79 Digital to discuss managed IT, cloud, cybersecurity, networking, business software, automation, training, or a scoped technology assessment.",
@@ -2972,6 +3014,11 @@ async function startServer() {
           summary: "A beginner-friendly guide to getting better results from AI with clearer instructions, reusable prompt templates, and practical verification habits.",
           points: ["5-part prompt formula", "10 copyable prompts", "Natural writing prompt", "AI verification questions", "Free V79 Digital newsletter"],
         },
+        "/faq": {
+          heading: "AI questions. Human answers.",
+          summary: "Practical answers for Caribbean businesses, with clear examples of how V79 Digital can help.",
+          points: BUSINESS_FAQS.map(f => f.question),
+        },
         "/contact": {
           heading: "Contact V79 Digital",
           summary: "Discuss managed IT, cybersecurity, cloud, networking, business software, or a scoped ICT assessment for your organisation.",
@@ -3023,10 +3070,12 @@ async function startServer() {
           ["/about", "About"],
           ["/solutions", "V79 Hub"],
           ["/resources", "Resources"],
+          ["/faq", "FAQ"],
           ["/contact", "Contact"],
         ].map(([href, label]) => `<a href="${href}" style="color:#0f766e;margin-right:16px">${label}</a>`).join("");
         const points = fallback.points.map(point => `<li>${escapeAttr(point)}</li>`).join("");
-        const fallbackHtml = `<main style="max-width:960px;margin:0 auto;padding:56px 24px;font-family:Inter,Arial,sans-serif;line-height:1.6;color:#132238"><p style="font-weight:700;color:#0f766e">V79 Digital · Saint Lucia</p><h1 style="font-size:clamp(2rem,5vw,3.5rem);line-height:1.05">${escapeAttr(fallback.heading)}</h1><p style="font-size:1.1rem;max-width:760px">${escapeAttr(fallback.summary)}</p><ul>${points}</ul><nav aria-label="Primary">${pageLinks}</nav><p><a href="/contact" style="display:inline-block;margin-top:18px;color:#0f766e;font-weight:700">Book an ICT consultation</a></p></main>`;
+        const faqAnswers = normalizedPath === "/faq" ? BUSINESS_FAQS.map(f => `<section id="${f.id}"><h2>${escapeAttr(f.question)}</h2><p>${escapeAttr(f.answer)}</p><h3>How V79 can help</h3><p>${escapeAttr(f.help)}</p><p>${escapeAttr(f.example)}</p><a href="/contact?faq=${f.id}">${escapeAttr(f.cta)}</a></section>`).join("") : "";
+        const fallbackHtml = `<main style="max-width:960px;margin:0 auto;padding:56px 24px;font-family:Inter,Arial,sans-serif;line-height:1.6;color:#132238"><p style="font-weight:700;color:#0f766e">V79 Digital · Saint Lucia</p><h1 style="font-size:clamp(2rem,5vw,3.5rem);line-height:1.05">${escapeAttr(fallback.heading)}</h1><p style="font-size:1.1rem;max-width:760px">${escapeAttr(fallback.summary)}</p><ul>${points}</ul>${faqAnswers}<nav aria-label="Primary">${pageLinks}</nav><p><a href="/contact" style="display:inline-block;margin-top:18px;color:#0f766e;font-weight:700">Book an ICT consultation</a></p></main>`;
         // Preserve non-JavaScript SEO content without painting a temporary
         // unstyled page into the React root during hydration.
         result = result.replace('<div id="root"></div>', `<div id="root"></div><noscript>${fallbackHtml}</noscript>`);
@@ -3320,6 +3369,12 @@ ${fields.content || ""}`;
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>${domain}/faq</loc>
+    <lastmod>${nowIso}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>${domain}/contact</loc>
     <lastmod>${nowIso}</lastmod>
     <changefreq>monthly</changefreq>
@@ -3350,6 +3405,11 @@ ${articlesXml}</urlset>`;
 
   // Vite development vs production serving logic
   app.use('/api', (_req,res)=>res.status(404).json({error:'API route not found'}));
+  app.get('/faq/', (req, res, next) => {
+    if (req.path !== '/faq/') return next();
+    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    return res.redirect(308, '/faq' + query);
+  });
   app.get('/privacy.html', (_req,res)=>res.redirect(308, '/privacy'));
   app.get('/terms.html', (_req,res)=>res.redirect(308, '/terms'));
   app.get('/blog', (_req,res)=>res.redirect(301, '/resources'));
@@ -3361,7 +3421,7 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
-    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
+    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/faq', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });
@@ -3494,4 +3554,5 @@ startServer().catch((error) => {
   console.error("[Startup] Server failed to start:", error);
   process.exit(1);
 });
+
 
