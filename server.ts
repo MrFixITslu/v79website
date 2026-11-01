@@ -2713,8 +2713,8 @@ async function startServer() {
 
   app.post("/api/admin/crm/prospects/search", requireAdmin, async (req, res) => {
     try {
-      const source = req.body?.source === "public" ? "public" : "directory";
-      if (source === "public" && process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
+      const source = req.body?.source === "public" ? "public" : req.body?.source === "exports" ? "exports" : "directory";
+      if (source !== "directory" && process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
         return res.status(503).json({ error: "Public business discovery is not enabled on this server." });
       }
       const result = await crmStorage.runProspectSearch({
