@@ -1262,7 +1262,8 @@ async function startServer() {
         hash,
         mustChangePassword: false,
         updatedAt: new Date().toISOString(),
-        resetTokenConsumed: currentAuth.resetTokenConsumed
+        resetTokenConsumed: currentAuth.resetTokenConsumed,
+        mfa: currentAuth.mfa
       };
       saveAdminAuth(adminAuth);
 
