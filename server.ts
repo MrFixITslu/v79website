@@ -3340,6 +3340,12 @@ ${fields.content || ""}`;
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>${domain}/faq</loc>
+    <lastmod>${nowIso}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>${domain}/contact</loc>
     <lastmod>${nowIso}</lastmod>
     <changefreq>monthly</changefreq>
