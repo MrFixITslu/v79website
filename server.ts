@@ -1271,6 +1271,31 @@ async function startServer() {
     return res.json({ success: true, token: "cookie-session", recoveryCodes: codes });
   });
 
+  app.post("/api/admin/mfa/verify", (req, res) => {
+    const token = adminCookie(req);
+    const session = getAdminSession(token);
+    if (!token || !session) return res.status(401).json({ error: "Sign in first." });
+    if (session.mustChangePassword) return res.status(403).json({ error: "Change your password first." });
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    if (isRateLimited(ip)) return res.status(429).json({ error: "Too many attempts." });
+    const auth = getLatestAdminAuth();
+    if (!auth.mfa) return res.status(409).json({ error: "Authenticator not enrolled." });
+    const code = String(req.body?.code || "");
+    const step = /^\\d{6}$/.test(code)
+      ? checkTotpCode(unseal(auth.mfa.sealedSecret), code, auth.mfa.lastStep) : null;
+    if (step === null) {
+      recordFailedAttempt(ip);
+      return res.status(401).json({ error: "Invalid authenticator code." });
+    }
+    auth.mfa.lastStep = step;
+    saveAdminAuth(auth);
+    adminSessions.delete(token);
+    const next = issueAdminSession(false, true);
+    setAdminCookie(res, next);
+    clearLoginAttempts(ip);
+    return res.json({ success: true, token: "cookie-session" });
+  });
+
   // POST administrator logout - invalidate the current session token
   app.post("/api/admin/logout", (req, res) => {
     const authHeader = req.headers.authorization;
