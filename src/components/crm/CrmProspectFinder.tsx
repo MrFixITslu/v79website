@@ -7,6 +7,7 @@ interface CrmProspectFinderProps {
   prospects: Prospect[];
   searchHistory: ProspectSearchLog[];
   sourceCapabilities: { directory: boolean; exports: boolean; osm: boolean };
+  onImportDirectory: (file: File) => Promise<{ count: number; skipped: number; total: number }>;
   onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports"; limit?: number }) => Promise<void>;
   onAnalyzeProspect: (prospectId: string) => Promise<void>;
   onEnrichProspect: (prospectId: string) => Promise<boolean>;
@@ -37,6 +38,7 @@ export function CrmProspectFinder({
   prospects,
   searchHistory,
   sourceCapabilities,
+  onImportDirectory,
   onRunSearch,
   onAnalyzeProspect,
   onEnrichProspect,
@@ -54,6 +56,8 @@ export function CrmProspectFinder({
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(10);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -67,6 +71,21 @@ export function CrmProspectFinder({
       query: query.trim() || undefined,
       limit
     });
+  };
+
+  const handleFileImport = async (file?: File) => {
+    if (!file) return;
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const result = await onImportDirectory(file);
+      setImportMessage(`Imported ${result.count} businesses; skipped ${result.skipped} duplicates. Local directory total: ${result.total}.`);
+      setSource("directory");
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : "Directory import failed.");
+    } finally {
+      setImporting(false);
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -188,6 +207,21 @@ export function CrmProspectFinder({
                 <option value="directory">My imported business directory</option>
               </select>
             </label>
+            <div className="rounded-xl border border-app-border p-3 bg-app-aside-bg/50 space-y-2">
+              <label htmlFor="crm-directory-import" className="block font-semibold text-xs text-app-text">
+                Add businesses you are authorised to use
+              </label>
+              <p className="text-xs text-app-text-sec">Import CSV or JSON with a businessName column. Optional: category, location, email, phone, website and social links. New records are merged, never replace existing entries.</p>
+              <input id="crm-directory-import" type="file" accept=".csv,.json,text/csv,application/json"
+                disabled={importing} className="text-xs max-w-full text-app-text-sec"
+                onChange={async e => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  await handleFileImport(file);
+                }} />
+              {importing && <p role="status" className="text-xs text-app-text-sec">Importing directory…</p>}
+              {importMessage && <p role="status" className="text-xs text-app-text-sec">{importMessage}</p>}
+            </div>
             {!sourceCapabilities.exports && (
               <p className="text-xs text-app-text-sec" role="status">
                 Public directory discovery is not enabled. You can search your imported business directory and use local AI to assess prospects.
