@@ -6,6 +6,7 @@ import { CrmLeadTable } from "./CrmLeadTable";
 import { CrmLeadDetailModal } from "./CrmLeadDetailModal";
 import { CrmColdCallCockpit } from "./CrmColdCallCockpit";
 import { CrmProspectFinder } from "./CrmProspectFinder";
+import { parseDirectoryFile } from "../../crm/directoryImport";
 import { CrmTasksList } from "./CrmTasksList";
 import { CrmSettings } from "./CrmSettings";
 import { CrmNewLeadModal } from "./CrmNewLeadModal";
@@ -458,6 +459,18 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     }
   };
 
+  const handleImportDirectory = async (file: File): Promise<{ count: number; skipped: number; total: number }> => {
+    if (file.size > 1_000_000) throw Error("Directory file exceeds 1 MB.");
+    const records = parseDirectoryFile(file.name, await file.text());
+    const response = await fetch("/api/admin/crm/directory", {
+      method: "POST", headers: getHeaders(), body: JSON.stringify({ entries: records })
+    });
+    if (response.status === 401) { onUnauthorized?.(); throw Error("Please sign in again."); }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw Error(result.error || "Could not import business directory.");
+    return result;
+  };
+
   // On-demand business-profile enrichment (admin only, never auto-outreach).
   const handleEnrichProspect = async (prospectId: string): Promise<boolean> => {
     setSearchError(null);
@@ -647,6 +660,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
           prospects={prospects}
           searchHistory={searchHistory}
           sourceCapabilities={sourceCapabilities}
+          onImportDirectory={handleImportDirectory}
           onRunSearch={handleRunSearch}
           onAnalyzeProspect={handleAnalyzeProspect}
           onEnrichProspect={handleEnrichProspect}
