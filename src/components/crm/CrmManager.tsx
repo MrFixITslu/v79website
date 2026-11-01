@@ -48,6 +48,9 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [sourceCapabilities, setSourceCapabilities] = useState<{ directory: boolean; exports: boolean; osm: boolean }>({
+    directory: true, exports: false, osm: false
+  });
   const [ollamaStatus, setOllamaStatus] = useState<{ connected: boolean; model?: string }>({
     connected: false
   });
@@ -66,6 +69,24 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
   }, [adminToken]);
+
+  const fetchDiscoveryCapabilities = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/crm/discovery-capabilities", { headers: getHeaders() });
+      if (res.status === 401) { onUnauthorized?.(); return; }
+      if (res.ok) {
+        const data = await res.json();
+        setSourceCapabilities({
+          directory: true,
+          exports: data?.exports === true,
+          osm: data?.osm === true
+        });
+      }
+    } catch (err) {
+      // Fail closed. The imported directory continues to work.
+      setSourceCapabilities({ directory: true, exports: false, osm: false });
+    }
+  }, [getHeaders, onUnauthorized]);
 
   // Fetch metrics & pipeline stats
   const fetchMetrics = useCallback(async () => {
@@ -183,7 +204,8 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
         fetchLeads(),
         fetchProspects(),
         fetchTasks(),
-        checkOllamaStatus()
+        checkOllamaStatus(),
+        fetchDiscoveryCapabilities()
       ]);
       if (selectedLead) {
         await fetchLeadDetails(selectedLead.id);
@@ -191,7 +213,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchMetrics, fetchLeads, fetchProspects, fetchTasks, checkOllamaStatus, selectedLead, fetchLeadDetails]);
+  }, [fetchMetrics, fetchLeads, fetchProspects, fetchTasks, checkOllamaStatus, fetchDiscoveryCapabilities, selectedLead, fetchLeadDetails]);
 
   // Initial load
   useEffect(() => {
@@ -624,6 +646,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
         <CrmProspectFinder
           prospects={prospects}
           searchHistory={searchHistory}
+          sourceCapabilities={sourceCapabilities}
           onRunSearch={handleRunSearch}
           onAnalyzeProspect={handleAnalyzeProspect}
           onEnrichProspect={handleEnrichProspect}
