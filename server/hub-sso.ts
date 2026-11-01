@@ -36,7 +36,7 @@ export function createHubSsoFlows({ clock = Date.now, capacity = 500 } = {}) {
 export function hubBackchannelUrl(raw: string): URL {
   const url = new URL(raw);
   const external = url.protocol === "https:" && url.hostname === "hub.v79sl.com" && !url.port;
-  const internal = url.protocol === "http:" && url.hostname === "v79-hub" && url.port === "3000";
+  const internal = url.protocol === "http:" && url.hostname === "v79-hub" && url.port === "3040";
   if ((!external && !internal) || url.username || url.password || url.pathname !== "/" ||
       url.search || url.hash) throw Error("Invalid Hub SSO backchannel origin");
   return url;
