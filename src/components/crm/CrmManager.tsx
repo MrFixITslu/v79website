@@ -409,7 +409,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   };
 
   // Run public business search
-  const handleRunSearch = async (params: { location?: string; category?: string; query?: string; source?: "directory" | "public"; limit?: number }) => {
+  const handleRunSearch = async (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports"; limit?: number }) => {
     setIsSearching(true);
     setSearchError(null);
     try {
