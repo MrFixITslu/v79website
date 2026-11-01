@@ -94,10 +94,18 @@ try {
   assert.equal(approved.filter(l => l.company === company).length, 1);
   check("manual approval creates exactly one CRM lead");
 
-  await selector.selectOption("exports");
-  await page.getByRole("button", { name: "Find businesses", exact: true }).click();
-  await page.getByText("Public business discovery is not enabled on this server.").waitFor({ timeout: 10000 });
-  check("default-off feature flag prevents external discovery");
+  assert.deepEqual(await selector.locator("option").allTextContents(), ["My imported business directory"]);
+  await page.getByText("Public directory discovery is not enabled.", { exact: false }).waitFor();
+  const capabilities = await context.request.get("/api/admin/crm/discovery-capabilities");
+  assert.equal(capabilities.status(), 200);
+  const enabled = await capabilities.json();
+  assert.equal(enabled.exports, false);
+  assert.equal(enabled.osm, false);
+  const declined = await context.request.post("/api/admin/crm/prospects/search", {
+    data: { source: "exports", limit: 1 }
+  });
+  assert.equal(declined.status(), 503);
+  check("provider is hidden in UI and server refuses disabled external discovery");
 
   assert.equal(errors.length, 0, "browser JavaScript errors: " + errors.join(" | "));
   await page.screenshot({ path: "crm-browser-acceptance.png", fullPage: true });
