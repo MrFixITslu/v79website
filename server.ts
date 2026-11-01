@@ -1173,8 +1173,10 @@ async function startServer() {
       return res.status(401).json({ valid: false, error: "Session invalid or expired" });
     }
     return res.json({
-      valid: true,
+      valid: !getLatestAdminAuth().mfa || session.mfaVerified,
       adminEmail: AUTHORIZED_ADMIN_EMAIL,
+      mfaRequired: !!getLatestAdminAuth().mfa && !session.mfaVerified,
+      mfaEnrolmentRequired: process.env.ADMIN_MFA_REQUIRED === "true" && !getLatestAdminAuth().mfa,
       mustChangePassword: session.mustChangePassword
     });
   });
