@@ -6,9 +6,9 @@ import { safeExternalLink, safeSocialLink, safeEmail } from "../../crm/linkSafet
 interface CrmProspectFinderProps {
   prospects: Prospect[];
   searchHistory: ProspectSearchLog[];
-  sourceCapabilities: { directory: boolean; exports: boolean; osm: boolean };
+  sourceCapabilities: { directory: boolean; exports: boolean; osm: boolean; geoapify: boolean };
   onImportDirectory: (file: File) => Promise<{ count: number; skipped: number; total: number }>;
-  onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports"; limit?: number }) => Promise<void>;
+  onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports" | "geoapify"; limit?: number }) => Promise<void>;
   onAnalyzeProspect: (prospectId: string) => Promise<void>;
   onEnrichProspect: (prospectId: string) => Promise<boolean>;
   onApproveProspect: (prospectId: string) => Promise<void>;
@@ -50,7 +50,7 @@ export function CrmProspectFinder({
   searchError
 }: CrmProspectFinderProps) {
   const [activeSubTab, setActiveSubTab] = useState<"catalog" | "history">("catalog");
-  const [source, setSource] = useState<"directory" | "public" | "exports">("directory");
+  const [source, setSource] = useState<"directory" | "public" | "exports" | "geoapify">("directory");
   const [location, setLocation] = useState("all");
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
@@ -202,7 +202,8 @@ export function CrmProspectFinder({
         {activeSubTab === "catalog" && (
           <form onSubmit={handleSearchSubmit} className="space-y-3 pt-2 border-t border-app-border/40">
             <label className="block text-xs text-app-text-sec">Discovery source
-              <select value={source} onChange={(e) => setSource(e.target.value as "directory" | "public" | "exports")} className="block mt-1 w-full sm:w-80 bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+              <select value={source} onChange={(e) => setSource(e.target.value as "directory" | "public" | "exports" | "geoapify")} className="block mt-1 w-full sm:w-80 bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+                {sourceCapabilities.geoapify && <option value="geoapify">Geoapify Places — Saint Lucia businesses</option>}
                 {sourceCapabilities.exports && <option value="exports">Export Saint Lucia business directory</option>}
                 <option value="directory">My imported business directory</option>
               </select>
@@ -222,7 +223,7 @@ export function CrmProspectFinder({
               {importing && <p role="status" className="text-xs text-app-text-sec">Importing directory…</p>}
               {importMessage && <p role="status" className="text-xs text-app-text-sec">{importMessage}</p>}
             </div>
-            {!sourceCapabilities.exports && (
+            {!sourceCapabilities.exports && !sourceCapabilities.geoapify && (
               <p className="text-xs text-app-text-sec" role="status">
                 Public directory discovery is not enabled. You can search your imported business directory and use local AI to assess prospects.
               </p>
@@ -346,6 +347,13 @@ export function CrmProspectFinder({
             </div>
           )}
 
+          {(sourceCapabilities.geoapify || prospects.some(p => p.sourceProvider === "geoapify")) && (
+            <p className="text-xs text-app-text-sec">
+              Place data from <a className="underline" href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Geoapify</a> and{" "}
+              <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors (ODbL)</a>.
+              Listings are unverified leads for human review, not confirmed customer problems.
+            </p>
+          )}
           {/* Prospects Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {prospects.length === 0 ? (
