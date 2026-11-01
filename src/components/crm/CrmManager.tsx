@@ -436,6 +436,32 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     }
   };
 
+  // On-demand business-profile enrichment (admin only, never auto-outreach).
+  const handleEnrichProspect = async (prospectId: string): Promise<boolean> => {
+    setSearchError(null);
+    try {
+      const res = await fetch(`/api/admin/crm/prospects/${prospectId}/enrich`, {
+        method: "POST",
+        headers: getHeaders()
+      });
+      if (res.status === 401) {
+        onUnauthorized?.();
+        return false;
+      }
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        setSearchError(error.error || "Could not retrieve public contact details.");
+        return false;
+      }
+      const prospect: Prospect = await res.json();
+      setProspects(prev => prev.map(p => p.id === prospectId ? prospect : p));
+      return true;
+    } catch {
+      setSearchError("Unable to reach the contact enrichment service.");
+      return false;
+    }
+  };
+
   // Analyze prospect with AI
   const handleAnalyzeProspect = async (prospectId: string) => {
     try {
@@ -600,6 +626,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
           searchHistory={searchHistory}
           onRunSearch={handleRunSearch}
           onAnalyzeProspect={handleAnalyzeProspect}
+          onEnrichProspect={handleEnrichProspect}
           onApproveProspect={handleApproveProspect}
           onBulkApprove={handleBulkApprove}
           onRejectProspect={handleRejectProspect}
