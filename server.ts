@@ -1203,7 +1203,9 @@ async function startServer() {
           success: true,
           token: "cookie-session",
           adminEmail: AUTHORIZED_ADMIN_EMAIL,
-          mustChangePassword: currentAuth.mustChangePassword
+          mustChangePassword: currentAuth.mustChangePassword,
+          mfaRequired: !!currentAuth.mfa,
+          mfaEnrolmentRequired: process.env.ADMIN_MFA_REQUIRED === "true" && !currentAuth.mfa
         });
       }
 
