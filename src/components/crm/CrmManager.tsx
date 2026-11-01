@@ -47,6 +47,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   // Status & Loading states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [ollamaStatus, setOllamaStatus] = useState<{ connected: boolean; model?: string }>({
     connected: false
   });
@@ -408,21 +409,28 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   };
 
   // Run public business search
-  const handleRunSearch = async (params: { location?: string; category?: string; query?: string; limit?: number }) => {
+  const handleRunSearch = async (params: { location?: string; category?: string; query?: string; source?: "directory" | "public"; limit?: number }) => {
     setIsSearching(true);
+    setSearchError(null);
     try {
       const res = await fetch("/api/admin/crm/prospects/search", {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify(params)
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProspects(data.prospects);
-        fetchProspects();
+      if (res.status === 401) {
+        onUnauthorized?.();
+        return;
       }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSearchError(data.error || "Search failed. No new prospects were saved.");
+        return;
+      }
+      await fetchProspects();
     } catch (e) {
       console.error("Search failed:", e);
+      setSearchError("Search failed. Please check the server connection.");
     } finally {
       setIsSearching(false);
     }
@@ -597,6 +605,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
           onRejectProspect={handleRejectProspect}
           onBulkReject={handleBulkReject}
           isSearching={isSearching}
+          searchError={searchError}
         />
       )}
 
