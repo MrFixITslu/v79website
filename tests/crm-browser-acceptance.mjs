@@ -39,24 +39,6 @@ try {
   }
   check("isolated admin session and password rotation");
 
-  const records = await context.request.post("/api/admin/crm/directory", {
-    data: { entries: [{
-      businessName: company,
-      category: "Professional Services",
-      industry: "Consulting",
-      location: "Castries",
-      phone: "+1 758 555 0101",
-      email: "company@example.test",
-      website: "https://example.com",
-      facebookUrl: "https://facebook.com/examplecompany",
-      instagramUrl: "https://instagram.com/examplecompany",
-      linkedinUrl: "https://linkedin.com/company/examplecompany",
-      description: "Synthetic business created only for isolated CRM testing."
-    }] }
-  });
-  assert.equal(records.status(), 200, await records.text());
-  check("synthetic directory import through authenticated admin API");
-
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (err) => errors.push(err.message));
@@ -66,6 +48,19 @@ try {
   await page.locator("#crm-tab-prospects").click();
   await page.getByText("AI Business Prospect Finder", { exact: true }).waitFor();
   check("CRM Prospect Finder visible in authenticated browser");
+
+  const csv = [
+    "businessName,category,industry,location,phone,email,website,facebookUrl,instagramUrl,linkedinUrl,description",
+    [company,"Professional Services","Consulting","Castries","+1 758 555 0101",
+     "company@example.test","https://example.com","https://facebook.com/examplecompany",
+     "https://instagram.com/examplecompany","https://linkedin.com/company/examplecompany",
+     "Synthetic business for isolated browser tests"].join(",")
+  ].join("\n");
+  await page.locator("#crm-directory-import").setInputFiles({
+    name: "owner-authorised-test.csv", mimeType: "text/csv", buffer: Buffer.from(csv)
+  });
+  await page.getByText("Imported 1 businesses", { exact: false }).waitFor();
+  check("CSV owner import completes in the admin browser without replacing existing data");
 
   // Real public-source network calls are deliberately disabled in CI.
   const selector = page.locator("label").filter({ hasText: "Discovery source" }).locator("select");
