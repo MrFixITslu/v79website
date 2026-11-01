@@ -2717,6 +2717,9 @@ async function startServer() {
       if (source !== "directory" && process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
         return res.status(503).json({ error: "Public business discovery is not enabled on this server." });
       }
+      if (source === "public" && process.env.CRM_OSM_DISCOVERY_ENABLED !== "true") {
+        return res.status(503).json({ error: "OpenStreetMap public discovery is not configured for commercial use." });
+      }
       const result = await crmStorage.runProspectSearch({
         location: typeof req.body?.location === "string" ? req.body.location.slice(0, 80) : undefined,
         category: typeof req.body?.category === "string" ? req.body.category.slice(0, 80) : undefined,
