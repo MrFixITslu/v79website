@@ -187,6 +187,7 @@ export interface Prospect {
   companySize?: string;
   sourceUrl: string;
   discoveredAt: string;
+  contactCheckedAt?: string;
   workflowStatus: ProspectWorkflowStatus;
   aiAnalysis?: AIAnalysisResult;
   leadScore: number;
