@@ -5,6 +5,7 @@ import { atomicWrite, encryptionKey, seal, unseal, readJSON, writeJSON, transact
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { createHubSsoFlows, hubBackchannelUrl } from "./server/hub-sso";
 
 import dotenv from "dotenv";
 import multer from "multer";
@@ -295,12 +296,17 @@ const ADMIN_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 interface AdminSession {
   expiry: number;
   mustChangePassword: boolean;
+  hubHandle?: string;
+  hubValidatedAt?: number;
 }
 const adminSessions = new Map<string, AdminSession>();
 
-function issueAdminSession(mustChangePassword: boolean): string {
+function issueAdminSession(mustChangePassword: boolean, hubHandle?: string): string {
   const token = crypto.randomBytes(32).toString("hex");
-  adminSessions.set(token, { expiry: Date.now() + ADMIN_SESSION_TTL_MS, mustChangePassword });
+  adminSessions.set(token, {
+    expiry: Date.now() + (hubHandle ? 30 * 60_000 : ADMIN_SESSION_TTL_MS),
+    mustChangePassword, ...(hubHandle ? { hubHandle, hubValidatedAt: Date.now() } : {})
+  });
   return token;
 }
 
@@ -316,7 +322,10 @@ function getAdminSession(token: string | undefined | null): AdminSession | null 
 }
 
 function isValidAdminSession(token: string | undefined | null): boolean {
-  const session=getAdminSession(token); return !!session && !session.mustChangePassword;
+  const session = getAdminSession(token);
+  if (!session || session.mustChangePassword) return false;
+  if (!websiteHubSsoEnforced()) return true;
+  return Boolean(session.hubHandle && session.hubValidatedAt && Date.now() - session.hubValidatedAt < 10_000);
 }
 
 function invalidateAllAdminSessions() {
