@@ -256,6 +256,10 @@ export function CrmProspectFinder({
             Public-source discovery only. Listings are unverified until checked; no login-based social scraping or automated outreach.
           </span>
         </div>
+        <p className="text-[11px] text-app-text-muted">
+          Public listing data: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline">© OpenStreetMap contributors (ODbL)</a>.
+          Verify each contact before outreach.
+        </p>
       </div>
 
       {/* SUB-TAB 1: PROSPECT CATALOG */}
