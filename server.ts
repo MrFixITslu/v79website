@@ -2713,17 +2713,23 @@ async function startServer() {
 
   app.post("/api/admin/crm/prospects/search", requireAdmin, async (req, res) => {
     try {
+      const source = req.body?.source === "public" ? "public" : "directory";
+      if (source === "public" && process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
+        return res.status(503).json({ error: "Public business discovery is not enabled on this server." });
+      }
       const result = await crmStorage.runProspectSearch({
-        location: req.body.location,
-        category: req.body.category,
-        query: req.body.query,
-        searchProviderKey: process.env.SEARCH_PROVIDER_API_KEY,
-        limit: req.body.limit || 10
+        location: typeof req.body?.location === "string" ? req.body.location.slice(0, 80) : undefined,
+        category: typeof req.body?.category === "string" ? req.body.category.slice(0, 80) : undefined,
+        query: typeof req.body?.query === "string" ? req.body.query.slice(0, 100) : undefined,
+        source,
+        limit: Math.max(1, Math.min(20, Number(req.body?.limit) || 10))
       });
       res.json(result);
     } catch (e) {
-      console.error("[CRM Prospect Search Error]:", e);
-      res.status(500).json({ error: "Prospect search failed." });
+      console.error("[CRM Prospect Search Error]:", (e as Error)?.message);
+      const status = Number((e as { status?: number })?.status);
+      res.status([429, 502, 503].includes(status) ? status : 500)
+        .json({ error: (e as Error)?.message || "Prospect search failed." });
     }
   });
 
