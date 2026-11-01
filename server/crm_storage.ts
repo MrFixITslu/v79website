@@ -1,5 +1,6 @@
 import { readJSON, writeJSON, transaction } from "./persistence";
 import { discoverPublicBusinesses } from "./crm_public_discovery";
+import { discoverExportSaintLucia } from "./crm_export_directory";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -500,16 +501,18 @@ export class CRMStorage {
     category?: string;
     query?: string;
     searchProviderKey?: string;
-    source?: "directory" | "public";
+    source?: "directory" | "public" | "exports";
     limit?: number;
   }): Promise<{ discovered: Prospect[]; duplicatesCount: number; newCount: number }> {
     const limit = Math.max(1, Math.min(20, Number(params.limit) || 10));
-    const source = params.source === "public" ? "public" : "directory";
+    const source = params.source === "public" ? "public" : params.source === "exports" ? "exports" : "directory";
 
     // Public discovery is opt-in; preserve the existing imported-directory mode.
     let candidates = source === "public"
       ? await discoverPublicBusinesses({ location: params.location, category: params.category, query: params.query, limit })
-      : readJSON<any[]>("business-directory.json", []);
+      : source === "exports"
+        ? await discoverExportSaintLucia({ location: params.location, category: params.category, query: params.query, limit })
+        : readJSON<any[]>("business-directory.json", []);
     if (!candidates.length && source === "directory") {
       throw new Error("Import your business directory first. No live social-network search is configured.");
     }
@@ -536,7 +539,7 @@ export class CRMStorage {
       const normalizedName = b.businessName.trim().toLocaleLowerCase("en");
       if (preparedNames.has(normalizedName)) continue;
       preparedNames.add(normalizedName);
-      const analysis = source === "public" && prepared.length < 2
+      const analysis = source !== "directory" && prepared.length < 2
         ? await analyzeBusinessWithAI(b)
         : calculateDeterministicAnalysis(b);
       prepared.push({
@@ -594,7 +597,7 @@ export class CRMStorage {
         duplicates: duplicatesCount,
         approvedCount: 0,
         rejectedCount: 0,
-        searchProvider: source === "public" ? "OpenStreetMap public listings + optional local Ollama" : "Curated local directory (not a live web search)",
+        searchProvider: source === "public" ? "OpenStreetMap public listings + optional local Ollama" : source === "exports" ? "Export Saint Lucia public directory + optional local Ollama" : "Curated local directory (not a live web search)",
         timestamp: new Date().toISOString()
       });
       writeJSON(CRM_PROSPECTS_FILE, existingProspects);
