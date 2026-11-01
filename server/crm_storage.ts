@@ -503,17 +503,16 @@ export class CRMStorage {
     source?: "directory" | "public";
     limit?: number;
   }): Promise<{ discovered: Prospect[]; duplicatesCount: number; newCount: number }> {
-    const existingProspects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    const existingLeads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
     const limit = Math.max(1, Math.min(20, Number(params.limit) || 10));
     const source = params.source === "public" ? "public" : "directory";
 
-    // Public discovery is an explicit operator action. Local directory behaviour is retained.
+    // Public discovery is opt-in; preserve the existing imported-directory mode.
     let candidates = source === "public"
       ? await discoverPublicBusinesses({ location: params.location, category: params.category, query: params.query, limit })
       : readJSON<any[]>("business-directory.json", []);
-    if (!candidates.length && source === "directory") throw new Error("Import your business directory first. No live social-network search is configured.");
-
+    if (!candidates.length && source === "directory") {
+      throw new Error("Import your business directory first. No live social-network search is configured.");
+    }
     if (params.location && params.location !== "all") {
       candidates = candidates.filter(b => (b.location || "").toLowerCase().includes(params.location!.toLowerCase()));
     }
@@ -528,26 +527,21 @@ export class CRMStorage {
       );
     }
 
-    let duplicatesCount = 0;
-    const newlyDiscovered: Prospect[] = [];
-
+    // Run AI outside the short synchronous transaction. No stale prospect
+    // snapshot is held during the network call.
+    const prepared: Prospect[] = [];
+    const preparedNames = new Set<string>();
     for (const b of candidates.slice(0, limit)) {
-      const existsInProspects = existingProspects.some(p => p.businessName.toLowerCase() === b.businessName.toLowerCase());
-      const existsInLeads = existingLeads.some(l => l.company.toLowerCase() === b.businessName.toLowerCase());
-
-      if (existsInProspects || existsInLeads) {
-        duplicatesCount++;
-        continue;
-      }
-
-      // Ollama enriches the first two new public matches; all others can be re-scored on demand.
-      // The existing local heuristic is an honest fallback when Ollama is not connected.
-      const analysis = source === "public" && newlyDiscovered.length < 2
+      if (typeof b.businessName !== "string" || !b.businessName.trim()) continue;
+      const normalizedName = b.businessName.trim().toLocaleLowerCase("en");
+      if (preparedNames.has(normalizedName)) continue;
+      preparedNames.add(normalizedName);
+      const analysis = source === "public" && prepared.length < 2
         ? await analyzeBusinessWithAI(b)
         : calculateDeterministicAnalysis(b);
-      const newProspect: Prospect = {
-        id: `prospect-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        businessName: b.businessName,
+      prepared.push({
+        id: "prospect-" + crypto.randomUUID(),
+        businessName: b.businessName.trim(),
         category: b.category || "Commercial",
         industry: b.industry || "General Industry",
         location: b.location || params.location || "Saint Lucia",
@@ -558,44 +552,55 @@ export class CRMStorage {
         instagramUrl: b.instagramUrl,
         linkedinUrl: b.linkedinUrl,
         description: b.description || "",
-        companySize: b.companySize || "1–10",
+        companySize: b.companySize,
         sourceUrl: b.sourceUrl || b.website || b.facebookUrl || "",
         discoveredAt: new Date().toISOString(),
         workflowStatus: "discovered",
         aiAnalysis: analysis,
         leadScore: analysis.leadScore,
         scoreCategory: analysis.scoreCategory
-      };
-
-      existingProspects.unshift(newProspect);
-      newlyDiscovered.push(newProspect);
+      });
     }
 
-    writeJSON(CRM_PROSPECTS_FILE, existingProspects);
+    // Re-read at commit time so an AI delay cannot erase concurrent records.
+    return transaction(() => {
+      const existingProspects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const existingLeads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
+      const known = new Set([
+        ...existingProspects.map(p => p.businessName.toLocaleLowerCase("en")),
+        ...existingLeads.map(l => l.company.toLocaleLowerCase("en"))
+      ]);
+      const discovered: Prospect[] = [];
+      let duplicatesCount = 0;
+      for (const candidate of prepared) {
+        const name = candidate.businessName.toLocaleLowerCase("en");
+        if (known.has(name)) {
+          duplicatesCount++;
+          continue;
+        }
+        known.add(name);
+        existingProspects.unshift(candidate);
+        discovered.push(candidate);
+      }
 
-    // Record Search Log
-    const searchLogs = readJSON<ProspectSearchLog[]>(CRM_SEARCHES_FILE, []);
-    const newLog: ProspectSearchLog = {
-      id: crypto.randomUUID(),
-      query: params.query || `Search in ${params.location || "All Saint Lucia"}`,
-      location: params.location || "All Saint Lucia",
-      category: params.category || "All Categories",
-      totalFound: candidates.length,
-      newProspects: newlyDiscovered.length,
-      duplicates: duplicatesCount,
-      approvedCount: 0,
-      rejectedCount: 0,
-      searchProvider: source === "public" ? "OpenStreetMap public listings + optional local Ollama" : "Curated local directory (not a live web search)",
-      timestamp: new Date().toISOString()
-    };
-    searchLogs.unshift(newLog);
-    writeJSON(CRM_SEARCHES_FILE, searchLogs);
-
-    return {
-      discovered: newlyDiscovered,
-      duplicatesCount,
-      newCount: newlyDiscovered.length
-    };
+      const searchLogs = readJSON<ProspectSearchLog[]>(CRM_SEARCHES_FILE, []);
+      searchLogs.unshift({
+        id: crypto.randomUUID(),
+        query: params.query || ("Search in " + (params.location || "All Saint Lucia")),
+        location: params.location || "All Saint Lucia",
+        category: params.category || "All Categories",
+        totalFound: candidates.length,
+        newProspects: discovered.length,
+        duplicates: duplicatesCount,
+        approvedCount: 0,
+        rejectedCount: 0,
+        searchProvider: source === "public" ? "OpenStreetMap public listings + optional local Ollama" : "Curated local directory (not a live web search)",
+        timestamp: new Date().toISOString()
+      });
+      writeJSON(CRM_PROSPECTS_FILE, existingProspects);
+      writeJSON(CRM_SEARCHES_FILE, searchLogs);
+      return { discovered, duplicatesCount, newCount: discovered.length };
+    });
   }
 
   getSearchHistory(): ProspectSearchLog[] {
