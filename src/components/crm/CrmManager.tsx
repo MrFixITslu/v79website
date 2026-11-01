@@ -310,20 +310,35 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     }
   };
 
-  // Add activity note
-  const handleAddActivity = async (leadId: number, type: string, title: string, description: string) => {
+  // Notes are confirmed only after the server persists them successfully.
+  const handleAddActivity = async (leadId: number, type: string, title: string, description: string): Promise<boolean> => {
     try {
       const res = await fetch(`/api/admin/crm/leads/${leadId}/activities`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify({ type, title, description })
+        method: "POST", headers: getHeaders(), body: JSON.stringify({ type, title, description })
       });
-      if (res.ok) {
-        const act = await res.json();
-        setSelectedLeadActivities((prev) => [act, ...prev]);
-      }
-    } catch (e) {
-      console.error("Failed to add activity:", e);
+      if (res.status === 401) { onUnauthorized?.(); return false; }
+      if (!res.ok) return false;
+      const activity: CRMActivity = await res.json();
+      setSelectedLeadActivities(prev => [activity, ...prev.filter(a => a.id !== activity.id)]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleSaveAdminNotes = async (leadId: number, adminNotes: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admin/crm/leads/${leadId}`, {
+        method: "PUT", headers: getHeaders(), body: JSON.stringify({ adminNotes })
+      });
+      if (res.status === 401) { onUnauthorized?.(); return false; }
+      if (!res.ok) return false;
+      const updated: CRMLead = await res.json();
+      setLeads(prev => prev.map(l => l.id === leadId ? updated : l));
+      setSelectedLead(prev => prev?.id === leadId ? updated : prev);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -745,6 +760,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
           onClose={() => setSelectedLead(null)}
           onUpdateLead={handleUpdateLead}
           onAddActivity={handleAddActivity}
+          onSaveAdminNotes={handleSaveAdminNotes}
           onAddCall={handleAddCall}
           onAddTask={handleAddTask}
           onToggleTaskStatus={handleToggleTaskStatus}
