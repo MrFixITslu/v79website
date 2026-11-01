@@ -597,6 +597,21 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   };
 
   // Bulk reject prospects
+  const handleRestoreProspect = async (id: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/admin/crm/prospects/${encodeURIComponent(id)}/restore`, {
+        method: "POST", headers: getHeaders()
+      });
+      if (response.status === 401) { onUnauthorized?.(); return false; }
+      if (!response.ok) return false;
+      const restored: Prospect = await response.json();
+      setProspects(prev => prev.map(p => p.id === id ? restored : p));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleBulkReject = async (ids: string[]) => {
     try {
       const res = await fetch("/api/admin/crm/prospects/bulk-reject", {
@@ -693,6 +708,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
           onApproveProspect={handleApproveProspect}
           onBulkApprove={handleBulkApprove}
           onRejectProspect={handleRejectProspect}
+          onRestoreProspect={handleRestoreProspect}
           onBulkReject={handleBulkReject}
           isSearching={isSearching}
           searchError={searchError}
