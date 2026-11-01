@@ -226,7 +226,7 @@ export async function queryOllama(
 export async function analyzeBusinessWithAI(
   business: BusinessInput,
   ollamaBaseUrl: string = process.env.OLLAMA_BASE_URL || "http://ollama:11434",
-  model: string = process.env.OLLAMA_CRM_MODEL || process.env.OLLAMA_MODEL || "qwen2.5:1.5b"
+  model: string = process.env.OLLAMA_CRM_MODEL || "qwen2.5:1.5b"
 ): Promise<CRMAnalysisResult> {
   const fallback = calculateDeterministicAnalysis(business);
   const allowedServices = [
