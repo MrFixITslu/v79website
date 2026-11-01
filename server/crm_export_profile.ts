@@ -5,7 +5,7 @@ export interface PublicProfileContact {
 }
 
 const PROFILE_URL = /^https:\/\/exportsaintlucia\.org\/directories\/[a-z0-9-]+\/$/i;
-const profileCache = new Map<string, PublicProfileContact>();
+const profileCache = new Map<string, { at: number; details: PublicProfileContact }>();
 let lastProfileFetch = 0;
 
 function extractContactPart(html: string): string {
@@ -42,7 +42,7 @@ export async function getExportProfileContact(sourceUrl: string): Promise<Public
     throw Object.assign(new Error("Contact enrichment is available only for verified Export Saint Lucia profiles."), { status: 400 });
   }
   const cached = profileCache.get(sourceUrl);
-  if (cached) return cached;
+  if (cached && Date.now() - cached.at < 86_400_000) return cached.details;
   const now = Date.now();
   if (now - lastProfileFetch < 3000) {
     throw Object.assign(new Error("Wait three seconds before requesting another profile."), { status: 429 });
@@ -62,7 +62,7 @@ export async function getExportProfileContact(sourceUrl: string): Promise<Public
     throw Object.assign(new Error("The public company profile is too large."), { status: 502 });
   }
   const details = parseExportProfileContact(html);
-  profileCache.set(sourceUrl, details);
+  profileCache.set(sourceUrl, { at: Date.now(), details });
   if (profileCache.size > 100) profileCache.delete(profileCache.keys().next().value as string);
   return details;
 }
