@@ -1,6 +1,6 @@
 # V79 website admin — Hub MFA sign-in rollout
 
-Status: **development accepted by CI, not live**. Paired changes: V79hub [PR #224](https://github.com/MrFixITslu/V79hub/pull/224) and v79website [PR #62](https://github.com/MrFixITslu/v79website/pull/62).
+Status: **live pilot is now flagged enforced; authenticated founder browser acceptance still unverified**. The source remains in a draft PR and must not be treated as merged. Paired changes: V79hub [PR #224](https://github.com/MrFixITslu/V79hub/pull/224) and v79website [PR #62](https://github.com/MrFixITslu/v79website/pull/62).
 
 ## Identity architecture
 
@@ -36,3 +36,12 @@ Both containers need the **same dedicated** `V79_WEBSITE_SSO_SHARED_SECRET` (32+
 - Historical accepted release fingerprints remain separate from the new staged branch. Do not repin a prior accepted release to disguise changes.
 
 This document is a release guide, **not proof of a deployed feature**.
+
+## Live read-back and independent negative acceptance — 1 November 2026
+
+- Production website container is healthy and, at the latest read-only check, both `WEBSITE_HUB_SSO_ENABLED=true` and `WEBSITE_HUB_SSO_ENFORCED=true`. Hub SSO provider is enabled.
+- `GET /api/admin/hub-sso/config` returned `{"enabled":true,"enforced":true}`. A synthetic/no-password login request to `POST /api/admin/login` returned HTTP **403**; a callback without valid state returned **401**; unauthenticated `GET /api/admin/verify-session` and CRM endpoints returned **401**.
+- These checks establish server-side legacy and anonymous denial only. They **do not prove** that the actual owner completed a fresh Hub MFA website sign-in, or that all browser flows, timeout, logout and cross-app revocation have been accepted.
+- Added non-deploying enforced-mode HTTP regression `tests/hub-sso-enforced-isolated.mjs` and isolated workflow, testing correct synthetic legacy-password denial, forged callback denial, protected CRM writes, fixed Hub redirect and public page access. The first exact-head workflow, the existing CRM browser suite and production checks passed.
+- Running website source fingerprint and release/rollback provenance still need independent read-back. No credential/cookie/owner MFA secrets should be posted to GitHub.
+- Because mandatory SSO is already flagged on, any recovery plan must preserve an authenticated owner path; never switch back to password-only fallback without a reviewed incident decision and owner approval.
