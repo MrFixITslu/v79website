@@ -34,6 +34,17 @@ function cleanUrl(value?: string): string | undefined {
   }
 }
 
+function cleanSocialUrl(value: string | undefined, service: "facebook" | "instagram" | "linkedin"): string | undefined {
+  const safeUrl = cleanUrl(value);
+  if (!safeUrl) return undefined;
+  const hostname = new URL(safeUrl).hostname.toLowerCase();
+  const allowedDomains = service === "facebook"
+    ? ["facebook.com", "fb.com"]
+    : service === "instagram" ? ["instagram.com"] : ["linkedin.com"];
+  return allowedDomains.some((domain) => hostname === domain || hostname.endsWith("." + domain))
+    ? safeUrl : undefined;
+}
+
 function firstTag(tags: Record<string, string>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = tags[key]?.trim();
@@ -90,9 +101,9 @@ export function parsePublicBusinesses(
     const emailCandidate = firstTag(tags, "contact:email", "email");
     const email = emailCandidate && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailCandidate) ? emailCandidate : undefined;
     const website = cleanUrl(firstTag(tags, "contact:website", "website", "url"));
-    const facebookUrl = cleanUrl(firstTag(tags, "contact:facebook", "facebook"));
-    const instagramUrl = cleanUrl(firstTag(tags, "contact:instagram", "instagram"));
-    const linkedinUrl = cleanUrl(firstTag(tags, "contact:linkedin", "linkedin"));
+    const facebookUrl = cleanSocialUrl(firstTag(tags, "contact:facebook", "facebook"), "facebook");
+    const instagramUrl = cleanSocialUrl(firstTag(tags, "contact:instagram", "instagram"), "instagram");
+    const linkedinUrl = cleanSocialUrl(firstTag(tags, "contact:linkedin", "linkedin"), "linkedin");
     const dedupeKey = businessName.toLowerCase().replace(/[^a-z0-9]+/g, "") + "|" + (phone || statedLocation).toLowerCase();
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
