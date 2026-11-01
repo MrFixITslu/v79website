@@ -36,3 +36,27 @@ export function totpCode(secret: string, step: number): string {
   const number = (mac.readUInt32BE(index) & 0x7fffffff) % 1_000_000;
   return String(number).padStart(6, "0");
 }
+
+export function checkTotpCode(secret: string, submitted: string, usedStep = -1, now = Date.now()): number | null {
+  if (!/^\\d{6}$/.test(submitted)) return null;
+  const step = Math.floor(now / 30000);
+  for (const candidate of [step - 1, step, step + 1]) {
+    if (candidate <= usedStep || candidate < 0) continue;
+    const expected = Buffer.from(totpCode(secret, candidate));
+    if (crypto.timingSafeEqual(expected, Buffer.from(submitted))) return candidate;
+  }
+  return null;
+}
+
+export function authenticatorUri(secret: string, email: string): string {
+  return "otpauth://totp/" + encodeURIComponent("V79 Digital:" + email) +
+    "?secret=" + encodeURIComponent(secret) +
+    "&issuer=" + encodeURIComponent("V79 Digital") + "&algorithm=SHA1&digits=6&period=30";
+}
+
+export function createRecoveryCodes(): string[] {
+  return Array.from({ length: 10 }, () => crypto.randomBytes(12).toString("hex").toUpperCase());
+}
+export function recoveryCodeDigest(code: string): string {
+  return crypto.createHash("sha256").update(code.toUpperCase()).digest("hex");
+}
