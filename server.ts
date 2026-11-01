@@ -2476,6 +2476,10 @@ async function startServer() {
 
   app.put("/api/admin/crm/leads/:id", requireAdmin, (req, res) => {
     try {
+      if (req.body?.adminNotes !== undefined &&
+          (typeof req.body.adminNotes !== "string" || req.body.adminNotes.length > 10000)) {
+        return res.status(400).json({ error: "Internal notes must be text under 10,000 characters." });
+      }
       const updated = transaction(() => crmStorage.updateLead(Number(String(req.params.id)), req.body, "Admin"));
       res.json(updated);
     } catch (e) {
@@ -2552,8 +2556,16 @@ async function startServer() {
 
   app.post("/api/admin/crm/leads/:id/activities", requireAdmin, (req, res) => {
     try {
+      const leadId = Number(String(req.params.id));
+      if (!Number.isInteger(leadId) || !crmStorage.getLeadById(leadId)) {
+        return res.status(404).json({ error: "CRM lead not found." });
+      }
+      if (typeof req.body?.description !== "string" || !req.body.description.trim() ||
+          req.body.description.length > 10000) {
+        return res.status(400).json({ error: "Notes must contain 1–10,000 characters." });
+      }
       const act = crmStorage.addActivity({
-        leadId: Number(String(req.params.id)),
+        leadId,
         type: req.body.type || "note",
         title: req.body.title || "Note Added",
         description: req.body.description || "",
