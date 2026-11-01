@@ -326,8 +326,9 @@ function getAdminSession(token: string | undefined | null): AdminSession | null 
 function isValidAdminSession(token: string | undefined | null): boolean {
   const session = getAdminSession(token);
   if (!session || session.mustChangePassword) return false;
-  if (!websiteHubSsoEnforced()) return true;
-  return Boolean(session.hubHandle && session.hubValidatedAt && Date.now() - session.hubValidatedAt < 10_000);
+  if (websiteHubSsoEnforced() && !session.hubHandle) return false;
+  if (!session.hubHandle) return true;
+  return Boolean(session.hubValidatedAt && Date.now() - session.hubValidatedAt < 5000);
 }
 
 function invalidateAllAdminSessions() {
@@ -390,7 +391,7 @@ async function requireAdmin(req: express.Request, res: express.Response, next: e
       code: "PASSWORD_CHANGE_REQUIRED"
     });
   }
-  if (websiteHubSsoEnforced()) {
+  if (websiteHubSsoEnforced() || session.hubHandle) {
     if (!session.hubHandle || !(await validateHubAdminSession(session))) {
       if (token) adminSessions.delete(token);
       return res.status(401).json({ error: "Complete MFA sign-in using V79 Hub.", code: "HUB_SSO_REQUIRED" });
@@ -1267,7 +1268,7 @@ async function startServer() {
     if (!session) {
       return res.status(401).json({ valid: false, error: "Session invalid or expired" });
     }
-    if (websiteHubSsoEnforced() && !(await validateHubAdminSession(session))) {
+    if ((websiteHubSsoEnforced() || session.hubHandle) && !(await validateHubAdminSession(session))) {
       if (token) adminSessions.delete(token);
       return res.status(401).json({ valid: false, error: "Hub MFA sign-in is required." });
     }
