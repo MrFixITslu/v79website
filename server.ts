@@ -1324,11 +1324,16 @@ async function startServer() {
   });
 
   // POST administrator logout - invalidate the current session token
-  app.post("/api/admin/logout", (req, res) => {
-    const authHeader = req.headers.authorization;
+  app.post("/api/admin/logout", async (req, res) => {
     const token = adminCookie(req);
+    const session = getAdminSession(token);
     if (token) adminSessions.delete(token);
     res.clearCookie("v79_admin", {path: "/"});
+    if (session?.hubHandle) {
+      try { await hubSsoBackchannel("/api/website-sso/revoke", { handle: session.hubHandle }); }
+      catch { /* Local session is already revoked. Hub's handle also expires on its own. */ }
+    }
+    res.setHeader("Cache-Control", "no-store");
     res.json({ success: true });
   });
 
