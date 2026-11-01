@@ -45,8 +45,8 @@ export interface CRMAnalysisResult {
 
 // Configurable scoring weights as requested by prompt
 export const DEFAULT_SCORING_RULES = [
-  { id: "no_website", label: "No Professional Website", points: 25, condition: (b: BusinessInput) => !b.website || !b.website.trim() },
-  { id: "active_social_no_web", label: "Active Social Media but No Dedicated Domain", points: 15, condition: (b: BusinessInput) => (!b.website || !b.website.trim()) && Boolean(b.facebookUrl || b.instagramUrl) },
+  { id: "no_website", label: "Website not listed in source (verification needed)", points: 10, condition: (b: BusinessInput) => !b.website || !b.website.trim() },
+  { id: "active_social_no_web", label: "Social URL listed, website not listed (verification needed)", points: 10, condition: (b: BusinessInput) => (!b.website || !b.website.trim()) && Boolean(b.facebookUrl || b.instagramUrl) },
   { id: "contact_available", label: "Direct Phone or WhatsApp Reachable", points: 15, condition: (b: BusinessInput) => Boolean(b.phone && b.phone.trim().length >= 7) },
   { id: "email_available", label: "Public Business Email Listed", points: 10, condition: (b: BusinessInput) => Boolean(b.email && b.email.includes("@")) },
   { id: "saint_lucia_location", label: "High-Commercial Saint Lucia District", points: 15, condition: (b: BusinessInput) => {
@@ -88,41 +88,41 @@ export function calculateDeterministicAnalysis(b: BusinessInput): CRMAnalysisRes
   const text = `${b.category || ""} ${b.industry || ""} ${b.description || ""}`.toLowerCase();
 
   if (!b.website || !b.website.trim()) {
-    problems.push("No dedicated company website; relies entirely on third-party social media pages");
+    problems.push("No website URL was present in the public listing; confirm whether the business has a website before proposing one.");
     recommendedServices.push("Website Development & Domain Setup");
     recommendedServices.push("Custom Digital Showcase / Mobile Ordering");
   } else {
-    problems.push("Existing web presence may lack speed, mobile optimization, or active conversion funnels");
+    problems.push("A website is listed; a technical review could establish whether modernisation or lead capture would add value.");
     recommendedServices.push("Website Modernization & SEO");
   }
 
   if (b.facebookUrl || b.instagramUrl) {
-    problems.push("Customer messages across social channels lack unified CRM or ticketing inbox");
+    problems.push("Social accounts are listed; ask how customer enquiries and service requests are managed before proposing a CRM.");
     recommendedServices.push("CRM & Helpdesk Implementation");
     recommendedServices.push("WhatsApp & Social Chatbot Automation");
   }
 
   if (/hotel|restaurant|resort|hospitality|bar|tour|rental/.test(text)) {
-    problems.push("High guest bandwidth demands and risk of reservation downtime during storms");
+    problems.push("Hospitality connectivity and continuity may be worth discussing; no actual problems have been confirmed.");
     recommendedServices.push("Wi-Fi Optimization & Guest Hotspots");
     recommendedServices.push("Automated Disaster Backup & Cloud Redundancy");
   } else if (/medical|clinic|law|legal|accounting|financial/.test(text)) {
-    problems.push("Sensitive client records and compliance risks without managed firewalls");
+    problems.push("Data protection and resilience may be relevant; no security gaps or compliance failures have been verified.");
     recommendedServices.push("Cybersecurity & Firewall Hardening");
     recommendedServices.push("Managed IT Support & Cloud Microsoft 365");
   } else if (/retail|store|wholesale|distributor|supply/.test(text)) {
-    problems.push("Manual stock counts and disconnected point-of-sale systems");
+    problems.push("Explore whether stock and point-of-sale workflows could benefit from integration; current processes are unknown.");
     recommendedServices.push("Inventory Management Integration");
     recommendedServices.push("Business Process Automation");
   } else {
-    problems.push("Manual operational processes and reliance on ad-hoc IT troubleshooting");
+    problems.push("Ask about existing workflows and IT support before suggesting automation or managed services.");
     recommendedServices.push("Managed IT Support");
     recommendedServices.push("Business Automation");
   }
 
   const category = b.category || b.industry || "General Small Business";
   const summary = `${b.businessName} operates in ${b.location || "Saint Lucia"}. ${
-    !b.website ? "They currently lack a standalone company website, depending heavily on direct contact and social channels." : "They maintain an online presence that could be modernized with automated client capture."
+    !b.website ? "No website was recorded in the directory; this does not mean the business lacks a site." : "A website URL is recorded, but its quality and technology needs have not been assessed."
   }`;
 
   const bestApproach = finalScore >= 80
@@ -145,8 +145,8 @@ export function calculateDeterministicAnalysis(b: BusinessInput): CRMAnalysisRes
     scoreBreakdown: breakdown,
     bestApproach,
     callPrep: {
-      whatTheyDo: `${b.businessName} provides ${category.toLowerCase()} services to residents and visitors in ${b.location || "Saint Lucia"}.`,
-      identifiedNeed: problems[0] || "Digital infrastructure enhancement",
+      whatTheyDo: `The public listing describes ${b.businessName} as ${category.toLowerCase()} in ${b.location || "Saint Lucia"}; confirm details before outreach.`,
+      identifiedNeed: problems[0] || "Potential ICT opportunities require a discovery conversation",
       recommendedPitch: `Introduce V79 Digital's localized Saint Lucia IT solutions, specifically how ${recommendedServices[0] || "modern IT infrastructure"} drives revenue and prevents costly downtime.`,
       discoveryQuestions,
       suggestedNextAction: finalScore >= 70 ? "Book a 15-minute Discovery Consultation" : "Send V79 Digital Portfolio & Overview via Email"
@@ -230,6 +230,7 @@ export async function analyzeBusinessWithAI(
 
   const systemPrompt = `You are the Lead Intelligence AI for V79 Digital, a premier Information and Communications Technology (ICT) consultancy in Saint Lucia (Caribbean).
 You analyze businesses discovered through public directories.
+All issues are questions to investigate, not established customer problems. A missing website field is not proof the company has no website. Never assert unverified security vulnerabilities, manual workflows, social responsiveness, or compliance failures.
 Do not fabricate missing details. Strictly rely on provided facts.
 Return ONLY valid JSON with this exact schema:
 {
