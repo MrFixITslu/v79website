@@ -1,0 +1,27 @@
+name: Hub MFA enforced-mode negative acceptance (non-deploying)
+on:
+  pull_request:
+    paths:
+      - "server.ts"
+      - "server/hub-sso.ts"
+      - "tests/hub-sso-enforced-isolated.mjs"
+      - ".github/workflows/hub-sso-enforced-isolated.yml"
+  push:
+    branches:
+      - feature/website-admin-hub-sso-20261101
+permissions:
+  contents: read
+jobs:
+  enforced:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Reject legacy admin paths while Hub MFA is enforced
+        run: node tests/hub-sso-enforced-isolated.mjs
