@@ -753,6 +753,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
       {/* Modals */}
       {selectedLead && (
         <CrmLeadDetailModal
+          key={selectedLead.id}
           lead={selectedLead}
           activities={selectedLeadActivities}
           calls={selectedLeadCalls}
