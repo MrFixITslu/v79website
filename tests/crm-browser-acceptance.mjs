@@ -69,6 +69,22 @@ try {
   assert.equal(secondSync.status(), 200);
   assert.equal((await secondSync.json()).staged, 0, "sync must not duplicate imported prospects");
   check("CSV import immediately shows the business for review without auto-approval or duplicates");
+  const industryFilter = page.getByRole("combobox", { name: "Filter existing prospects by industry" });
+  await industryFilter.selectOption("industry:professional services");
+  await page.getByText(company, { exact: true }).waitFor();
+  await industryFilter.selectOption("industry:consulting");
+  await page.getByText(company, { exact: true }).waitFor();
+  await industryFilter.selectOption("preset:law-firms");
+  await page.getByText("No matching businesses in your existing prospects.", { exact: false }).waitFor();
+  assert.equal(await page.locator('input[type="checkbox"]:visible').count(), 0, "filtered-out prospects cannot be selected");
+  await industryFilter.selectOption("all");
+  await page.getByRole("searchbox", { name: "Search existing prospects" }).fill("not-in-directory");
+  await page.getByText("No matching businesses in your existing prospects.", { exact: false }).waitFor();
+  await page.getByRole("searchbox", { name: "Search existing prospects" }).fill("");
+  await page.getByRole("combobox", { name: "Sort existing prospects" }).selectOption("business");
+  await page.getByText(company, { exact: true }).waitFor();
+  check("industry, trade, keyword and sort controls filter local records without network discovery");
+
 
   // Real public-source network calls are deliberately disabled in CI.
   const selector = page.locator("label").filter({ hasText: "Discovery source" }).locator("select");
