@@ -75,11 +75,11 @@ try {
   await industryFilter.selectOption("industry:consulting");
   await page.getByText(company, { exact: true }).waitFor();
   await industryFilter.selectOption("preset:law-firms");
-  await page.getByText("No matching businesses in your existing prospects.", { exact: false }).waitFor();
+  await page.getByText("No matching businesses in the review queue.", { exact: false }).waitFor();
   assert.equal(await page.locator('input[type="checkbox"]:visible').count(), 0, "filtered-out prospects cannot be selected");
   await industryFilter.selectOption("all");
   await page.getByRole("searchbox", { name: "Search existing prospects" }).fill("not-in-directory");
-  await page.getByText("No matching businesses in your existing prospects.", { exact: false }).waitFor();
+  await page.getByText("No matching businesses in the review queue.", { exact: false }).waitFor();
   await page.getByRole("searchbox", { name: "Search existing prospects" }).fill("");
   await page.getByRole("combobox", { name: "Sort existing prospects" }).selectOption("business");
   await page.getByText(company, { exact: true }).waitFor();
