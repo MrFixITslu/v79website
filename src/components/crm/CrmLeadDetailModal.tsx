@@ -441,7 +441,7 @@ export function CrmLeadDetailModal({
                 <textarea
                   rows={3}
                   value={adminNotesDraft}
-                  onBlur={(e) => onUpdateLead(lead.id, { adminNotes: e.target.value })}
+                  onChange={e => { setAdminNotesDraft(e.target.value); setNotesStatus(""); }}
                   placeholder="Record internal consultation notes, client objections, or specific agreements..."
                   className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-3 text-xs focus:outline-none focus:border-sky-500/80"
                 />
