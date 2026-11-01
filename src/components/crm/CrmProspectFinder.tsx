@@ -7,7 +7,7 @@ interface CrmProspectFinderProps {
   prospects: Prospect[];
   searchHistory: ProspectSearchLog[];
   sourceCapabilities: { directory: boolean; exports: boolean; osm: boolean; geoapify: boolean };
-  onImportDirectory: (file: File) => Promise<{ count: number; skipped: number; total: number }>;
+  onImportDirectory: (file: File) => Promise<{ count: number; skipped: number; total: number; staged: number; reviewTotal: number }>;
   onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports" | "geoapify"; limit?: number }) => Promise<void>;
   onAnalyzeProspect: (prospectId: string) => Promise<void>;
   onEnrichProspect: (prospectId: string) => Promise<boolean>;
@@ -56,6 +56,7 @@ export function CrmProspectFinder({
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(10);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [visibleCount, setVisibleCount] = useState(20);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
@@ -79,7 +80,9 @@ export function CrmProspectFinder({
     setImportMessage(null);
     try {
       const result = await onImportDirectory(file);
-      setImportMessage(`Imported ${result.count} businesses; skipped ${result.skipped} duplicates. Local directory total: ${result.total}.`);
+      setImportMessage(`Imported ${result.count} businesses; skipped ${result.skipped} duplicates. ${result.staged} added to Prospect Finder for review (${result.reviewTotal} total). Leads are only created after approval.`);
+      setVisibleCount(20);
+      setActiveSubTab("catalog");
       setSource("directory");
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : "Directory import failed.");
@@ -95,10 +98,11 @@ export function CrmProspectFinder({
   };
 
   const selectAll = () => {
-    if (selectedIds.length === prospects.length) {
-      setSelectedIds([]);
+    const visible = prospects.slice(0, visibleCount).map(p => p.id);
+    if (visible.every(id => selectedIds.includes(id))) {
+      setSelectedIds(ids => ids.filter(id => !visible.includes(id)));
     } else {
-      setSelectedIds(prospects.map((p) => p.id));
+      setSelectedIds(ids => Array.from(new Set([...ids, ...visible])));
     }
   };
 
@@ -361,7 +365,7 @@ export function CrmProspectFinder({
                 No prospects yet. Choose a discovery source and search above.
               </div>
             ) : (
-              prospects.map((p) => {
+              prospects.slice(0, visibleCount).map((p) => {
                 const websiteHref = safeExternalLink(p.website);
                 const facebookHref = safeSocialLink(p.facebookUrl, "facebook");
                 const instagramHref = safeSocialLink(p.instagramUrl, "instagram");
