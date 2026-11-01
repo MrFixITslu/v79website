@@ -338,6 +338,21 @@ export default function AdminApp() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [hubSsoEnabled, setHubSsoEnabled] = useState(false);
+  const [hubSsoEnforced, setHubSsoEnforced] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/hub-sso/config", { credentials: "same-origin" })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!active || !data) return;
+        setHubSsoEnabled(data.enabled === true);
+        setHubSsoEnforced(data.enforced === true);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
 
   const handleUnauthorized = () => {
     setAdminToken(null);
@@ -1413,10 +1428,25 @@ V79 ICT Solutions`;
                         <Lock className="w-5 h-5 animate-pulse" />
                       </div>
                       <h2 className="text-xl font-bold tracking-tight text-app-text font-display">VISION79 Admin Authentication</h2>
-                      <p className="text-xs text-app-text-sec">This page requires dynamic cryptographic authorization checks. Please verify your administrative credential token.</p>
+                      <p className="text-xs text-app-text-sec">Access to this area is restricted to authorised V79 administrators.</p>
+                    {hubSsoEnabled && (
+                      <a href="/api/admin/hub-sso/start"
+                        className="flex justify-center rounded-xl bg-sky-600 p-3 text-sm font-semibold text-white hover:bg-sky-500">
+                        Sign in securely with V79 Hub MFA
+                      </a>
+                    )}
+                    {hubSsoEnforced && !hubSsoEnabled && (
+                      <p role="alert" className="text-xs text-red-500">Hub SSO is not configured. Contact your platform administrator.</p>
+                    )}
+                    {hubSsoEnabled && (
+                      <p className="text-xs text-app-text-sec">
+                        Already signed into Hub with your authenticator? Continue above.
+                        If not, sign in at <a href="https://hub.v79sl.com" className="underline" target="_blank" rel="noopener noreferrer">V79 Hub</a> first.
+                      </p>
+                    )}
                     </div>
 
-                    <form onSubmit={handleAdminLogin} className="space-y-4">
+                    {!hubSsoEnforced && <form onSubmit={handleAdminLogin} className="space-y-4">
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-mono uppercase tracking-wider text-app-text-sec">Administration Password</label>
