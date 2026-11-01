@@ -1,4 +1,5 @@
 import { readJSON, writeJSON, transaction } from "./persistence";
+import { discoverPublicBusinesses } from "./crm_public_discovery";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -499,15 +500,19 @@ export class CRMStorage {
     category?: string;
     query?: string;
     searchProviderKey?: string;
+    source?: "directory" | "public";
     limit?: number;
   }): Promise<{ discovered: Prospect[]; duplicatesCount: number; newCount: number }> {
     const existingProspects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
     const existingLeads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
-    const limit = params.limit || 10;
+    const limit = Math.max(1, Math.min(20, Number(params.limit) || 10));
+    const source = params.source === "public" ? "public" : "directory";
 
-    // Filter through Saint Lucia public directory and query matches
-    let candidates = readJSON<any[]>("business-directory.json", []);
-    if (!candidates.length) throw new Error("Import your business directory first. No live social-network search is configured.");
+    // Public discovery is an explicit operator action. Local directory behaviour is retained.
+    let candidates = source === "public"
+      ? await discoverPublicBusinesses({ location: params.location, category: params.category, query: params.query, limit })
+      : readJSON<any[]>("business-directory.json", []);
+    if (!candidates.length && source === "directory") throw new Error("Import your business directory first. No live social-network search is configured.");
 
     if (params.location && params.location !== "all") {
       candidates = candidates.filter(b => (b.location || "").toLowerCase().includes(params.location!.toLowerCase()));
@@ -535,7 +540,11 @@ export class CRMStorage {
         continue;
       }
 
-      const analysis = calculateDeterministicAnalysis(b);
+      // Ollama enriches the first two new public matches; all others can be re-scored on demand.
+      // The existing local heuristic is an honest fallback when Ollama is not connected.
+      const analysis = source === "public" && newlyDiscovered.length < 2
+        ? await analyzeBusinessWithAI(b)
+        : calculateDeterministicAnalysis(b);
       const newProspect: Prospect = {
         id: `prospect-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         businessName: b.businessName,
@@ -550,7 +559,7 @@ export class CRMStorage {
         linkedinUrl: b.linkedinUrl,
         description: b.description || "",
         companySize: b.companySize || "1–10",
-        sourceUrl: b.facebookUrl || b.website || "https://stlucia.org/business",
+        sourceUrl: b.sourceUrl || b.website || b.facebookUrl || "",
         discoveredAt: new Date().toISOString(),
         workflowStatus: "discovered",
         aiAnalysis: analysis,
@@ -576,7 +585,7 @@ export class CRMStorage {
       duplicates: duplicatesCount,
       approvedCount: 0,
       rejectedCount: 0,
-      searchProvider: "Curated local directory (not a live web search)",
+      searchProvider: source === "public" ? "OpenStreetMap public listings + optional local Ollama" : "Curated local directory (not a live web search)",
       timestamp: new Date().toISOString()
     };
     searchLogs.unshift(newLog);
