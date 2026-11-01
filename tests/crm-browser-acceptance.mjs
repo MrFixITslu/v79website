@@ -50,11 +50,11 @@ try {
   check("CRM Prospect Finder visible in authenticated browser");
 
   const csv = [
-    "businessName,category,industry,location,phone,email,website,facebookUrl,instagramUrl,linkedinUrl,description",
+    "businessName,category,industry,location,phone,email,website,facebookUrl,instagramUrl,linkedinUrl,description,sourceUrl",
     [company,"Professional Services","Consulting","Castries","+1 758 555 0101",
      "company@example.test","https://example.com","https://facebook.com/examplecompany",
      "https://instagram.com/examplecompany","https://linkedin.com/company/examplecompany",
-     "Synthetic business for isolated browser tests"].join(",")
+     "Synthetic business for isolated browser tests","https://example.com/directory-test-profile"].join(",")
   ].join("\n");
   await page.locator("#crm-directory-import").setInputFiles({
     name: "owner-authorised-test.csv", mimeType: "text/csv", buffer: Buffer.from(csv)
