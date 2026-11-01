@@ -49,8 +49,8 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [sourceCapabilities, setSourceCapabilities] = useState<{ directory: boolean; exports: boolean; osm: boolean }>({
-    directory: true, exports: false, osm: false
+  const [sourceCapabilities, setSourceCapabilities] = useState<{ directory: boolean; exports: boolean; osm: boolean; geoapify: boolean }>({
+    directory: true, exports: false, osm: false, geoapify: false
   });
   const [ollamaStatus, setOllamaStatus] = useState<{ connected: boolean; model?: string }>({
     connected: false
@@ -80,12 +80,13 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
         setSourceCapabilities({
           directory: true,
           exports: data?.exports === true,
-          osm: data?.osm === true
+          osm: data?.osm === true,
+          geoapify: data?.geoapify === true
         });
       }
     } catch (err) {
       // Fail closed. The imported directory continues to work.
-      setSourceCapabilities({ directory: true, exports: false, osm: false });
+      setSourceCapabilities({ directory: true, exports: false, osm: false, geoapify: false });
     }
   }, [getHeaders, onUnauthorized]);
 
@@ -432,7 +433,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   };
 
   // Run public business search
-  const handleRunSearch = async (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports"; limit?: number }) => {
+  const handleRunSearch = async (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports" | "geoapify"; limit?: number }) => {
     setIsSearching(true);
     setSearchError(null);
     try {
