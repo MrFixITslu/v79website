@@ -2708,7 +2708,14 @@ async function startServer() {
           throw Object.assign(new Error("The local directory limit is 5000 businesses."), { status: 413 });
         }
         writeJSON("business-directory.json", current.concat(additions));
-        return { count: additions.length, skipped: entries.length - additions.length, total: current.length + additions.length };
+        const review = crmStorage.stageImportedDirectoryProspects();
+        return {
+          count: additions.length,
+          skipped: entries.length - additions.length,
+          total: current.length + additions.length,
+          staged: review.staged,
+          reviewTotal: review.total
+        };
       });
       res.json(result);
     } catch (e) {
@@ -2716,6 +2723,17 @@ async function startServer() {
       res.status(status === 413 ? 413 : 500).json({ error: (e as Error).message || "Directory import failed." });
     }
   });
+  // Idempotent backfill for directories imported before automatic staging.
+  // This creates review candidates only, never customer leads.
+  app.post("/api/admin/crm/directory/sync", requireAdmin, (_req, res) => {
+    try {
+      res.json(crmStorage.stageImportedDirectoryProspects());
+    } catch (e) {
+      const status = Number((e as { status?: number }).status);
+      res.status(status === 413 ? 413 : 500).json({ error: (e as Error).message || "Could not stage imported businesses." });
+    }
+  });
+
   app.get("/api/admin/crm/prospects/history", requireAdmin, (req, res) => {
     try {
       const history = crmStorage.getSearchHistory();
