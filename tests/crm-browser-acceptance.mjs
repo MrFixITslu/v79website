@@ -60,7 +60,15 @@ try {
     name: "owner-authorised-test.csv", mimeType: "text/csv", buffer: Buffer.from(csv)
   });
   await page.getByText("Imported 1 businesses", { exact: false }).waitFor();
-  check("CSV owner import completes in the admin browser without replacing existing data");
+  await page.getByText(company, { exact: true }).waitFor({ timeout: 15000 });
+  const leadsAfterImport = await context.request.get("/api/admin/crm/leads");
+  assert.equal(leadsAfterImport.status(), 200);
+  assert.equal((await leadsAfterImport.json()).filter(l => l.company === company).length, 0,
+    "CSV staging must not automatically approve leads");
+  const secondSync = await context.request.post("/api/admin/crm/directory/sync");
+  assert.equal(secondSync.status(), 200);
+  assert.equal((await secondSync.json()).staged, 0, "sync must not duplicate imported prospects");
+  check("CSV import immediately shows the business for review without auto-approval or duplicates");
 
   // Real public-source network calls are deliberately disabled in CI.
   const selector = page.locator("label").filter({ hasText: "Discovery source" }).locator("select");
