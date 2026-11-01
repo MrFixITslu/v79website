@@ -22,7 +22,7 @@ try {
   // In the CI-only HTTP preview, explicitly install the *actual server-issued*
   // secure cookie as a loopback cookie. Production still enforces Secure/HttpOnly.
   const putPreviewCookie = async (response) => {
-    const value = response.headers()["set-cookie"]?.match(/(?:^|\\s)v79_admin=([^;]+)/)?.[1];
+    const value = response.headers()["set-cookie"]?.match(/v79_admin=([^;]+)/)?.[1];
     assert.ok(value, "server must issue an administrator cookie");
     await context.addCookies([{
       name: "v79_admin", value, url: BASE, httpOnly: true,
