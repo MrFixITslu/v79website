@@ -2766,7 +2766,7 @@ async function startServer() {
       const updated = await crmStorage.analyzeProspect(
         String(req.params.id),
         process.env.OLLAMA_BASE_URL,
-        process.env.OLLAMA_CRM_MODEL || process.env.OLLAMA_MODEL
+        process.env.OLLAMA_CRM_MODEL || "qwen2.5:1.5b"
       );
       res.json(updated);
     } catch (e) {
@@ -2819,7 +2819,7 @@ async function startServer() {
       const analysis = await analyzeBusinessWithAI(
         businessData,
         process.env.OLLAMA_BASE_URL,
-        process.env.OLLAMA_CRM_MODEL || process.env.OLLAMA_MODEL
+        process.env.OLLAMA_CRM_MODEL || "qwen2.5:1.5b"
       );
       res.json(analysis);
     } catch (e) {
