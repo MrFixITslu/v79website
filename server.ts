@@ -1203,6 +1203,66 @@ async function startServer() {
     }
   });
 
+  // Dedicated Hub owner SSO: code is ephemeral, PKCE-verified and browser-bound.
+  app.get("/api/admin/hub-sso/config", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ enabled: websiteHubSsoReady(), enforced: websiteHubSsoEnforced() });
+  });
+
+  app.get("/api/admin/hub-sso/start", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    if (!websiteHubSsoReady()) return res.status(503).type("text/plain").send("Hub sign-in is not configured.");
+    const flow = hubSsoFlows.begin();
+    res.cookie("v79_hub_sso_flow", flow.browser, {
+      httpOnly: true, secure: process.env.NODE_ENV === "production",
+      sameSite: "lax", path: "/api/admin/hub-sso/callback", maxAge: 120_000
+    });
+    const destination = new URL("https://hub.v79sl.com/api/website-sso/authorize");
+    destination.searchParams.set("state", flow.state);
+    destination.searchParams.set("code_challenge", flow.challenge);
+    destination.searchParams.set("redirect_uri", "https://v79sl.com/api/admin/hub-sso/callback");
+    return res.redirect(302, destination.toString());
+  });
+
+  app.get("/api/admin/hub-sso/callback", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    const browser = cookie(req, "v79_hub_sso_flow");
+    res.clearCookie("v79_hub_sso_flow", { path: "/api/admin/hub-sso/callback" });
+    if (!websiteHubSsoReady()) return res.status(503).send("Hub sign-in is not configured.");
+    const state = String(req.query.state || "");
+    const code = String(req.query.code || "");
+    const verifier = hubSsoFlows.consume(state, browser);
+    if (!verifier || !/^[A-Za-z0-9_-]{43}$/.test(code)) {
+      return res.status(401).type("text/plain").send("Sign-in expired. Return to the website and try again.");
+    }
+    try {
+      const accepted = await hubSsoBackchannel("/api/website-sso/exchange", {
+        code, code_verifier: verifier
+      });
+      if (accepted.issuer !== "V79 Hub" || accepted.audience !== "V79website-admin" ||
+          !/^[A-Za-z0-9_-]{43}$/.test(String(accepted.handle || "")) ||
+          typeof accepted.subject !== "string" || !accepted.subject ||
+          typeof accepted.organizationId !== "string" || !accepted.organizationId ||
+          !Number.isFinite(accepted.mfaVerifiedAt)) throw Error("Invalid Hub authorisation");
+      const token = issueAdminSession(false, String(accepted.handle));
+      const session = getAdminSession(token)!;
+      session.hubSubject = accepted.subject;
+      session.hubOrganizationId = accepted.organizationId;
+      invalidateAllAdminSessions();
+      // Issue a fresh session after invalidating all old password-only sessions.
+      const rotated = issueAdminSession(false, String(accepted.handle));
+      const verified = getAdminSession(rotated)!;
+      verified.hubSubject = accepted.subject;
+      verified.hubOrganizationId = accepted.organizationId;
+      setAdminCookie(res, rotated);
+      return res.redirect(303, "/admin");
+    } catch {
+      return res.status(401).type("text/plain").send("Hub MFA sign-in could not be verified. Try again.");
+    }
+  });
+
   // GET administrator session verification
   app.get("/api/admin/verify-session", (req, res) => {
     const authHeader = req.headers.authorization;
