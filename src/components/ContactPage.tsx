@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Phone, Mail, MapPin, Send, CheckCircle, AlertCircle, Building2, Users, Lock, MessageSquare } from "lucide-react";
+import { BUSINESS_FAQS } from "../data/faqs";
 import { FieldError } from "./ui/FieldError";
 
 const CHALLENGES = [
@@ -59,10 +60,18 @@ async function fetchRecaptchaToken(siteKey?: string): Promise<string> {
 }
 
 export default function ContactPage() {
-  const submissionId = useRef(crypto.randomUUID());
+  // Keep a strong idempotency key in local HTTP previews as well as HTTPS.
+  const submissionId = useRef(typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, "0")).join(""));
   const [form, setForm] = useState({
     name: "", company: "", email: "", phone: "",
-    employees: "", biggestChallenge: "", requestedAction: "", message: "",
+    employees: "", biggestChallenge: "",
+    requestedAction: BUSINESS_FAQS.some(f => f.id === new URLSearchParams(window.location.search).get("faq")) ? "Discuss an AI or technology question" : "",
+    message: (() => {
+      const faq = BUSINESS_FAQS.find(f => f.id === new URLSearchParams(window.location.search).get("faq"));
+      return faq ? `I would like to discuss: ${faq.question}\n\nOur task or challenge: ` : "";
+    })(),
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -107,9 +116,9 @@ export default function ContactPage() {
         currentUrl.searchParams.get("utm_medium"),
         currentUrl.searchParams.get("utm_campaign"),
       ].filter(Boolean) : [];
-      const leadSource = campaignParts.length
-        ? `Website Contact Form (${campaignParts.join(" / ")})`
-        : "Website Contact Form";
+      const faq = BUSINESS_FAQS.find(f => f.id === currentUrl?.searchParams.get("faq"));
+      const sourceName = faq ? `Website FAQ (${faq.id})` : "Website Contact Form";
+      const leadSource = campaignParts.length ? `${sourceName} (${campaignParts.join(" / ")})` : sourceName;
 
       const res = await fetch("/api/leads", {
         method: "POST",
@@ -387,6 +396,7 @@ export default function ContactPage() {
                       className={inputClass("requestedAction") + " appearance-none cursor-pointer"}
                     >
                       <option value="">Select your objective...</option>
+                      <option value="Discuss an AI or technology question">Discuss an AI or technology question</option>
                       <option value="Book a Free ICT Consultation">Book a Free ICT Consultation (Primary CTA)</option>
                       <option value="Request Affordable ICT Support">Request Affordable ICT Support (Secondary CTA)</option>
                       <option value="Managed IT Services Inquiry">Inquire about Managed IT Services & SLAs</option>
