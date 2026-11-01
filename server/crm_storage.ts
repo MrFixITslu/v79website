@@ -468,6 +468,76 @@ export class CRMStorage {
   }
 
   // --- Prospects & Prospect Finder ---
+  /**
+   * Stage already-imported directory businesses for admin review.
+   * No external requests, lead creation, emails or calls. The full operation
+   * is idempotent and commits atomically with an import, including backfills.
+   */
+  stageImportedDirectoryProspects(): { staged: number; total: number; directoryCount: number; skipped: number } {
+    return transaction(() => {
+      const directory = readJSON<any[]>("business-directory.json", []);
+      const prospects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const leads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
+      const normalise = (name: string) => name.trim().toLocaleLowerCase("en");
+      const known = new Set([
+        ...prospects.map(p => normalise(p.businessName)),
+        ...leads.map(l => normalise(l.company))
+      ]);
+      let staged = 0;
+      let skipped = 0;
+      const pending: Prospect[] = [];
+      for (const record of directory) {
+        const businessName = typeof record?.businessName === "string" ? record.businessName.trim() : "";
+        if (!businessName || businessName.length > 200 || known.has(normalise(businessName))) {
+          skipped++;
+          continue;
+        }
+        known.add(normalise(businessName));
+        const business = {
+          businessName,
+          category: typeof record.category === "string" ? record.category : "",
+          industry: typeof record.industry === "string" ? record.industry : "",
+          location: typeof record.location === "string" ? record.location : "",
+          website: typeof record.website === "string" ? record.website : "",
+          phone: typeof record.phone === "string" ? record.phone : "",
+          email: typeof record.email === "string" ? record.email : "",
+          facebookUrl: typeof record.facebookUrl === "string" ? record.facebookUrl : "",
+          instagramUrl: typeof record.instagramUrl === "string" ? record.instagramUrl : "",
+          linkedinUrl: typeof record.linkedinUrl === "string" ? record.linkedinUrl : "",
+          description: typeof record.description === "string" ? record.description : ""
+        };
+        const analysis = calculateDeterministicAnalysis(business);
+        pending.push({
+          id: "prospect-" + crypto.randomUUID(),
+          businessName,
+          category: business.category || "Commercial",
+          industry: business.industry || business.category || "General Industry",
+          location: business.location || "Saint Lucia",
+          phone: business.phone || undefined,
+          email: business.email || undefined,
+          website: business.website || undefined,
+          facebookUrl: business.facebookUrl || undefined,
+          instagramUrl: business.instagramUrl || undefined,
+          linkedinUrl: business.linkedinUrl || undefined,
+          description: business.description,
+          sourceUrl: typeof record.sourceUrl === "string" ? record.sourceUrl : "",
+          discoveredAt: new Date().toISOString(),
+          workflowStatus: "discovered",
+          aiAnalysis: analysis,
+          leadScore: analysis.leadScore,
+          scoreCategory: analysis.scoreCategory
+        });
+        staged++;
+      }
+      if (prospects.length + pending.length > 5000) {
+        throw Object.assign(new Error("The prospect review queue limit is 5000 businesses."), { status: 413 });
+      }
+      if (pending.length) writeJSON(CRM_PROSPECTS_FILE, [...pending, ...prospects]);
+      return { staged, total: prospects.length + pending.length, directoryCount: directory.length, skipped };
+    });
+  }
+
+
 
   getProspects(filters?: {
     status?: string;
