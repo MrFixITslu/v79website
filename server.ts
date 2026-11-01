@@ -301,6 +301,8 @@ interface AdminSession {
   mfaVerified: boolean;
 }
 const adminSessions = new Map<string, AdminSession>();
+const pendingMfaEnrolments = new Map<string, { secret: string; expires: number }>();
+
 
 function issueAdminSession(mustChangePassword: boolean, mfaVerified = false): string {
   const token = crypto.randomBytes(32).toString("hex");
