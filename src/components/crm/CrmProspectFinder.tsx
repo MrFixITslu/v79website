@@ -535,6 +535,22 @@ export function CrmProspectFinder({
               })
             )}
           </div>
+          {prospects.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-app-text-sec">
+              <span>Showing {Math.min(visibleCount, prospects.length)} of {prospects.length} prospects awaiting your review.</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={selectAll} className="px-3 py-1.5 rounded-lg border border-app-border text-app-text">
+                  Select visible prospects
+                </button>
+                {prospects.length > visibleCount && (
+                  <button type="button" onClick={() => setVisibleCount(n => n + 20)}
+                    className="px-3 py-1.5 rounded-lg border border-app-border text-sky-500">
+                    Show 20 more
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
