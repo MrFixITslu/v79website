@@ -68,7 +68,7 @@ try {
   check("CRM Prospect Finder visible in authenticated browser");
 
   // Real public-source network calls are deliberately disabled in CI.
-  const selector = page.getByText("Discovery source", { exact: true }).locator("select");
+  const selector = page.locator("label").filter({ hasText: "Discovery source" }).locator("select");
   await selector.selectOption("directory");
   await page.getByRole("button", { name: "Find businesses", exact: true }).click();
   await page.getByText(company, { exact: true }).waitFor({ timeout: 15000 });
