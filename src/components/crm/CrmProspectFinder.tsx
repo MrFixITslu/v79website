@@ -6,6 +6,7 @@ import { safeExternalLink, safeSocialLink, safeEmail } from "../../crm/linkSafet
 interface CrmProspectFinderProps {
   prospects: Prospect[];
   searchHistory: ProspectSearchLog[];
+  sourceCapabilities: { directory: boolean; exports: boolean; osm: boolean };
   onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports"; limit?: number }) => Promise<void>;
   onAnalyzeProspect: (prospectId: string) => Promise<void>;
   onEnrichProspect: (prospectId: string) => Promise<boolean>;
@@ -35,6 +36,7 @@ const CATEGORIES = [
 export function CrmProspectFinder({
   prospects,
   searchHistory,
+  sourceCapabilities,
   onRunSearch,
   onAnalyzeProspect,
   onEnrichProspect,
@@ -46,7 +48,7 @@ export function CrmProspectFinder({
   searchError
 }: CrmProspectFinderProps) {
   const [activeSubTab, setActiveSubTab] = useState<"catalog" | "history">("catalog");
-  const [source, setSource] = useState<"directory" | "public" | "exports">("exports");
+  const [source, setSource] = useState<"directory" | "public" | "exports">("directory");
   const [location, setLocation] = useState("all");
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
@@ -182,10 +184,15 @@ export function CrmProspectFinder({
           <form onSubmit={handleSearchSubmit} className="space-y-3 pt-2 border-t border-app-border/40">
             <label className="block text-xs text-app-text-sec">Discovery source
               <select value={source} onChange={(e) => setSource(e.target.value as "directory" | "public" | "exports")} className="block mt-1 w-full sm:w-80 bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
-                <option value="exports">Export Saint Lucia business directory</option>
+                {sourceCapabilities.exports && <option value="exports">Export Saint Lucia business directory</option>}
                 <option value="directory">My imported business directory</option>
               </select>
             </label>
+            {!sourceCapabilities.exports && (
+              <p className="text-xs text-app-text-sec" role="status">
+                Public directory discovery is not enabled. You can search your imported business directory and use local AI to assess prospects.
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div>
                 <label className="text-[10px] font-mono uppercase text-app-text-muted block mb-1">
