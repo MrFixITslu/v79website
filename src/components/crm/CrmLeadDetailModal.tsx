@@ -445,6 +445,14 @@ export function CrmLeadDetailModal({
                   placeholder="Record internal consultation notes, client objections, or specific agreements..."
                   className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-3 text-xs focus:outline-none focus:border-sky-500/80"
                 />
+                <div className="flex items-center justify-between gap-2">
+                  <span role="status" className="text-xs text-app-text-sec">{notesStatus}</span>
+                  <button type="button" disabled={savingAdminNotes}
+                    onClick={saveAdminNotes}
+                    className="px-3 py-2 rounded-lg text-xs bg-sky-600 text-white disabled:opacity-50">
+                    {savingAdminNotes ? "Saving…" : "Save notes"}
+                  </button>
+                </div>
               </div>
 
               {/* Quick Actions Footer */}
