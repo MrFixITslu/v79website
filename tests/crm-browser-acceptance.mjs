@@ -19,11 +19,23 @@ try {
   const login = await context.request.post("/api/admin/login", { data: { password: OLD_PASSWORD } });
   assert.equal(login.status(), 200, await login.text());
   const auth = await login.json();
+  // In the CI-only HTTP preview, explicitly install the *actual server-issued*
+  // secure cookie as a loopback cookie. Production still enforces Secure/HttpOnly.
+  const putPreviewCookie = async (response) => {
+    const value = response.headers()["set-cookie"]?.match(/(?:^|\\s)v79_admin=([^;]+)/)?.[1];
+    assert.ok(value, "server must issue an administrator cookie");
+    await context.addCookies([{
+      name: "v79_admin", value, url: BASE, httpOnly: true,
+      secure: false, sameSite: "Strict"
+    }]);
+  };
+  await putPreviewCookie(login);
   if (auth.mustChangePassword) {
     const changed = await context.request.post("/api/admin/change-password", {
       data: { currentPassword: OLD_PASSWORD, newPassword: NEW_PASSWORD }
     });
     assert.equal(changed.status(), 200, await changed.text());
+    await putPreviewCookie(changed);
   }
   check("isolated admin session and password rotation");
 
