@@ -5,6 +5,7 @@ import { atomicWrite, encryptionKey, seal, unseal, readJSON, writeJSON, transact
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { createTotpSecret, checkTotpCode, authenticatorUri, createRecoveryCodes, recoveryCodeDigest } from "./server/adminTotp";
 
 import dotenv from "dotenv";
 import multer from "multer";
@@ -132,6 +133,7 @@ interface AdminAuthRecord {
   // one-time reset (see applyAdminResetIfRequested below) doesn't re-fire on
   // every container restart if the operator forgets to clear the env var.
   resetTokenConsumed?: string;
+  mfa?: { sealedSecret: string; lastStep: number; recoveryDigests: string[]; enabledAt: string };
 }
 
 const AUTHORIZED_ADMIN_EMAIL = cleanEnvValue(process.env.ADMIN_EMAIL) || "vision79slu@gmail.com";
@@ -251,7 +253,8 @@ function applyAdminResetIfRequested(record: AdminAuthRecord): AdminAuthRecord {
     hash,
     mustChangePassword: true,
     updatedAt: new Date().toISOString(),
-    resetTokenConsumed: resetToken
+    resetTokenConsumed: resetToken,
+    mfa: record.mfa
   };
   saveAdminAuth(newRecord);
 
@@ -295,12 +298,13 @@ const ADMIN_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 interface AdminSession {
   expiry: number;
   mustChangePassword: boolean;
+  mfaVerified: boolean;
 }
 const adminSessions = new Map<string, AdminSession>();
 
-function issueAdminSession(mustChangePassword: boolean): string {
+function issueAdminSession(mustChangePassword: boolean, mfaVerified = false): string {
   const token = crypto.randomBytes(32).toString("hex");
-  adminSessions.set(token, { expiry: Date.now() + ADMIN_SESSION_TTL_MS, mustChangePassword });
+  adminSessions.set(token, { expiry: Date.now() + ADMIN_SESSION_TTL_MS, mustChangePassword, mfaVerified });
   return token;
 }
 
@@ -316,7 +320,7 @@ function getAdminSession(token: string | undefined | null): AdminSession | null 
 }
 
 function isValidAdminSession(token: string | undefined | null): boolean {
-  const session=getAdminSession(token); return !!session && !session.mustChangePassword;
+  const session=getAdminSession(token); return !!session && !session.mustChangePassword && (!!session.mfaVerified || !getLatestAdminAuth().mfa);
 }
 
 function invalidateAllAdminSessions() {
@@ -346,6 +350,12 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
       error: "You must set a new password before continuing.",
       code: "PASSWORD_CHANGE_REQUIRED"
     });
+  }
+  if (getLatestAdminAuth().mfa && !session.mfaVerified) {
+    return res.status(403).json({ error: "Authenticator verification required.", code: "MFA_REQUIRED" });
+  }
+  if (process.env.ADMIN_MFA_REQUIRED === "true" && !getLatestAdminAuth().mfa) {
+    return res.status(403).json({ error: "Set up administrator MFA before continuing.", code: "MFA_ENROLMENT_REQUIRED" });
   }
   next();
 }
