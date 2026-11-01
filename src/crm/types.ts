@@ -189,6 +189,8 @@ export interface Prospect {
   sourceProvider?: "geoapify";
   discoveredAt: string;
   contactCheckedAt?: string;
+  approvedAt?: string;
+  archivedAt?: string;
   workflowStatus: ProspectWorkflowStatus;
   aiAnalysis?: AIAnalysisResult;
   leadScore: number;
