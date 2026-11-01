@@ -8,6 +8,7 @@ interface CrmProspectFinderProps {
   searchHistory: ProspectSearchLog[];
   onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports"; limit?: number }) => Promise<void>;
   onAnalyzeProspect: (prospectId: string) => Promise<void>;
+  onEnrichProspect: (prospectId: string) => Promise<boolean>;
   onApproveProspect: (prospectId: string) => Promise<void>;
   onBulkApprove: (ids: string[]) => Promise<void>;
   onRejectProspect: (prospectId: string) => Promise<void>;
@@ -36,6 +37,7 @@ export function CrmProspectFinder({
   searchHistory,
   onRunSearch,
   onAnalyzeProspect,
+  onEnrichProspect,
   onApproveProspect,
   onBulkApprove,
   onRejectProspect,
@@ -51,6 +53,7 @@ export function CrmProspectFinder({
   const [limit, setLimit] = useState(10);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [enrichingId, setEnrichingId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const handleSearchSubmit = async (e: React.FormEvent) => {
@@ -84,6 +87,15 @@ export function CrmProspectFinder({
       await onAnalyzeProspect(id);
     } finally {
       setAnalyzingId(null);
+    }
+  };
+
+  const handleEnrich = async (id: string) => {
+    setEnrichingId(id);
+    try {
+      await onEnrichProspect(id);
+    } finally {
+      setEnrichingId(null);
     }
   };
 
@@ -439,6 +451,13 @@ export function CrmProspectFinder({
                         <span>{analyzingId === p.id ? "Analyzing..." : "Re-Score with AI"}</span>
                       </button>
 
+                      {!isApproved && !isRejected && p.sourceUrl?.startsWith("https://exportsaintlucia.org/directories/") && (
+                        <button type="button" onClick={() => handleEnrich(p.id)}
+                          disabled={enrichingId === p.id}
+                          className="text-xs text-sky-500 hover:underline font-semibold disabled:opacity-50">
+                          {enrichingId === p.id ? "Checking..." : p.contactCheckedAt ? "Refresh contact" : "Find contact info"}
+                        </button>
+                      )}
                       {!isApproved && !isRejected && (
                         <div className="flex items-center gap-2">
                           <button
