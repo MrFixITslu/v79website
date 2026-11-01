@@ -2799,6 +2799,16 @@ async function startServer() {
     }
   });
 
+  app.post("/api/admin/crm/prospects/:id/restore", requireAdmin, (req, res) => {
+    try {
+      const restored = crmStorage.restoreArchivedProspect(String(req.params.id));
+      if (!restored) return res.status(409).json({ error: "Only archived prospects can be restored." });
+      res.json(restored);
+    } catch {
+      res.status(500).json({ error: "Unable to restore archived prospect." });
+    }
+  });
+
   app.post("/api/admin/crm/prospects/bulk-reject", requireAdmin, (req, res) => {
     try {
       const ids: string[] = req.body.prospectIds || req.body.ids || [];
