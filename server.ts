@@ -2711,6 +2711,15 @@ async function startServer() {
     }
   });
 
+  app.get("/api/admin/crm/discovery-capabilities", requireAdmin, (_req, res) => {
+    const publicEnabled = process.env.CRM_PUBLIC_DISCOVERY_ENABLED === "true";
+    res.json({
+      directory: true,
+      exports: publicEnabled,
+      osm: publicEnabled && process.env.CRM_OSM_DISCOVERY_ENABLED === "true"
+    });
+  });
+
   app.post("/api/admin/crm/prospects/search", requireAdmin, async (req, res) => {
     try {
       const source = req.body?.source === "public" ? "public" : req.body?.source === "exports" ? "exports" : "directory";
