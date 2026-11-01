@@ -15,6 +15,7 @@ interface CrmProspectFinderProps {
   onApproveProspect: (prospectId: string) => Promise<void>;
   onBulkApprove: (ids: string[]) => Promise<void>;
   onRejectProspect: (prospectId: string) => Promise<void>;
+  onRestoreProspect: (prospectId: string) => Promise<boolean>;
   onBulkReject: (ids: string[]) => Promise<void>;
   isSearching: boolean;
   searchError?: string | null;
@@ -46,11 +47,15 @@ export function CrmProspectFinder({
   onApproveProspect,
   onBulkApprove,
   onRejectProspect,
+  onRestoreProspect,
   onBulkReject,
   isSearching,
   searchError
 }: CrmProspectFinderProps) {
   const [activeSubTab, setActiveSubTab] = useState<"catalog" | "history">("catalog");
+  const [viewMode, setViewMode] = useState<"review" | "archive">("review");
+  const [showApproved, setShowApproved] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const [source, setSource] = useState<"directory" | "public" | "exports" | "geoapify">("directory");
   const [location, setLocation] = useState("all");
   const [category, setCategory] = useState("all");
@@ -62,11 +67,18 @@ export function CrmProspectFinder({
   const [localKeyword, setLocalKeyword] = useState("");
   const [industryOrder, setIndustryOrder] = useState<IndustryOrder>("industry");
   const availableIndustries = useMemo(() => industryChoices(prospects), [prospects]);
-  const matchingProspects = useMemo(
+  const filteredProspects = useMemo(
     () => filterAndSortProspects(prospects, { industry: industryFilter, text: localKeyword, order: industryOrder }),
     [prospects, industryFilter, localKeyword, industryOrder]
   );
+  const matchingProspects = filteredProspects.filter(p => viewMode === "archive"
+    ? p.workflowStatus === "rejected"
+    : p.workflowStatus !== "rejected" && p.workflowStatus !== "approved");
+  const approvedProspects = filteredProspects.filter(p => p.workflowStatus === "approved");
   const visibleProspects = matchingProspects.slice(0, visibleCount);
+  const pendingCount = prospects.filter(p => p.workflowStatus !== "approved" && p.workflowStatus !== "rejected").length;
+  const archivedCount = prospects.filter(p => p.workflowStatus === "rejected").length;
+  const approvedCount = prospects.filter(p => p.workflowStatus === "approved").length;
   const shortcutCounts = useMemo(() => ({
     electricians: filterAndSortProspects(prospects, { industry: "preset:electricians", text: "", order: "score" }).length,
     accommodation: filterAndSortProspects(prospects, { industry: "preset:accommodation", text: "", order: "score" }).length,
@@ -116,6 +128,7 @@ export function CrmProspectFinder({
       setLocalKeyword("");
       setSelectedIds([]);
       setActiveSubTab("catalog");
+      setViewMode("review");
       setSource("directory");
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : "Directory import failed.");
@@ -173,6 +186,19 @@ export function CrmProspectFinder({
     setActionLoading(id);
     try {
       await onRejectProspect(id);
+      setSelectedIds(ids => ids.filter(x => x !== id));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRestore = async (id: string) => {
+    setActionLoading(id);
+    setRestoreError(null);
+    try {
+      if (!await onRestoreProspect(id)) {
+        setRestoreError("Could not restore this business. Refresh and try again.");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -224,7 +250,7 @@ export function CrmProspectFinder({
                 activeSubTab === "catalog" ? "bg-app-text text-app-bg" : "bg-app-btn-sec text-app-text"
               }`}
             >
-              Discovered Prospects ({prospects.length})
+              Prospect Finder ({pendingCount})
             </button>
             <button
               onClick={() => setActiveSubTab("history")}
@@ -411,8 +437,22 @@ export function CrmProspectFinder({
                 className="text-xs text-sky-500 hover:underline">Clear filters</button>
             )}
           </div>
+          <div className="flex flex-wrap gap-2 items-center" role="group" aria-label="Prospect lifecycle view">
+            <button type="button" onClick={() => { setViewMode("review"); setVisibleCount(20); setSelectedIds([]); }}
+              aria-pressed={viewMode === "review"}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold ${viewMode === "review" ? "bg-sky-600 text-white" : "bg-app-btn-sec text-app-text"}`}>
+              For review ({pendingCount})
+            </button>
+            <button type="button" onClick={() => { setViewMode("archive"); setVisibleCount(20); setSelectedIds([]); }}
+              aria-pressed={viewMode === "archive"}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold ${viewMode === "archive" ? "bg-sky-600 text-white" : "bg-app-btn-sec text-app-text"}`}>
+              Archived / Rejected ({archivedCount})
+            </button>
+            <span className="text-xs text-app-text-sec">Approved ({approvedCount}) appears at the bottom of this page.</span>
+          </div>
+          {restoreError && <p role="alert" className="text-red-500 text-xs">{restoreError}</p>}
           {/* Bulk Action Controls */}
-          {selectedIds.length > 0 && (
+          {viewMode === "review" && selectedIds.length > 0 && (
             <div className="glass p-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 flex items-center justify-between text-xs animate-fade-in-once">
               <span className="font-semibold text-sky-500">
                 {selectedIds.length} {selectedIds.length === 1 ? "prospect" : "prospects"} selected
@@ -449,9 +489,11 @@ export function CrmProspectFinder({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {matchingProspects.length === 0 ? (
               <div className="col-span-2 glass p-12 text-center text-xs text-app-text-muted rounded-2xl border border-app-border">
-                {prospects.length === 0
-                  ? "No prospects yet. Import a CSV or discover businesses above."
-                  : "No matching businesses in your existing prospects. Try another industry or clear the filters. Broad categories are not assumed to be specialist trades."}
+                {viewMode === "archive"
+                  ? "Nothing archived matches these filters. Rejected businesses will be available here for future restoration."
+                  : pendingCount === 0
+                    ? "Your review queue is clear. Import or discover more businesses, or view approved records below."
+                    : "No matching businesses in the review queue. Try another industry or clear the filters."}
               </div>
             ) : (
               visibleProspects.map((p) => {
@@ -602,6 +644,13 @@ export function CrmProspectFinder({
                           {enrichingId === p.id ? "Checking..." : p.contactCheckedAt ? "Refresh contact" : "Find contact info"}
                         </button>
                       )}
+                      {isRejected && viewMode === "archive" && (
+                        <button type="button" onClick={() => handleRestore(p.id)}
+                          disabled={actionLoading === p.id}
+                          className="px-3 py-1.5 rounded-lg bg-sky-600 text-white text-xs disabled:opacity-50">
+                          {actionLoading === p.id ? "Restoring…" : "Restore to review"}
+                        </button>
+                      )}
                       {!isApproved && !isRejected && (
                         <div className="flex items-center gap-2">
                           <button
@@ -641,6 +690,28 @@ export function CrmProspectFinder({
                   </button>
                 )}
               </div>
+            </div>
+          )}
+          {viewMode === "review" && (
+            <div className="glass rounded-2xl border border-app-border bg-app-aside-bg/30 p-4 space-y-3">
+              <button type="button" aria-expanded={showApproved}
+                onClick={() => setShowApproved(value => !value)}
+                className="w-full text-left text-xs font-semibold flex justify-between gap-3 text-app-text">
+                <span>Approved businesses — now in CRM ({approvedCount})</span>
+                <span>{showApproved ? "Hide" : "Show"}</span>
+              </button>
+              {showApproved && (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {approvedProspects.length === 0
+                    ? <p className="text-xs text-app-text-sec">No approved businesses match these filters.</p>
+                    : approvedProspects.map(p => (
+                      <div key={p.id} className="flex justify-between gap-3 rounded-xl border border-app-border p-3 text-xs">
+                        <span className="font-medium text-app-text">{p.businessName}</span>
+                        <span className="text-app-text-sec">CRM Lead #{p.convertedLeadId ?? "saved"}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
           )}
         </div>
