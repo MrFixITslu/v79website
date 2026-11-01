@@ -756,6 +756,7 @@ export class CRMStorage {
     if (idx === -1) throw new Error(`Prospect ${prospectId} not found`);
 
     const p = list[idx];
+    if (p.workflowStatus === "rejected") throw new Error("Restore this archived prospect before approving.");
     if (p.convertedLeadId) { const existing = this.getLeadById(p.convertedLeadId); if (existing) return existing; }
     return transaction(() => {
     const { lead } = this.addLead({
@@ -780,6 +781,7 @@ export class CRMStorage {
     }, author);
 
     list[idx].workflowStatus = "approved";
+    list[idx].approvedAt = new Date().toISOString();
     list[idx].convertedLeadId = lead.id;
     writeJSON(CRM_PROSPECTS_FILE, list);
 
@@ -800,27 +802,48 @@ export class CRMStorage {
     return leads;
   }
 
+  // A rejected prospect is archived, never deleted. Its contacts and analysis
+  // remain available for later review, with an explicit restore action.
   rejectProspect(prospectId: string): boolean {
-    const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    const idx = list.findIndex(p => p.id === prospectId);
-    if (idx === -1) return false;
-    list[idx].workflowStatus = "rejected";
-    writeJSON(CRM_PROSPECTS_FILE, list);
-    return true;
+    return transaction(() => {
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const candidate = list.find(p => p.id === prospectId);
+      if (!candidate || candidate.workflowStatus === "approved") return false;
+      if (candidate.workflowStatus === "rejected") return true;
+      candidate.workflowStatus = "rejected";
+      candidate.archivedAt = new Date().toISOString();
+      writeJSON(CRM_PROSPECTS_FILE, list);
+      return true;
+    });
   }
 
   bulkRejectProspects(prospectIds: string[]): number {
-    const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    let count = 0;
-    for (const id of prospectIds) {
-      const idx = list.findIndex(p => p.id === id);
-      if (idx !== -1) {
-        list[idx].workflowStatus = "rejected";
-        count++;
+    return transaction(() => {
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const ids = new Set(prospectIds);
+      let count = 0;
+      for (const p of list) {
+        if (ids.has(p.id) && p.workflowStatus !== "approved" && p.workflowStatus !== "rejected") {
+          p.workflowStatus = "rejected";
+          p.archivedAt = new Date().toISOString();
+          count++;
+        }
       }
-    }
-    writeJSON(CRM_PROSPECTS_FILE, list);
-    return count;
+      if (count) writeJSON(CRM_PROSPECTS_FILE, list);
+      return count;
+    });
+  }
+
+  restoreArchivedProspect(prospectId: string): Prospect | null {
+    return transaction(() => {
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const candidate = list.find(p => p.id === prospectId);
+      if (!candidate || candidate.workflowStatus !== "rejected") return null;
+      candidate.workflowStatus = "discovered";
+      delete candidate.archivedAt;
+      writeJSON(CRM_PROSPECTS_FILE, list);
+      return candidate;
+    });
   }
 
   // --- Analytics & Reports ---
