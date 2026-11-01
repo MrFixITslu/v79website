@@ -2747,6 +2747,20 @@ async function startServer() {
     }
   });
 
+  app.post("/api/admin/crm/prospects/:id/enrich", requireAdmin, async (req, res) => {
+    try {
+      if (process.env.CRM_PUBLIC_DISCOVERY_ENABLED !== "true") {
+        return res.status(503).json({ error: "Public contact enrichment is not enabled." });
+      }
+      const prospect = await crmStorage.enrichPublicProspect(String(req.params.id));
+      res.json(prospect);
+    } catch (e) {
+      const status = Number((e as { status?: number })?.status);
+      res.status([400, 404, 409, 429, 502, 503].includes(status) ? status : 500)
+        .json({ error: (e as Error)?.message || "Unable to verify public contact details." });
+    }
+  });
+
   app.post("/api/admin/crm/prospects/:id/analyze", requireAdmin, async (req, res) => {
     try {
       const updated = await crmStorage.analyzeProspect(
