@@ -9,7 +9,8 @@ interface CrmLeadDetailModalProps {
   tasks: CRMTask[];
   onClose: () => void;
   onUpdateLead: (leadId: number, updates: Partial<CRMLead>) => void;
-  onAddActivity: (leadId: number, type: string, title: string, description: string) => void;
+  onAddActivity: (leadId: number, type: string, title: string, description: string) => Promise<boolean>;
+  onSaveAdminNotes: (leadId: number, notes: string) => Promise<boolean>;
   onAddCall: (leadId: number, outcome: CallOutcome, durationSecs: number, notes: string, nextFollowUpAt?: string) => void;
   onAddTask: (leadId: number, title: string, dueAt: string, priority: "Low" | "Medium" | "High") => void;
   onToggleTaskStatus: (taskId: string, currentStatus: string) => void;
@@ -27,6 +28,7 @@ export function CrmLeadDetailModal({
   onClose,
   onUpdateLead,
   onAddActivity,
+  onSaveAdminNotes,
   onAddCall,
   onAddTask,
   onToggleTaskStatus,
@@ -39,6 +41,9 @@ export function CrmLeadDetailModal({
 
   // Note form state
   const [noteText, setNoteText] = useState("");
+  const [adminNotesDraft, setAdminNotesDraft] = useState(lead.adminNotes || "");
+  const [savingAdminNotes, setSavingAdminNotes] = useState(false);
+  const [notesStatus, setNotesStatus] = useState("");
   const [addingNote, setAddingNote] = useState(false);
 
   // Call form state
