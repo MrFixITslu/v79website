@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseGeoapifyPlaces, geoapifyReady, discoverGeoapifyBusinesses } from "../server/crm_geoapify";
+import { parseGeoapifyPlaces, geoapifyReady, discoverGeoapifyBusinesses, SAINT_LUCIA_SEARCH_FILTER } from "../server/crm_geoapify";
 
 const fixture = { features: [
   { properties: {
@@ -23,6 +23,12 @@ const fixture = { features: [
     categories: ["office.accountant"]
   }}
 ] };
+
+test("Geoapify uses the successfully probed Saint Lucia rectangle", () => {
+  assert.deepEqual(SAINT_LUCIA_SEARCH_FILTER, {
+    type: "rect", lon1: -61.16, lat1: 14.14, lon2: -60.85, lat2: 13.68
+  });
+});
 
 test("Geoapify fixtures stay in Saint Lucia and preserve only sourced contacts", () => {
   const p=parseGeoapifyPlaces(fixture,{limit:20});
