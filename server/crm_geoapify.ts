@@ -7,6 +7,11 @@ const ENDPOINT = "https://api.geoapify.com/v2/places";
 const ALLOWED_CATEGORIES = ["commercial", "catering", "accommodation", "healthcare", "office"] as const;
 const MAX_RESULTS = 20;
 const MIN_REQUEST_INTERVAL_MS = 60_000;
+/** Bounded Saint Lucia rectangle; provider's country-code filter currently responds 400. */
+export const SAINT_LUCIA_SEARCH_FILTER = Object.freeze({
+  type: "rect" as const,
+  lon1: -61.16, lat1: 14.14, lon2: -60.85, lat2: 13.68
+});
 let lastRequest = 0;
 let inFlight = false;
 
@@ -130,7 +135,7 @@ export async function discoverGeoapifyBusinesses(options: PublicSearchOptions = 
         headers: { "Content-Type": "application/json", "x-api-key": key },
         body: JSON.stringify({
           categories: [...ALLOWED_CATEGORIES],
-          filter: { type: "countrycode", values: ["lc"] },
+          filter: SAINT_LUCIA_SEARCH_FILTER,
           limit: Math.max(1, Math.min(MAX_RESULTS, Number(options.limit) || 10)),
           lang: "en"
         }),
