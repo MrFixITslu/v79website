@@ -144,6 +144,30 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     }
   }, [getHeaders]);
 
+  // Synchronise previously imported directory entries on opening Prospect Finder.
+  // Idempotent: existing prospects/leads are preserved; no lead is created.
+  const syncImportedDirectory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/crm/directory/sync", {
+        method: "POST", headers: getHeaders()
+      });
+      if (res.status === 401) { onUnauthorized?.(); return; }
+      if (!res.ok) {
+        console.error("Could not stage imported business directory.");
+        return;
+      }
+      await fetchProspects();
+    } catch {
+      console.error("Directory synchronisation is temporarily unavailable.");
+    }
+  }, [getHeaders, onUnauthorized, fetchProspects]);
+
+  useEffect(() => {
+    if (activeTab === "prospects") {
+      void syncImportedDirectory();
+    }
+  }, [activeTab, syncImportedDirectory]);
+
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
     try {
@@ -460,7 +484,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     }
   };
 
-  const handleImportDirectory = async (file: File): Promise<{ count: number; skipped: number; total: number }> => {
+  const handleImportDirectory = async (file: File): Promise<{ count: number; skipped: number; total: number; staged: number; reviewTotal: number }> => {
     if (file.size > 1_000_000) throw Error("Directory file exceeds 1 MB.");
     const records = parseDirectoryFile(file.name, await file.text());
     const response = await fetch("/api/admin/crm/directory", {
@@ -469,6 +493,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     if (response.status === 401) { onUnauthorized?.(); throw Error("Please sign in again."); }
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw Error(result.error || "Could not import business directory.");
+    await fetchProspects();
     return result;
   };
 
