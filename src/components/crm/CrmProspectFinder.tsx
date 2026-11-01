@@ -183,7 +183,6 @@ export function CrmProspectFinder({
             <label className="block text-xs text-app-text-sec">Discovery source
               <select value={source} onChange={(e) => setSource(e.target.value as "directory" | "public" | "exports")} className="block mt-1 w-full sm:w-80 bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
                 <option value="exports">Export Saint Lucia business directory</option>
-                <option value="public">OpenStreetMap business listings (best effort)</option>
                 <option value="directory">My imported business directory</option>
               </select>
             </label>
