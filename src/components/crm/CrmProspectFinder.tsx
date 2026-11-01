@@ -6,7 +6,7 @@ import { safeExternalLink, safeSocialLink, safeEmail } from "../../crm/linkSafet
 interface CrmProspectFinderProps {
   prospects: Prospect[];
   searchHistory: ProspectSearchLog[];
-  onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public"; limit?: number }) => Promise<void>;
+  onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports"; limit?: number }) => Promise<void>;
   onAnalyzeProspect: (prospectId: string) => Promise<void>;
   onApproveProspect: (prospectId: string) => Promise<void>;
   onBulkApprove: (ids: string[]) => Promise<void>;
@@ -44,7 +44,7 @@ export function CrmProspectFinder({
   searchError
 }: CrmProspectFinderProps) {
   const [activeSubTab, setActiveSubTab] = useState<"catalog" | "history">("catalog");
-  const [source, setSource] = useState<"directory" | "public">("public");
+  const [source, setSource] = useState<"directory" | "public" | "exports">("exports");
   const [location, setLocation] = useState("all");
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
@@ -169,8 +169,9 @@ export function CrmProspectFinder({
         {activeSubTab === "catalog" && (
           <form onSubmit={handleSearchSubmit} className="space-y-3 pt-2 border-t border-app-border/40">
             <label className="block text-xs text-app-text-sec">Discovery source
-              <select value={source} onChange={(e) => setSource(e.target.value as "directory" | "public")} className="block mt-1 w-full sm:w-80 bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
-                <option value="public">Public listings (Saint Lucia; OpenStreetMap)</option>
+              <select value={source} onChange={(e) => setSource(e.target.value as "directory" | "public" | "exports")} className="block mt-1 w-full sm:w-80 bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+                <option value="exports">Export Saint Lucia business directory</option>
+                <option value="public">OpenStreetMap business listings (best effort)</option>
                 <option value="directory">My imported business directory</option>
               </select>
             </label>
@@ -254,7 +255,7 @@ export function CrmProspectFinder({
         <div className="pt-2 flex items-center gap-2 text-[11px] text-app-text-sec">
           <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
           <span>
-            Public-source discovery only. Listings are unverified until checked; no login-based social scraping or automated outreach.
+            Public business directories only. Details may be incomplete; review the source before outreach. No login-based social scraping or automated outreach.
           </span>
         </div>
         <p className="text-[11px] text-app-text-muted">
