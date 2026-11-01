@@ -1246,12 +1246,8 @@ async function startServer() {
           typeof accepted.subject !== "string" || !accepted.subject ||
           typeof accepted.organizationId !== "string" || !accepted.organizationId ||
           !Number.isFinite(accepted.mfaVerifiedAt)) throw Error("Invalid Hub authorisation");
-      const token = issueAdminSession(false, String(accepted.handle));
-      const session = getAdminSession(token)!;
-      session.hubSubject = accepted.subject;
-      session.hubOrganizationId = accepted.organizationId;
+      // Rotate existing website sessions when Hub SSO succeeds.
       invalidateAllAdminSessions();
-      // Issue a fresh session after invalidating all old password-only sessions.
       const rotated = issueAdminSession(false, String(accepted.handle));
       const verified = getAdminSession(rotated)!;
       verified.hubSubject = accepted.subject;
@@ -1264,15 +1260,20 @@ async function startServer() {
   });
 
   // GET administrator session verification
-  app.get("/api/admin/verify-session", (req, res) => {
+  app.get("/api/admin/verify-session", async (req, res) => {
     const authHeader = req.headers.authorization;
     const token = adminCookie(req);
     const session = getAdminSession(token);
     if (!session) {
       return res.status(401).json({ valid: false, error: "Session invalid or expired" });
     }
+    if (websiteHubSsoEnforced() && !(await validateHubAdminSession(session))) {
+      if (token) adminSessions.delete(token);
+      return res.status(401).json({ valid: false, error: "Hub MFA sign-in is required." });
+    }
     return res.json({
       valid: true,
+      loginProvider: session.hubHandle ? "V79 Hub MFA" : "website",
       adminEmail: AUTHORIZED_ADMIN_EMAIL,
       mustChangePassword: session.mustChangePassword
     });
@@ -1280,6 +1281,9 @@ async function startServer() {
 
   // POST administrator login verification (password-only — no email required)
   app.post("/api/admin/login", (req, res) => {
+    if (websiteHubSsoEnforced()) {
+      return res.status(403).json({ error: "Use the V79 Hub MFA sign-in.", code: "HUB_SSO_REQUIRED" });
+    }
     try {
       const ip = req.ip || req.socket.remoteAddress || "unknown";
 
@@ -1332,6 +1336,9 @@ async function startServer() {
   // until they've set a new password) as well as with a normal full session,
   // so admins can rotate their password voluntarily at any time.
   app.post("/api/admin/change-password", (req, res) => {
+    if (websiteHubSsoEnforced()) {
+      return res.status(403).json({ error: "Website password sign-in is disabled. Use V79 Hub.", code: "HUB_SSO_REQUIRED" });
+    }
     try {
       const authHeader = req.headers.authorization;
       const token = adminCookie(req);
