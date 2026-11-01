@@ -1,6 +1,7 @@
 import { readJSON, writeJSON, transaction } from "./persistence";
 import { discoverPublicBusinesses } from "./crm_public_discovery";
 import { discoverExportSaintLucia } from "./crm_export_directory";
+import { getExportProfileContact } from "./crm_export_profile";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -603,6 +604,36 @@ export class CRMStorage {
       writeJSON(CRM_PROSPECTS_FILE, existingProspects);
       writeJSON(CRM_SEARCHES_FILE, searchLogs);
       return { discovered, duplicatesCount, newCount: discovered.length };
+    });
+  }
+
+  async enrichPublicProspect(prospectId: string): Promise<Prospect> {
+    const original = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, [])
+      .find(p => p.id === prospectId);
+    if (!original) throw Object.assign(new Error("Prospect not found."), { status: 404 });
+    if (original.workflowStatus === "approved" || original.workflowStatus === "rejected") {
+      throw Object.assign(new Error("Only prospects awaiting review can be enriched."), { status: 409 });
+    }
+
+    const details = await getExportProfileContact(original.sourceUrl);
+    return transaction(() => {
+      const current = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const index = current.findIndex(p => p.id === prospectId);
+      if (index === -1) throw Object.assign(new Error("Prospect was removed during lookup."), { status: 409 });
+      const entry = current[index];
+      if (entry.sourceUrl !== original.sourceUrl || entry.workflowStatus === "approved" || entry.workflowStatus === "rejected") {
+        throw Object.assign(new Error("Prospect changed during lookup; reload before retrying."), { status: 409 });
+      }
+      const updated = {
+        ...entry,
+        phone: entry.phone || details.phone,
+        email: entry.email || details.email,
+        website: entry.website || details.website,
+        contactCheckedAt: new Date().toISOString()
+      };
+      current[index] = updated;
+      writeJSON(CRM_PROSPECTS_FILE, current);
+      return updated;
     });
   }
 
