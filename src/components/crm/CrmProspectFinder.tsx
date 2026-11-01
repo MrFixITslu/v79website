@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, MapPin, Sparkles, CheckCircle2, XCircle, ShieldCheck, Globe, Phone, Mail, History, ExternalLink, RefreshCw } from "lucide-react";
 import { Prospect, ProspectSearchLog, SAINT_LUCIA_LOCATIONS } from "../../crm/types";
 import { safeExternalLink, safeSocialLink, safeEmail } from "../../crm/linkSafety";
+import { filterAndSortProspects, industryChoices, type IndustryOrder } from "../../crm/prospectFilters";
 
 interface CrmProspectFinderProps {
   prospects: Prospect[];
@@ -57,6 +58,35 @@ export function CrmProspectFinder({
   const [limit, setLimit] = useState(10);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(20);
+  const [industryFilter, setIndustryFilter] = useState("all");
+  const [localKeyword, setLocalKeyword] = useState("");
+  const [industryOrder, setIndustryOrder] = useState<IndustryOrder>("industry");
+  const availableIndustries = useMemo(() => industryChoices(prospects), [prospects]);
+  const matchingProspects = useMemo(
+    () => filterAndSortProspects(prospects, { industry: industryFilter, text: localKeyword, order: industryOrder }),
+    [prospects, industryFilter, localKeyword, industryOrder]
+  );
+  const visibleProspects = matchingProspects.slice(0, visibleCount);
+  const shortcutCounts = useMemo(() => ({
+    electricians: filterAndSortProspects(prospects, { industry: "preset:electricians", text: "", order: "score" }).length,
+    accommodation: filterAndSortProspects(prospects, { industry: "preset:accommodation", text: "", order: "score" }).length,
+    lawFirms: filterAndSortProspects(prospects, { industry: "preset:law-firms", text: "", order: "score" }).length
+  }), [prospects]);
+  const updateIndustry = (value: string) => {
+    setIndustryFilter(value);
+    setVisibleCount(20);
+    setSelectedIds([]);
+  };
+  const updateKeyword = (value: string) => {
+    setLocalKeyword(value);
+    setVisibleCount(20);
+    setSelectedIds([]);
+  };
+  const updateOrder = (value: IndustryOrder) => {
+    setIndustryOrder(value);
+    setVisibleCount(20);
+    setSelectedIds([]);
+  };
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
@@ -82,6 +112,9 @@ export function CrmProspectFinder({
       const result = await onImportDirectory(file);
       setImportMessage(`Imported ${result.count} businesses; skipped ${result.skipped} duplicates. ${result.staged} added to Prospect Finder for review (${result.reviewTotal} total). Leads are only created after approval.`);
       setVisibleCount(20);
+      setIndustryFilter("all");
+      setLocalKeyword("");
+      setSelectedIds([]);
       setActiveSubTab("catalog");
       setSource("directory");
     } catch (error) {
@@ -98,7 +131,10 @@ export function CrmProspectFinder({
   };
 
   const selectAll = () => {
-    const visible = prospects.slice(0, visibleCount).map(p => p.id);
+    const visible = visibleProspects
+      .filter(p => p.workflowStatus !== "approved" && p.workflowStatus !== "rejected")
+      .map(p => p.id);
+    if (visible.length === 0) return;
     if (visible.every(id => selectedIds.includes(id))) {
       setSelectedIds(ids => ids.filter(id => !visible.includes(id)));
     } else {
@@ -324,6 +360,57 @@ export function CrmProspectFinder({
       {/* SUB-TAB 1: PROSPECT CATALOG */}
       {activeSubTab === "catalog" && (
         <div className="space-y-4">
+          {/* These controls filter ONLY existing prospects; no provider calls or CRM writes. */}
+          <div className="glass rounded-2xl border border-app-border bg-app-aside-bg/30 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h3 className="text-sm font-semibold text-app-text">Browse existing prospects by industry</h3>
+              <span className="text-xs text-app-text-sec" role="status">
+                {matchingProspects.length} matching of {prospects.length} total
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label className="text-xs text-app-text-sec">
+                Industry or trade
+                <select aria-label="Filter existing prospects by industry"
+                  value={industryFilter} onChange={e => updateIndustry(e.target.value)}
+                  className="block mt-1 w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+                  <option value="all">All industries ({prospects.length})</option>
+                  <optgroup label="Popular trades">
+                    <option value="preset:electricians">Electricians ({shortcutCounts.electricians})</option>
+                    <option value="preset:accommodation">Accommodation &amp; lodging ({shortcutCounts.accommodation})</option>
+                    <option value="preset:law-firms">Law firms ({shortcutCounts.lawFirms})</option>
+                  </optgroup>
+                  <optgroup label="Industries found in your records">
+                    {availableIndustries.map(item => (
+                      <option value={item.value} key={item.value}>{item.label} ({item.count})</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </label>
+              <label className="text-xs text-app-text-sec">
+                Search existing businesses
+                <input type="search" aria-label="Search existing prospects"
+                  value={localKeyword} onChange={e => updateKeyword(e.target.value)}
+                  placeholder="Name, trade, location..."
+                  className="block mt-1 w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs" />
+              </label>
+              <label className="text-xs text-app-text-sec">
+                Sort results
+                <select aria-label="Sort existing prospects"
+                  value={industryOrder} onChange={e => updateOrder(e.target.value as IndustryOrder)}
+                  className="block mt-1 w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+                  <option value="industry">Industry A–Z</option>
+                  <option value="business">Business name A–Z</option>
+                  <option value="score">Lead score (highest first)</option>
+                </select>
+              </label>
+            </div>
+            {(industryFilter !== "all" || localKeyword || industryOrder !== "industry") && (
+              <button type="button"
+                onClick={() => { updateIndustry("all"); setLocalKeyword(""); setIndustryOrder("industry"); }}
+                className="text-xs text-sky-500 hover:underline">Clear filters</button>
+            )}
+          </div>
           {/* Bulk Action Controls */}
           {selectedIds.length > 0 && (
             <div className="glass p-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 flex items-center justify-between text-xs animate-fade-in-once">
@@ -360,12 +447,14 @@ export function CrmProspectFinder({
           )}
           {/* Prospects Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {prospects.length === 0 ? (
+            {matchingProspects.length === 0 ? (
               <div className="col-span-2 glass p-12 text-center text-xs text-app-text-muted rounded-2xl border border-app-border">
-                No prospects yet. Choose a discovery source and search above.
+                {prospects.length === 0
+                  ? "No prospects yet. Import a CSV or discover businesses above."
+                  : "No matching businesses in your existing prospects. Try another industry or clear the filters. Broad categories are not assumed to be specialist trades."}
               </div>
             ) : (
-              prospects.slice(0, visibleCount).map((p) => {
+              visibleProspects.map((p) => {
                 const websiteHref = safeExternalLink(p.website);
                 const facebookHref = safeSocialLink(p.facebookUrl, "facebook");
                 const instagramHref = safeSocialLink(p.instagramUrl, "instagram");
@@ -418,6 +507,9 @@ export function CrmProspectFinder({
                             <span>{p.location}</span>
                             <span>•</span>
                             <span>{p.category}</span>
+                            {p.industry && p.industry.toLocaleLowerCase("en") !== p.category.toLocaleLowerCase("en") && (
+                              <span className="text-sky-500">· {p.industry}</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -535,14 +627,14 @@ export function CrmProspectFinder({
               })
             )}
           </div>
-          {prospects.length > 0 && (
+          {matchingProspects.length > 0 && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-app-text-sec">
-              <span>Showing {Math.min(visibleCount, prospects.length)} of {prospects.length} prospects awaiting your review.</span>
+              <span>Showing {Math.min(visibleCount, matchingProspects.length)} of {matchingProspects.length} matching prospects ({prospects.length} total).</span>
               <div className="flex gap-2">
                 <button type="button" onClick={selectAll} className="px-3 py-1.5 rounded-lg border border-app-border text-app-text">
                   Select visible prospects
                 </button>
-                {prospects.length > visibleCount && (
+                {matchingProspects.length > visibleCount && (
                   <button type="button" onClick={() => setVisibleCount(n => n + 20)}
                     className="px-3 py-1.5 rounded-lg border border-app-border text-sky-500">
                     Show 20 more
