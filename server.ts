@@ -1225,6 +1225,52 @@ async function startServer() {
     }
   });
 
+  // Stage an authenticator on a password-verified, non-privileged session.
+  app.post("/api/admin/mfa/setup", (req, res) => {
+    const token = adminCookie(req);
+    const session = getAdminSession(token);
+    if (!token || !session) return res.status(401).json({ error: "Sign in first." });
+    if (session.mustChangePassword) return res.status(403).json({ error: "Change your temporary password first." });
+    if (getLatestAdminAuth().mfa) return res.status(409).json({ error: "Authenticator already enrolled." });
+    const secret = createTotpSecret();
+    pendingMfaEnrolments.set(token, { secret, expires: Date.now() + 10 * 60_000 });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ secret, uri: authenticatorUri(secret, AUTHORIZED_ADMIN_EMAIL), expiresInSeconds: 600 });
+  });
+
+  app.post("/api/admin/mfa/enable", (req, res) => {
+    const token = adminCookie(req);
+    const session = getAdminSession(token);
+    if (!token || !session) return res.status(401).json({ error: "Sign in first." });
+    if (session.mustChangePassword) return res.status(403).json({ error: "Change your password first." });
+    const challenge = pendingMfaEnrolments.get(token);
+    if (!challenge || challenge.expires < Date.now()) return res.status(410).json({ error: "Authenticator setup expired. Start again." });
+    if (getLatestAdminAuth().mfa) return res.status(409).json({ error: "Authenticator already enrolled." });
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    if (isRateLimited(ip)) return res.status(429).json({ error: "Too many attempts." });
+    const step = checkTotpCode(challenge.secret, String(req.body?.code || ""));
+    if (step === null) {
+      recordFailedAttempt(ip);
+      return res.status(401).json({ error: "Invalid authenticator code." });
+    }
+    const codes = createRecoveryCodes();
+    const auth = getLatestAdminAuth();
+    auth.mfa = {
+      sealedSecret: seal(challenge.secret),
+      lastStep: step,
+      recoveryDigests: codes.map(recoveryCodeDigest),
+      enabledAt: new Date().toISOString()
+    };
+    saveAdminAuth(auth);
+    pendingMfaEnrolments.clear();
+    invalidateAllAdminSessions();
+    const next = issueAdminSession(false, true);
+    setAdminCookie(res, next);
+    clearLoginAttempts(ip);
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ success: true, token: "cookie-session", recoveryCodes: codes });
+  });
+
   // POST administrator logout - invalidate the current session token
   app.post("/api/admin/logout", (req, res) => {
     const authHeader = req.headers.authorization;
