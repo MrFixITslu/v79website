@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Search, MapPin, Sparkles, CheckCircle2, XCircle, ShieldCheck, Globe, Phone, Mail, History, ExternalLink, RefreshCw } from "lucide-react";
 import { Prospect, ProspectSearchLog, SAINT_LUCIA_LOCATIONS } from "../../crm/types";
+import { safeExternalLink, safeSocialLink, safeEmail } from "../../crm/linkSafety";
 
 interface CrmProspectFinderProps {
   prospects: Prospect[];
@@ -300,6 +301,12 @@ export function CrmProspectFinder({
               </div>
             ) : (
               prospects.map((p) => {
+                const websiteHref = safeExternalLink(p.website);
+                const facebookHref = safeSocialLink(p.facebookUrl, "facebook");
+                const instagramHref = safeSocialLink(p.instagramUrl, "instagram");
+                const linkedinHref = safeSocialLink(p.linkedinUrl, "linkedin");
+                const sourceHref = safeExternalLink(p.sourceUrl);
+                const email = safeEmail(p.email);
                 const isSelected = selectedIds.includes(p.id);
                 const isApproved = p.workflowStatus === "approved";
                 const isRejected = p.workflowStatus === "rejected";
@@ -379,31 +386,31 @@ export function CrmProspectFinder({
                           <span>{p.phone}</span>
                         </a>
                       ) : <span className="text-app-text-muted">Phone not listed</span>}
-                      {p.email ? (
-                        <a href={`mailto:${p.email}`} className="flex items-center gap-1 text-app-text hover:text-sky-500">
+                      {email ? (
+                        <a href={`mailto:${email}`} className="flex items-center gap-1 text-app-text hover:text-sky-500">
                           <Mail className="w-3 h-3 text-emerald-500" />
-                          <span>{p.email}</span>
+                          <span>{email}</span>
                         </a>
                       ) : <span className="text-app-text-muted">Email not listed</span>}
-                      {p.website ? (
-                        <a href={p.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-500 hover:underline truncate max-w-[150px]">
+                      {websiteHref ? (
+                        <a href={websiteHref} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-500 hover:underline truncate max-w-[150px]">
                           <Globe className="w-3 h-3" />
                           <span>Website</span>
                         </a>
                       ) : (
                         <span className="text-amber-500 font-mono text-[10px]">No website listed</span>
                       )}
-                      {p.facebookUrl && (
-                        <a href={p.facebookUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Facebook</a>
+                      {facebookHref && (
+                        <a href={facebookHref} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Facebook</a>
                       )}
-                      {p.instagramUrl && (
-                        <a href={p.instagramUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Instagram</a>
+                      {instagramHref && (
+                        <a href={instagramHref} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Instagram</a>
                       )}
-                      {p.linkedinUrl && (
-                        <a href={p.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">LinkedIn</a>
+                      {linkedinHref && (
+                        <a href={linkedinHref} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">LinkedIn</a>
                       )}
-                      {p.sourceUrl && (
-                        <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-app-text-sec hover:underline flex items-center gap-1">
+                      {sourceHref && (
+                        <a href={sourceHref} target="_blank" rel="noopener noreferrer" className="text-app-text-sec hover:underline flex items-center gap-1">
                           <ExternalLink className="w-3 h-3" /> Source
                         </a>
                       )}
