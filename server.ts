@@ -298,6 +298,8 @@ interface AdminSession {
   mustChangePassword: boolean;
   hubHandle?: string;
   hubValidatedAt?: number;
+  hubSubject?: string;
+  hubOrganizationId?: string;
 }
 const adminSessions = new Map<string, AdminSession>();
 
@@ -340,10 +342,42 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000).unref();
 
+const websiteHubSsoEnforced = () => process.env.WEBSITE_HUB_SSO_ENFORCED === "true";
+const websiteHubSsoReady = () => process.env.WEBSITE_HUB_SSO_ENABLED === "true" &&
+  String(process.env.V79_WEBSITE_SSO_SHARED_SECRET || "").length >= 32;
+const hubSsoFlows = createHubSsoFlows();
+
+async function hubSsoBackchannel(pathname: "/api/website-sso/exchange" | "/api/website-sso/introspect" | "/api/website-sso/revoke", body: unknown) {
+  if (!websiteHubSsoReady()) throw Error("Hub SSO is not configured");
+  const base = hubBackchannelUrl(process.env.WEBSITE_HUB_SSO_INTERNAL_URL || "https://hub.v79sl.com");
+  const target = new URL(pathname, base);
+  const response = await fetch(target, {
+    method: "POST",
+    redirect: "error",
+    signal: AbortSignal.timeout(4000),
+    headers: { "content-type": "application/json", "x-v79-website-sso-key": String(process.env.V79_WEBSITE_SSO_SHARED_SECRET) },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw Error("Hub SSO rejected this request");
+  return await response.json() as Record<string, unknown>;
+}
+async function validateHubAdminSession(session: AdminSession): Promise<boolean> {
+  if (!session.hubHandle || !session.hubSubject || !session.hubOrganizationId) return false;
+  if (session.hubValidatedAt && Date.now() - session.hubValidatedAt < 5000) return true;
+  try {
+    const result = await hubSsoBackchannel("/api/website-sso/introspect", { handle: session.hubHandle });
+    if (result.active !== true || result.subject !== session.hubSubject ||
+        result.organizationId !== session.hubOrganizationId || !Number.isFinite(result.mfaVerifiedAt)) return false;
+    session.hubValidatedAt = Date.now();
+    return true;
+  } catch {
+    return false;
+  }
+}
 function adminCookie(req: express.Request): string | null { return cookie(req, "v79_admin") || null; }
 function setAdminCookie(res: express.Response, token: string) { res.cookie("v79_admin", token, {...cookieOptions(), maxAge: ADMIN_SESSION_TTL_MS}); }
 
-function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
   const token = adminCookie(req);
   const session = getAdminSession(token);
@@ -355,6 +389,12 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
       error: "You must set a new password before continuing.",
       code: "PASSWORD_CHANGE_REQUIRED"
     });
+  }
+  if (websiteHubSsoEnforced()) {
+    if (!session.hubHandle || !(await validateHubAdminSession(session))) {
+      if (token) adminSessions.delete(token);
+      return res.status(401).json({ error: "Complete MFA sign-in using V79 Hub.", code: "HUB_SSO_REQUIRED" });
+    }
   }
   next();
 }
