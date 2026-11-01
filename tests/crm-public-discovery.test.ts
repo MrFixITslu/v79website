@@ -76,12 +76,16 @@ test("rejects unsafe URL schemes and malformed publicly listed contact data", ()
       name: "Test Retail",
       shop: "convenience",
       "contact:website": "javascript:alert(1)",
-      "contact:facebook": "https://localhost/private",
+      "contact:facebook": "https://facebook.com.evil.example/private",
+      "contact:instagram": "https://localhost/private",
+      "contact:linkedin": "https://linkedin.com.evil.example/company/not-real",
       "contact:email": "not-an-email"
     }
   }]);
   assert.equal(results.length, 1);
   assert.equal(results[0].website, undefined);
   assert.equal(results[0].facebookUrl, undefined);
+  assert.equal(results[0].instagramUrl, undefined);
+  assert.equal(results[0].linkedinUrl, undefined);
   assert.equal(results[0].email, undefined);
 });
