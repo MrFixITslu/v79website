@@ -570,6 +570,19 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         </div>
       </section>
 
+      <section className="px-6 lg:px-8" aria-labelledby="home-ai-faq-title">
+        <div className="max-w-5xl mx-auto border border-app-border rounded-3xl p-6 sm:p-9 bg-app-aside-bg space-y-5">
+          <div className="space-y-3"><p className="text-xs uppercase tracking-widest font-mono text-v79-teal dark:text-v79-teal-light">AI questions. Human answers.</p>
+            <h2 id="home-ai-faq-title" className="text-2xl sm:text-3xl font-display font-bold">A useful place to start with AI.</h2>
+            <p className="text-app-text-sec text-sm">Explore practical answers, everyday examples and how V79 can help.</p></div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            {[['q1', 'Where should we start?'], ['q2', 'What will it cost?'], ['q4', 'How do we train our team?']].map(([id, text]) => (
+              <a key={id} href={`/faq#${id}`} className="p-4 border border-app-border rounded-xl text-sm font-semibold hover:border-v79-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 flex items-center justify-between gap-3">{text}<ArrowRight className="w-4 h-4 shrink-0 text-v79-teal" /></a>
+            ))}
+          </div><Button variant="ghost" onClick={() => onNavigate("faq")} icon={<ArrowRight className="w-4 h-4" />}>Explore all ten questions</Button>
+        </div>
+      </section>
+
       {/* ── CTA Banner ────────────────────────────────────────────── */}
       <section className="px-6 lg:px-8">
         <motion.div
