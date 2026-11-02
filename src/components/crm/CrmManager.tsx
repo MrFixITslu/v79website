@@ -10,6 +10,7 @@ import { parseDirectoryFile } from "../../crm/directoryImport";
 import { CrmTasksList } from "./CrmTasksList";
 import { CrmSettings } from "./CrmSettings";
 import { CrmNewLeadModal } from "./CrmNewLeadModal";
+import { readNewLeadDraft } from "../../crm/newLeadDraft";
 import {
   CRMLead,
   CRMMetrics,
@@ -43,7 +44,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
 
   // Selection & modal states
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
-  const [isNewLeadOpen, setIsNewLeadOpen] = useState(false);
+  const [isNewLeadOpen, setIsNewLeadOpen] = useState(() => Boolean(readNewLeadDraft()));
 
   // Status & Loading states
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -288,25 +289,32 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   };
 
   // Create new lead manually
-  const handleCreateLead = async (leadData: any) => {
+  const handleCreateLead = async (leadData: any): Promise<void> => {
     try {
       const res = await fetch("/api/admin/crm/leads", {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify(leadData)
       });
-      if (res.ok) {
-        const data = await res.json();
-        const created: CRMLead = data.lead || data;
-        setLeads((prev) => [created, ...prev.filter((l) => l.id !== created.id)]);
-        fetchMetrics();
-        setSelectedLead(created);
-        if (created?.id) {
-          fetchLeadDetails(created.id);
-        }
+      if (res.status === 401) {
+        onUnauthorized?.();
+        throw new Error("Admin session expired. Reconnect with V79 Hub; your lead draft is safe in this tab.");
       }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Could not save this lead. Please try again.");
+      }
+      const data = await res.json();
+      const created: CRMLead = data.lead || data;
+      if (!created?.id) throw new Error("Lead save could not be confirmed. Check the CRM before retrying.");
+      setLeads((prev) => [created, ...prev.filter((l) => l.id !== created.id)]);
+      void fetchMetrics();
+      setSelectedLead(created);
+      void fetchLeadDetails(created.id);
     } catch (e) {
       console.error("Failed to create lead:", e);
+      // The modal must not close or discard unsaved data after any failure.
+      throw e;
     }
   };
 
