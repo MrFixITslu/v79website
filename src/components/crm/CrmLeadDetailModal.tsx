@@ -60,7 +60,7 @@ export function CrmLeadDetailModal({
   const [savingTask, setSavingTask] = useState(false);
 
   // Conversion form state
-  const [contractValue, setContractValue] = useState(lead.estimatedValue || 10000);
+  const [contractValue, setContractValue] = useState(lead.estimatedValue ? String(lead.estimatedValue) : "");
   const [billingEmail, setBillingEmail] = useState(lead.email);
   const [conversionNotes, setConversionNotes] = useState("");
 
@@ -135,8 +135,10 @@ export function CrmLeadDetailModal({
 
   const handleConvert = (e: React.FormEvent) => {
     e.preventDefault();
+    const amount = Number(contractValue);
+    if (!contractValue.trim() || !Number.isFinite(amount) || amount <= 0) return;
     onConvertLead(lead.id, {
-      contractValue: Number(contractValue),
+      contractValue: amount,
       billingEmail,
       notes: conversionNotes
     });
@@ -818,8 +820,11 @@ export function CrmLeadDetailModal({
                   <input
                     type="number"
                     required
+                    min="0.01"
+                    step="0.01"
+                    placeholder="Enter project value"
                     value={contractValue}
-                    onChange={(e) => setContractValue(Number(e.target.value))}
+                    onChange={(e) => setContractValue(e.target.value)}
                     className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs focus:outline-none"
                   />
                 </div>
