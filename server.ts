@@ -292,9 +292,12 @@ function getLatestAdminAuth(): AdminAuthRecord {
 // In-memory session store: token -> { expiry timestamp (ms), mustChangePassword }.
 // Tokens are cryptographically random and single-instance scoped, which is
 // appropriate for this app's single-container deployment model.
-const ADMIN_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const ADMIN_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // website password session: 2 hours
+const HUB_ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000; // MFA-backed Hub workday: absolute maximum
+const HUB_ADMIN_IDLE_MS = 60 * 60 * 1000; // one hour without authenticated admin activity
 interface AdminSession {
   expiry: number;
+  lastActivityAt: number;
   mustChangePassword: boolean;
   hubHandle?: string;
   hubValidatedAt?: number;
@@ -305,9 +308,11 @@ const adminSessions = new Map<string, AdminSession>();
 
 function issueAdminSession(mustChangePassword: boolean, hubHandle?: string): string {
   const token = crypto.randomBytes(32).toString("hex");
+  const now = Date.now();
   adminSessions.set(token, {
-    expiry: Date.now() + (hubHandle ? 30 * 60_000 : ADMIN_SESSION_TTL_MS),
-    mustChangePassword, ...(hubHandle ? { hubHandle, hubValidatedAt: Date.now() } : {})
+    expiry: now + (hubHandle ? HUB_ADMIN_SESSION_TTL_MS : ADMIN_SESSION_TTL_MS),
+    lastActivityAt: now,
+    mustChangePassword, ...(hubHandle ? { hubHandle, hubValidatedAt: now } : {})
   });
   return token;
 }
@@ -316,7 +321,8 @@ function getAdminSession(token: string | undefined | null): AdminSession | null 
   if (!token) return null;
   const session = adminSessions.get(token);
   if (!session) return null;
-  if (Date.now() > session.expiry) {
+  if (Date.now() > session.expiry ||
+      (session.hubHandle && Date.now() - session.lastActivityAt > HUB_ADMIN_IDLE_MS)) {
     adminSessions.delete(token);
     return null;
   }
@@ -376,7 +382,10 @@ async function validateHubAdminSession(session: AdminSession): Promise<boolean> 
   }
 }
 function adminCookie(req: express.Request): string | null { return cookie(req, "v79_admin") || null; }
-function setAdminCookie(res: express.Response, token: string) { res.cookie("v79_admin", token, {...cookieOptions(), maxAge: ADMIN_SESSION_TTL_MS}); }
+function setAdminCookie(res: express.Response, token: string) {
+  const maxAge = getAdminSession(token)?.hubHandle ? HUB_ADMIN_SESSION_TTL_MS : ADMIN_SESSION_TTL_MS;
+  res.cookie("v79_admin", token, { ...cookieOptions(), maxAge });
+}
 
 async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
@@ -393,9 +402,10 @@ async function requireAdmin(req: express.Request, res: express.Response, next: e
   }
   if (websiteHubSsoEnforced() || session.hubHandle) {
     if (!session.hubHandle || !(await validateHubAdminSession(session))) {
-      if (token) adminSessions.delete(token);
-      return res.status(401).json({ error: "Complete MFA sign-in using V79 Hub.", code: "HUB_SSO_REQUIRED" });
+      // Fail closed without discarding browser state on a transient Hub network failure.
+      return res.status(401).json({ error: "Hub verification unavailable or expired. Reconnect via V79 Hub.", code: "HUB_SSO_REQUIRED" });
     }
+    session.lastActivityAt = Date.now();
   }
   next();
 }
@@ -1269,8 +1279,7 @@ async function startServer() {
       return res.status(401).json({ valid: false, error: "Session invalid or expired" });
     }
     if ((websiteHubSsoEnforced() || session.hubHandle) && !(await validateHubAdminSession(session))) {
-      if (token) adminSessions.delete(token);
-      return res.status(401).json({ valid: false, error: "Hub MFA sign-in is required." });
+      return res.status(401).json({ valid: false, error: "Hub SSO must be verified again." });
     }
     return res.json({
       valid: true,
