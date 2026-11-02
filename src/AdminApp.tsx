@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { OperationsPanel } from "./components/OperationsPanel";
+import { clearNewLeadDraft, readNewLeadDraft } from "./crm/newLeadDraft";
 import React, { useState, useEffect, ChangeEvent, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -1012,6 +1013,8 @@ V79 ICT Solutions`;
   };
 
   const handleLogout = () => {
+    if (readNewLeadDraft() && !window.confirm("Logging out will discard your unsaved CRM lead draft. Continue?")) return;
+    clearNewLeadDraft();
     const token = adminToken || safeSessionStorage.getItem("admin-token");
     if (token) {
       fetch("/api/admin/logout", {
