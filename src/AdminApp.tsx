@@ -1155,6 +1155,27 @@ V79 ICT Solutions`;
     }
   }, []);
 
+  // Extend the *idle* window only for real owner interaction, not background
+  // dashboard polling. Hub MFA itself retains its fixed eight-hour limit.
+  useEffect(() => {
+    if (!adminToken || mustChangePassword) return;
+    let lastCheck = Date.now();
+    const onInteraction = (event: Event) => {
+      if (!event.isTrusted || document.hidden) return;
+      const now = Date.now();
+      if (now - lastCheck < 4 * 60_000) return;
+      lastCheck = now;
+      void fetch("/api/admin/verify-session", { credentials: "same-origin", cache: "no-store" })
+        .catch(() => undefined);
+    };
+    window.addEventListener("keydown", onInteraction);
+    window.addEventListener("pointerdown", onInteraction);
+    return () => {
+      window.removeEventListener("keydown", onInteraction);
+      window.removeEventListener("pointerdown", onInteraction);
+    };
+  }, [adminToken, mustChangePassword]);
+
   useEffect(() => {
     fetchApps();
     fetchAds();
