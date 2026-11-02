@@ -1281,6 +1281,7 @@ async function startServer() {
     if ((websiteHubSsoEnforced() || session.hubHandle) && !(await validateHubAdminSession(session))) {
       return res.status(401).json({ valid: false, error: "Hub SSO must be verified again." });
     }
+    if (session.hubHandle) session.lastActivityAt = Date.now();
     return res.json({
       valid: true,
       loginProvider: session.hubHandle ? "V79 Hub MFA" : "website",
