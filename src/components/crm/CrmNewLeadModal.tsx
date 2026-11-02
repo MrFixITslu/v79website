@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { clearNewLeadDraft, readNewLeadDraft, saveNewLeadDraft } from "../../crm/newLeadDraft";
 import { X, UserPlus, Building, Mail, Phone, MapPin, DollarSign, Briefcase } from "lucide-react";
 import { SAINT_LUCIA_LOCATIONS } from "../../crm/types";
 
@@ -9,25 +10,56 @@ interface CrmNewLeadModalProps {
 }
 
 export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadModalProps) {
-  const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
-  const [location, setLocation] = useState("Castries");
-  const [serviceRequested, setServiceRequested] = useState("Managed IT Support");
-  const [estimatedValue, setEstimatedValue] = useState(5000);
-  const [priority, setPriority] = useState<"Low" | "Medium" | "High" | "Urgent">("Medium");
-  const [leadSource, setLeadSource] = useState("Direct Phone Call");
-  const [message, setMessage] = useState("");
+  const [restored] = useState(() => readNewLeadDraft());
+  const [name, setName] = useState(restored?.name || "");
+  const [company, setCompany] = useState(restored?.company || "");
+  const [email, setEmail] = useState(restored?.email || "");
+  const [phone, setPhone] = useState(restored?.phone || "");
+  const [whatsapp, setWhatsapp] = useState(restored?.whatsapp || "");
+  const [location, setLocation] = useState(restored?.location || "Castries");
+  const [serviceRequested, setServiceRequested] = useState(restored?.serviceRequested || "Managed IT Support");
+  // Empty input instead of a number that becomes 06000 when typing.
+  const [estimatedValue, setEstimatedValue] = useState(restored?.estimatedValue || "");
+  const [priority, setPriority] = useState<"Low" | "Medium" | "High" | "Urgent">(restored?.priority || "Medium");
+  const [leadSource, setLeadSource] = useState(restored?.leadSource || "Direct Phone Call");
+  const [message, setMessage] = useState(restored?.message || "");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const hasDraftContent = Boolean(name || company || email || phone || whatsapp || estimatedValue || message);
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!hasDraftContent) return;
+    saveNewLeadDraft({ name, company, email, phone, whatsapp, location, serviceRequested,
+      estimatedValue, priority, leadSource, message });
+  }, [isOpen, name, company, email, phone, whatsapp, location, serviceRequested,
+      estimatedValue, priority, leadSource, message, hasDraftContent]);
+
+  const resetForm = () => {
+    setName(""); setCompany(""); setEmail(""); setPhone(""); setWhatsapp("");
+    setLocation("Castries"); setServiceRequested("Managed IT Support");
+    setEstimatedValue(""); setPriority("Medium"); setLeadSource("Direct Phone Call");
+    setMessage(""); setSubmitError("");
+  };
+
+  const closeAndDiscard = () => {
+    if (hasDraftContent && !window.confirm("Discard this unsaved lead?")) return;
+    clearNewLeadDraft();
+    resetForm();
+    onClose();
+  };
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company.trim() || !name.trim()) return;
-
+    const amount = estimatedValue.trim() === "" ? 0 : Number(estimatedValue);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setSubmitError("Enter a valid estimate of zero or more.");
+      return;
+    }
+    setSubmitError("");
     setSubmitting(true);
     try {
       await onCreateLead({
@@ -38,12 +70,17 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
         whatsapp: whatsapp.trim() || phone.trim() || undefined,
         location,
         serviceRequested,
-        estimatedValue: Number(estimatedValue) || 0,
+        estimatedValue: amount,
         priority,
         leadSource,
         message: message.trim() || undefined
       });
+      clearNewLeadDraft();
+      resetForm();
       onClose();
+    } catch (error: any) {
+      // Keep every field and its temporary draft when a save fails.
+      setSubmitError(error?.message || "Could not save this lead. Your draft has been kept.");
     } finally {
       setSubmitting(false);
     }
@@ -58,7 +95,8 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
             <h3 className="text-sm font-bold text-app-text font-display">Capture New CRM Lead</h3>
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            onClick={closeAndDiscard}
             className="p-1.5 rounded-xl hover:bg-app-btn-sec text-app-text-muted hover:text-app-text transition cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -164,8 +202,11 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
               <label className="text-[10px] font-mono uppercase text-app-text-muted block mb-1">Est. Deal Value (XCD)</label>
               <input
                 type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
                 value={estimatedValue}
-                onChange={(e) => setEstimatedValue(Number(e.target.value))}
+                onChange={(e) => setEstimatedValue(e.target.value)}
                 className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs focus:outline-none font-mono"
               />
             </div>
@@ -214,10 +255,14 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
             />
           </div>
 
+          {restored && (
+            <p className="text-amber-500 text-[11px]" role="status">Unsaved lead draft restored in this tab.</p>
+          )}
+          {submitError && <p className="text-red-500 text-[11px]" role="alert">{submitError}</p>}
           <div className="flex justify-end gap-2 pt-2 border-t border-app-border/40">
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeAndDiscard}
               className="px-4 py-2 rounded-xl bg-app-btn-sec text-app-text font-semibold hover:bg-app-btn-sec/80 transition cursor-pointer"
             >
               Cancel
