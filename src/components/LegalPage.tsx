@@ -158,6 +158,14 @@ function PrivacyPolicy() {
           Google's own technologies and privacy terms apply to that service.
         </p>
         <p>
+          Optional Google Analytics may be used on public pages to understand page visits, traffic sources
+          and which services people find useful. The Google tag is not loaded until you choose to
+          accept analytics. You can reject it or change your choice through the <strong>Analytics choices</strong>
+          control on public website pages. When enabled, Google may process usage information and
+          set analytics cookies, subject to the <External href="https://policies.google.com/privacy">Google Privacy Policy</External>.
+          Your analytics choice does not subscribe you to marketing messages.
+        </p>
+        <p>
           We do not currently use the public V79 website to place third-party behavioural advertising
           cookies. If that changes, this policy and any required consent controls will be updated
           before the new use is enabled.
