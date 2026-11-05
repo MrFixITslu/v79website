@@ -105,6 +105,8 @@ test("acceptance loads one tag and records one manual page view", async () => {
   const rows = c.events();
   assert.equal(rows.filter((r: any[]) => r[0] === "config").length, 1);
   assert.equal(rows.find((r: any[]) => r[0] === "config")[2].send_page_view, false);
+  assert.equal(rows.find((r: any[]) => r[0] === "config")[2].page_location, "https://v79sl.com/");
+  assert.equal(rows.find((r: any[]) => r[0] === "config")[2].allow_ad_personalization_signals, false);
   assert.equal(rows.filter((r: any[]) => r[0] === "event" && r[1] === "page_view").length, 1);
   const consent = rows.filter((r: any[]) => r[0] === "consent");
   assert.equal(consent[0][2].analytics_storage, "denied");
