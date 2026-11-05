@@ -667,7 +667,7 @@ export default function App() {
                       </div>
                       <div className="space-y-2">
                         <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-indigo-400 font-bold">The centre of the ecosystem</div>
-                        <h3 className="text-2xl sm:text-3xl font-bold font-display text-app-text dark:text-white">V79 Hub</h3>
+                        <h3 className="text-2xl sm:text-3xl font-bold font-display text-app-text dark:text-white"><a href="/products/hub.html" className="hover:underline focus-visible:underline underline-offset-4">V79 Hub</a></h3>
                         <p className="text-sm text-app-text-sec leading-relaxed max-w-xl">
                           Your business workspace for secure sign-in, access to V79 applications, key information and the services enabled for your organisation.
                         </p>
@@ -704,7 +704,7 @@ export default function App() {
                       <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400"><WalletCards className="w-5 h-5" /></div>
                       <div>
                         <div className="text-[10px] font-mono uppercase tracking-wider text-app-text-muted">Manage Money</div>
-                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white">FFPRO</h4>
+                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white"><a href="/products/ffpro.html" className="hover:underline focus-visible:underline underline-offset-4">FFPRO</a></h4>
                         <p className="mt-2 text-xs leading-relaxed text-app-text-sec">Track finances, budgets, cash flow, goals and business financial performance.</p>
                       </div>
                     </div>
@@ -713,7 +713,7 @@ export default function App() {
                       <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400"><CheckCircle2 className="w-5 h-5" /></div>
                       <div>
                         <div className="text-[10px] font-mono uppercase tracking-wider text-app-text-muted">Manage Customers & Support</div>
-                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white">V79 Tiquet</h4>
+                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white"><a href="/products/tiquet.html" className="hover:underline focus-visible:underline underline-offset-4">V79 Tiquet</a></h4>
                         <p className="mt-2 text-xs leading-relaxed text-app-text-sec">Manage customer requests, service tickets, follow-up and support activity.</p>
                       </div>
                     </div>
@@ -722,7 +722,7 @@ export default function App() {
                       <div className="w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400"><Megaphone className="w-5 h-5" /></div>
                       <div>
                         <div className="text-[10px] font-mono uppercase tracking-wider text-app-text-muted">Grow Your Business</div>
-                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white">V79 Marketing</h4>
+                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white"><a href="/products/marketing.html" className="hover:underline focus-visible:underline underline-offset-4">V79 Marketing</a></h4>
                         <p className="mt-2 text-xs leading-relaxed text-app-text-sec">Organise leads, campaigns, events and customer engagement from one workflow.</p>
                       </div>
                     </div>
@@ -731,7 +731,7 @@ export default function App() {
                       <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400"><ShoppingCart className="w-5 h-5" /></div>
                       <div>
                         <div className="text-[10px] font-mono uppercase tracking-wider text-app-text-muted">Manage Sales</div>
-                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white">V79 POS</h4>
+                        <h4 className="mt-1 text-base font-bold font-display text-app-text dark:text-white"><a href="/products/pos.html" className="hover:underline focus-visible:underline underline-offset-4">V79 POS</a></h4>
                         <p className="mt-2 text-xs leading-relaxed text-app-text-sec">Support day-to-day selling, transaction workflows and operational sales visibility.</p>
                       </div>
                     </div>
@@ -743,7 +743,7 @@ export default function App() {
                     <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shrink-0"><GraduationCap className="w-6 h-6" /></div>
                     <div className="space-y-1.5">
                       <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-violet-400 font-bold">Connected Learning</div>
-                      <h3 className="text-xl font-bold font-display text-app-text dark:text-white">V79 Academy</h3>
+                      <h3 className="text-xl font-bold font-display text-app-text dark:text-white"><a href="/products/academy.html" className="hover:underline focus-visible:underline underline-offset-4">V79 Academy</a></h3>
                       <p className="text-xs sm:text-sm text-app-text-sec leading-relaxed max-w-2xl">Practical technology and business training for individuals and teams. Course discovery and learning now live in the Academy rather than the business-app marketplace.</p>
                     </div>
                   </div>
