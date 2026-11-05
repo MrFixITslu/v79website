@@ -969,8 +969,19 @@ async function startServer() {
     next();
   });
 
+  // A numeric GA4 property ID is NOT a G- Measurement ID. Invalid configuration disables all tracking.
+  const ga4ConfiguredId = String(process.env.GA4_MEASUREMENT_ID || "").trim();
+  const ga4MeasurementId = /^G-[A-Z0-9]{7,15}$/.test(ga4ConfiguredId) ? ga4ConfiguredId : "";
+
   app.use((req, res, next) => {
-    if (isProduction) res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self' https://www.google.com/recaptcha/; frame-src 'self' blob: https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'");
+    if (isProduction) {
+      const baseCsp = "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self' https://www.google.com/recaptcha/; frame-src 'self' blob: https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'";
+      const policy = ga4MeasurementId
+        ? baseCsp.replace("script-src 'self'", "script-src 'self' https://www.googletagmanager.com")
+          .replace("connect-src 'self'", "connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com")
+        : baseCsp;
+      res.setHeader("Content-Security-Policy", policy);
+    }
     if (req.path.startsWith('/api/')) {
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('X-Robots-Tag', 'noindex, nofollow');
@@ -989,6 +1000,8 @@ async function startServer() {
   app.use(express.json({ limit: "1mb" }));
 
   app.use((req, res, next) => { if (!['GET','HEAD','OPTIONS'].includes(req.method) && req.is('application/json') && (!req.body || Array.isArray(req.body) || typeof req.body !== 'object')) return res.status(400).json({error:'Expected a JSON object'}); next(); });
+  // A public Measurement ID is safe to expose. This API never returns credentials.
+  app.get("/api/analytics-config", (_req, res) => res.json({ measurementId: ga4MeasurementId, enabled: Boolean(ga4MeasurementId) }));
   app.get('/api/config', (_req,res)=>res.json({recaptchaSiteKey:process.env.RECAPTCHA_SITE_KEY || process.env.VITE_RECAPTCHA_SITE_KEY || '',captchaEnabled:process.env.CAPTCHA_MODE !== 'disabled'}));
   app.get('/api/ready', (_req,res)=>{try {storageReady();res.json({status:'ready'});}catch {res.status(503).json({status:'storage unavailable'});}});
   mountLearners(app, db, requireAdmin, isCourseComplete);
