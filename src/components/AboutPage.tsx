@@ -8,7 +8,7 @@ const TEAM = [
     name: "Neil Verdant",
     role: "Founder & Lead Systems Architect",
     bio: "More than 20 years of ICT experience across telecommunications, fibre networks, and enterprise technology.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/v79digital",
     email: "vision79slu@gmail.com",
     initials: "NV",
   },
@@ -302,7 +302,7 @@ export default function AboutPage() {
               <p className="text-xs text-app-text-sec font-light leading-relaxed">{member.bio}</p>
               <div className="flex items-center gap-3 pt-1 border-t border-app-border">
                 {member.linkedin && (
-                  <a href={member.linkedin} target="_blank" rel="noopener noreferrer" className="text-app-text-muted hover:text-v79-teal transition">
+                  <a href={member.linkedin} target="_blank" rel="noopener noreferrer" aria-label="Visit V79 Digital on LinkedIn (opens in a new tab)" className="inline-flex min-w-6 min-h-6 items-center justify-center text-app-text-muted hover:text-v79-teal transition">
                     <Linkedin className="w-4 h-4" />
                   </a>
                 )}

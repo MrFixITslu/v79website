@@ -7,7 +7,7 @@ type Size = "md" | "lg";
 // Color/shape only — no padding here, so callers never need to fight
 // Tailwind's generated stylesheet order to override it (see Size below).
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: "bg-v79-coral hover:bg-v79-coral-dark text-white shadow-md shadow-v79-coral/25 rounded-xl font-bold",
+  primary: "bg-v79-coral-dark hover:bg-[#b9411d] text-white shadow-md shadow-v79-coral/25 rounded-xl font-bold",
   secondary: "bg-transparent border-2 border-v79-navy/25 dark:border-v79-teal-light/30 text-app-text hover:bg-app-aside-bg/80 rounded-xl font-semibold",
   ghost: "text-v79-teal hover:text-v79-teal-dark dark:hover:text-v79-teal-light font-semibold",
 };

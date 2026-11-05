@@ -107,21 +107,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       <section className="relative min-h-[82vh] flex flex-col justify-center overflow-hidden pt-16">
         {/* Ambient brand-color drift — navy/teal/coral, not generic tech-blue */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <motion.div
-            animate={{ scale: [1, 1.08, 1], x: [0, 20, 0], y: [0, -15, 0] }}
-            transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-v79-teal/8 rounded-full blur-3xl"
-          />
-          <motion.div
-            animate={{ scale: [1, 1.12, 1], x: [0, -18, 0] }}
-            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-            className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-v79-coral/6 rounded-full blur-3xl"
-          />
-          <motion.div
-            animate={{ scale: [1, 1.1, 1], y: [0, 20, 0] }}
-            transition={{ duration: 16, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-            className="absolute top-1/3 right-0 w-[300px] h-[300px] bg-v79-navy/6 dark:bg-v79-teal/8 rounded-full blur-3xl"
-          />
+          <div aria-hidden="true" className="hidden sm:block absolute top-0 left-1/4 w-[600px] h-[600px] bg-v79-teal/8 rounded-full blur-3xl" />
+          <div aria-hidden="true" className="hidden sm:block absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-v79-coral/6 rounded-full blur-3xl" />
+          <div aria-hidden="true" className="hidden sm:block absolute top-1/3 right-0 w-[300px] h-[300px] bg-v79-navy/6 dark:bg-v79-teal/8 rounded-full blur-3xl" />
           {/* Abstract Caribbean archipelago rendered as a network/node diagram */}
           <svg
             aria-hidden="true"
@@ -159,12 +147,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 lg:px-8 text-center space-y-8">
           {/* Headline & Description */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="space-y-4"
-          >
+          {/* Keep the primary headline visible immediately for readers and search crawlers. */}
+          <div className="space-y-4">
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold font-display tracking-tight leading-tight text-app-text dark:text-white">
               Managed IT Services &amp; Cybersecurity<br />
               <span className="bg-gradient-to-r from-v79-teal via-v79-teal-light to-v79-teal bg-clip-text text-transparent">
@@ -174,7 +158,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <p className="max-w-3xl mx-auto text-lg sm:text-xl text-app-text-sec font-light leading-relaxed">
               Protect your business with proactive monitoring, managed backups, cybersecurity support, and clearly defined response targets for businesses across Saint Lucia.
             </p>
-          </motion.div>
+          </div>
 
           {/* Call to Action Buttons */}
           <motion.div
@@ -297,7 +281,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       <section id="why-v79" className="py-16 bg-v79-sand-light/50 dark:bg-v79-navy-light/20 border-y border-app-border scroll-mt-24">
         <div className="px-6 lg:px-8 space-y-8 max-w-6xl mx-auto">
           <div className="text-center space-y-2">
-            <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">Excellence</span>
+            <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">Excellence</span>
             <h2 className="text-3xl sm:text-4xl font-extrabold font-display text-app-text dark:text-white tracking-tight">Why Caribbean Businesses Choose V79</h2>
             <p className="max-w-xl mx-auto text-sm text-app-text-sec font-light">
               Caribbean-rooted, enterprise-grade — we understand the unique challenges Caribbean businesses face and build solutions for this environment.
@@ -522,7 +506,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       {/* ── Semantic AI Search & Commercial FAQs (AEO/GEO Optimized) ── */}
       <section className="max-w-4xl mx-auto px-6 lg:px-8 space-y-8">
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-v79-teal/10 border border-v79-teal/20 text-v79-teal text-xs font-mono font-semibold">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-v79-teal/10 border border-v79-teal/20 text-v79-teal dark:text-v79-teal-light text-xs font-mono font-semibold">
             <HelpCircle className="w-3.5 h-3.5" /> Frequent Questions &amp; SLA Details
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold font-display text-app-text dark:text-white tracking-tight">
