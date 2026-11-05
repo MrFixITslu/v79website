@@ -128,6 +128,7 @@ export function renderProduct(product) {
     '<meta property="og:image" content="' + SITE + '/og-image.png">',
     '<meta name="twitter:card" content="summary_large_image">',
     '<link rel="icon" href="/favicon.ico">',
+    '<script src="/ga4-consent.js" defer></script>',
     '<script type="application/ld+json">' + structuredData + "</script>",
     "<style>" + CSS + "</style></head><body>",
     '<header class="header"><div class="container header-inner"><a class="brand" href="/">V79 <span>Digital</span></a>',
