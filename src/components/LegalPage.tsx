@@ -8,7 +8,7 @@ interface LegalPageProps {
   type: LegalDocumentType;
 }
 
-const EFFECTIVE_DATE = "6 October 2026";
+const EFFECTIVE_DATE = "5 November 2026";
 
 const External = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a
@@ -161,6 +161,27 @@ function PrivacyPolicy() {
           We do not currently use the public V79 website to place third-party behavioural advertising
           cookies. If that changes, this policy and any required consent controls will be updated
           before the new use is enabled.
+        </p>
+      </Section>
+
+      <Section title="7A. Optional website analytics">
+        <p>
+          On the public V79 Digital website and public product pages, we offer optional Google
+          Analytics 4 measurement. The Google Analytics script does not load until you choose
+          <strong> Allow analytics</strong>. This helps us understand visits and useful content,
+          not personalise advertising. Advertising-related permissions remain denied.
+        </p>
+        <p>
+          Page addresses shared for analytics omit private query parameters. Only validated
+          article names and campaign labels may be included. We do not transmit private CRM
+          records, passwords or authenticated admin pages to Google Analytics.
+        </p>
+        <p>
+          You can reject analytics or change your decision at any time by selecting{" "}
+          <button type="button" data-v79-ga4-preferences className="font-semibold text-v79-teal dark:text-v79-teal-light underline underline-offset-2 cursor-pointer">
+            Analytics preferences
+          </button>. Essential security and session storage is separate from optional analytics.
+          Google processes analytics information under its applicable privacy terms.
         </p>
       </Section>
 
