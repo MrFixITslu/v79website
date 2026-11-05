@@ -75,7 +75,7 @@ export default function IndustriesPage({ onNavigate }: { onNavigate: (v: string)
           <div className="absolute top-0 right-1/4 w-[350px] h-[350px] bg-v79-teal/6 rounded-full blur-3xl" />
         </div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="relative z-10 space-y-4">
-          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">Industry Focus</span>
+          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">Industry Focus</span>
           <h1 className="text-4xl sm:text-5xl font-extrabold font-display tracking-tight text-app-text dark:text-white">
             Industries We Support
           </h1>

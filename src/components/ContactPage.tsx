@@ -157,7 +157,7 @@ export default function ContactPage() {
         transition={{ duration: 0.5 }}
         className="pt-10 px-6 lg:px-8 text-center space-y-4"
       >
-        <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">Get in Touch</span>
+        <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">Get in Touch</span>
         <h1 className="text-4xl sm:text-5xl font-extrabold font-display tracking-tight text-app-text dark:text-white">
           Let's Talk About Your Business Technology
         </h1>

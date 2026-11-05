@@ -208,7 +208,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       </section>
 
       {/* ── Services Grid ─────────────────────────────────────────── */}
-      <section id="services-overview" className="px-6 lg:px-8 space-y-8 max-w-7xl mx-auto scroll-mt-24">
+      <section id="services-overview" className="defer-offscreen-paint px-6 lg:px-8 space-y-8 max-w-7xl mx-auto scroll-mt-24">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -216,7 +216,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           transition={{ duration: 0.5 }}
           className="text-center space-y-3"
         >
-          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">What We Do</span>
+          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">What We Do</span>
           <h2 className="text-3xl sm:text-4xl font-extrabold font-display text-app-text dark:text-white tracking-tight">
             Comprehensive ICT Services
           </h2>
@@ -278,7 +278,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       {/* ── Why Choose Vision79 Digital ───────────────────────────────
            Feature grid on a contrasting sand-tinted band to break up
            white space between the services grid and testimonials. */}
-      <section id="why-v79" className="py-16 bg-v79-sand-light/50 dark:bg-v79-navy-light/20 border-y border-app-border scroll-mt-24">
+      <section id="why-v79" className="defer-offscreen-paint py-16 bg-v79-sand-light/50 dark:bg-v79-navy-light/20 border-y border-app-border scroll-mt-24">
         <div className="px-6 lg:px-8 space-y-8 max-w-6xl mx-auto">
           <div className="text-center space-y-2">
             <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">Excellence</span>
@@ -315,7 +315,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
 
       {/* ── Problem Agitation ─────────────────────────────────────── */}
-      <section id="cost-of-downtime" className="py-20 bg-v79-navy dark:bg-v79-navy-dark fiber-texture relative overflow-hidden scroll-mt-24">
+      <section id="cost-of-downtime" className="defer-offscreen-paint py-20 bg-v79-navy dark:bg-v79-navy-dark fiber-texture relative overflow-hidden scroll-mt-24">
         <div className="px-6 lg:px-8 max-w-4xl mx-auto text-center space-y-12 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -387,7 +387,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             transition={{ duration: 0.5 }}
             className="text-center space-y-2"
           >
-            <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">Client Stories</span>
+            <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">Client Stories</span>
             <h2 className="text-3xl sm:text-4xl font-extrabold font-display text-app-text dark:text-white tracking-tight">
               Trusted Across Saint Lucia
             </h2>
@@ -430,7 +430,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       {/* ── ICT Business Health Assessment ───────────────────────────
            Discovery is free; formal assessment scope and pricing are quoted
            after the environment and business requirements are understood. */}
-      <section id="free-assessment" className="px-6 lg:px-8 scroll-mt-24">
+      <section id="free-assessment" className="defer-offscreen-paint px-6 lg:px-8 scroll-mt-24">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -441,7 +441,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           <div className="grid grid-cols-1 lg:grid-cols-2">
             {/* Left: product + price */}
             <div className="p-8 sm:p-10 lg:p-12 space-y-5 flex flex-col justify-center">
-              <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">ICT Business Health Diagnostic</span>
+              <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">ICT Business Health Diagnostic</span>
               <h2 className="text-2xl sm:text-3xl font-extrabold font-display text-app-text dark:text-white tracking-tight leading-tight">
                 Know exactly where your<br />technology stands.
               </h2>
