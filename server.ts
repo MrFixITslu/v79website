@@ -3489,6 +3489,36 @@ ${fields.content || ""}`;
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>${domain}/products/hub.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${domain}/products/tiquet.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${domain}/products/pos.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${domain}/products/ffpro.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${domain}/products/marketing.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${domain}/products/academy.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>${domain}/resources</loc>
     <lastmod>${nowIso}</lastmod>
     <changefreq>weekly</changefreq>
