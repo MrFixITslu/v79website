@@ -92,7 +92,12 @@
     window.gtag("consent", "default", CONSENT_DENIED);
     window.gtag("consent", "update", { ...CONSENT_DENIED, analytics_storage: "granted" });
     window.gtag("js", new Date());
-    window.gtag("config", measurementId, { send_page_view: false });
+    window.gtag("config", measurementId, {
+      send_page_view: false,
+      page_location: cleanUrl(window.location.href),
+      page_referrer: cleanUrl(document.referrer),
+      allow_ad_personalization_signals: false
+    });
 
     installNavigationTracking();
     const script = document.createElement("script");
