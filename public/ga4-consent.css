@@ -1,0 +1,34 @@
+/* Consistent, accessible V79 brand styling. External stylesheet is CSP-compatible. */
+.v79-ga4-consent {
+  position: fixed; z-index: 2147483000; bottom: 18px; left: 50%;
+  width: min(760px, calc(100vw - 24px)); transform: translateX(-50%);
+  padding: 20px 23px; border: 1px solid #cbdedc; border-radius: 18px;
+  box-shadow: 0 15px 55px rgba(9, 30, 36, .20); background: #ffffff;
+  color: #132f38; display: flex; flex-wrap: wrap; align-items: center; gap: 20px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; line-height: 1.5;
+}
+.v79-ga4-copy { flex: 1 1 350px; }
+.v79-ga4-copy strong { font-size: 15px; color: #102d35; }
+.v79-ga4-copy p { font-size: 13px; margin: 6px 0 0; color: #3d5a62; }
+.v79-ga4-copy a { color: #076b65; text-decoration: underline; }
+.v79-ga4-actions { display: flex; gap: 9px; flex: 0 1 auto; flex-wrap: wrap; }
+.v79-ga4-actions button, .v79-ga4-preferences {
+  font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  border-radius: 10px; padding: 11px 15px; border: 1px solid #0d7772;
+  background: #fff; color: #075f5b;
+}
+.v79-ga4-actions button[data-v79-choice="accepted"] { color: #fff; background: #087a75; }
+.v79-ga4-actions button:hover, .v79-ga4-preferences:hover { filter: brightness(.94); }
+.v79-ga4-actions button:focus-visible, .v79-ga4-preferences:focus-visible {
+  outline: 3px solid #118a83; outline-offset: 3px;
+}
+.v79-ga4-preferences {
+  position: fixed; z-index: 2147482999; bottom: 12px; left: 12px;
+  padding: 7px 11px; background: #f4faf9; box-shadow: 0 4px 16px rgba(9, 30, 36, .08);
+}
+@media (max-width: 600px) {
+  .v79-ga4-consent { bottom: 68px; padding: 15px; gap: 12px; }
+  .v79-ga4-actions { width: 100%; }
+  .v79-ga4-actions button { flex: 1; }
+  .v79-ga4-preferences { bottom: 66px; left: 8px; }
+}
