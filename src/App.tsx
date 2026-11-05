@@ -825,7 +825,7 @@ export default function App() {
 
         <div className="w-full max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-app-border to-transparent" /></div>
 
-        <section id="resources" className="defer-offscreen-paint scroll-mt-32">
+        <section id="resources" className="scroll-mt-32">
           <Suspense fallback={<SectionLoadingFallback />}>
             <ResourcesPage
               onNavigate={(v) => scrollTo(SECTIONS.some(s => s.id === v) ? v : "resources")}
