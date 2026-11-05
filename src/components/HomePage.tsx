@@ -107,9 +107,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       <section className="relative min-h-[82vh] flex flex-col justify-center overflow-hidden pt-16">
         {/* Ambient brand-color drift — navy/teal/coral, not generic tech-blue */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div aria-hidden="true" className="hidden sm:block absolute top-0 left-1/4 w-[600px] h-[600px] bg-v79-teal/8 rounded-full blur-3xl" />
-          <div aria-hidden="true" className="hidden sm:block absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-v79-coral/6 rounded-full blur-3xl" />
-          <div aria-hidden="true" className="hidden sm:block absolute top-1/3 right-0 w-[300px] h-[300px] bg-v79-navy/6 dark:bg-v79-teal/8 rounded-full blur-3xl" />
+          <div aria-hidden="true" className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-v79-teal/8 rounded-full blur-3xl" />
+          <div aria-hidden="true" className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-v79-coral/6 rounded-full blur-3xl" />
+          <div aria-hidden="true" className="absolute top-1/3 right-0 w-[300px] h-[300px] bg-v79-navy/6 dark:bg-v79-teal/8 rounded-full blur-3xl" />
           {/* Abstract Caribbean archipelago rendered as a network/node diagram */}
           <svg
             aria-hidden="true"
