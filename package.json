@@ -9,7 +9,10 @@
     "start": "node dist/server/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit && tsc -p tsconfig.server.json",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "predev": "node scripts/generate-product-pages.mjs",
+    "prebuild": "node scripts/generate-product-pages.mjs",
+    "test:seo": "node scripts/generate-product-pages.mjs --check"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",
