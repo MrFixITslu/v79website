@@ -405,7 +405,7 @@ export default function App() {
               <div key={sec.id} className="relative">
                 <div
                   className={`relative flex items-center rounded-lg cursor-pointer focus-within:ring-2 focus-within:ring-v79-teal/50 ${
-                    active ? "text-v79-teal font-bold" : "text-app-text-sec hover:text-app-text"
+                    active ? "text-v79-teal dark:text-v79-teal-light font-bold" : "text-app-text-sec hover:text-app-text"
                   }`}
                 >
                   {active && (
@@ -536,7 +536,7 @@ export default function App() {
                 <div key={sec.id}>
                   <div
                     className={`relative flex items-center rounded-xl ${
-                      active ? "text-v79-teal font-bold" : "text-app-text-sec hover:text-app-text hover:bg-app-aside-bg transition-colors"
+                      active ? "text-v79-teal dark:text-v79-teal-light font-bold" : "text-app-text-sec hover:text-app-text hover:bg-app-aside-bg transition-colors"
                     }`}
                   >
                     {active && (
@@ -644,13 +644,13 @@ export default function App() {
 
         <div className="w-full max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-app-border to-transparent" /></div>
 
-        <section id="about" className="scroll-mt-32">
+        <section id="about" className="defer-offscreen-paint scroll-mt-32">
           <AboutPage />
         </section>
 
         <div className="w-full max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-app-border to-transparent" /></div>
 
-        <section id="services" className="scroll-mt-32">
+        <section id="services" className="defer-offscreen-paint scroll-mt-32">
           <ServicesPage
             onNavigate={(v) => scrollTo(SECTIONS.some(s => s.id === v) ? v : "services")}
             openId={openServiceId}
@@ -660,13 +660,13 @@ export default function App() {
 
         <div className="w-full max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-app-border to-transparent" /></div>
 
-        <section id="industries" className="scroll-mt-32">
+        <section id="industries" className="defer-offscreen-paint scroll-mt-32">
           <IndustriesPage onNavigate={(v) => scrollTo(SECTIONS.some(s => s.id === v) ? v : "industries")} />
         </section>
 
         <div className="w-full max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-app-border to-transparent" /></div>
 
-        <section id="solutions" className="scroll-mt-32 max-w-7xl mx-auto px-6 lg:px-12 w-full">
+        <section id="solutions" className="defer-offscreen-paint scroll-mt-32 max-w-7xl mx-auto px-6 lg:px-12 w-full">
           <AnimatePresence mode="wait">
             {selectedCourse ? (
               <motion.div key="course" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.15 }}>
@@ -842,7 +842,7 @@ export default function App() {
 
         <div className="w-full max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-app-border to-transparent" /></div>
 
-        <section id="contact" className="scroll-mt-32">
+        <section id="contact" className="defer-offscreen-paint scroll-mt-32">
           <ContactPage />
         </section>
       </main>
@@ -863,20 +863,20 @@ export default function App() {
           <div className="space-y-2 text-xs">
             <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono text-[11px]">Services</div>
             <ul className="space-y-1.5 text-slate-600 dark:text-white/60 font-light">
-              <li><button onClick={() => scrollTo("services")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Cybersecurity</button></li>
-              <li><button onClick={() => scrollTo("services")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Cloud &amp; Backup</button></li>
-              <li><button onClick={() => scrollTo("services")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Managed IT Support</button></li>
-              <li><button onClick={() => scrollTo("services")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Custom Software</button></li>
+              <li><button onClick={() => scrollTo("services")} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Cybersecurity</button></li>
+              <li><button onClick={() => scrollTo("services")} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Cloud &amp; Backup</button></li>
+              <li><button onClick={() => scrollTo("services")} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Managed IT Support</button></li>
+              <li><button onClick={() => scrollTo("services")} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Custom Software</button></li>
             </ul>
           </div>
 
           <div className="space-y-2 text-xs">
             <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono text-[11px]">Industries</div>
             <ul className="space-y-1.5 text-slate-600 dark:text-white/60 font-light">
-              <li><button onClick={() => scrollTo("industries")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Small Business</button></li>
-              <li><button onClick={() => scrollTo("industries")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Government</button></li>
-              <li><button onClick={() => scrollTo("industries")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Healthcare</button></li>
-              <li><button onClick={() => scrollTo("industries")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Hospitality</button></li>
+              <li><button onClick={() => scrollTo("industries")} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Small Business</button></li>
+              <li><button onClick={() => scrollTo("industries")} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Government</button></li>
+              <li><button onClick={() => scrollTo("industries")} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Healthcare</button></li>
+              <li><button onClick={() => scrollTo("industries")} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Hospitality</button></li>
             </ul>
           </div>
 
@@ -885,7 +885,7 @@ export default function App() {
             <ul className="space-y-1.5 text-slate-600 dark:text-white/60 font-light">
               {SECTIONS.filter(s => ["about", "resources", "faq", "contact"].includes(s.id)).map(s => (
                 <li key={s.id}>
-                  <button onClick={() => scrollTo(s.id)} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">{s.label}</button>
+                  <button onClick={() => scrollTo(s.id)} className="inline-flex min-h-6 items-center py-1 hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">{s.label}</button>
                 </li>
               ))}
               <li><a href="/free-ai-prompting-guide" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Free AI Prompt Guide</a></li>
@@ -922,7 +922,7 @@ export default function App() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Chat with V79 Digital on WhatsApp"
-          className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-xl shadow-emerald-900/30 hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 group"
+          className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-sm shadow-xl shadow-emerald-900/30 hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 group"
         >
           <div className="relative">
             <MessageSquare className="w-5 h-5 text-white" />
@@ -938,7 +938,7 @@ export default function App() {
         <a
           id="mobile-call-btn"
           href="tel:+17587260035"
-          aria-label="Call Vision79 Digital at +1 758 726 0035"
+          aria-label="Call Office — Vision79 Digital, +1 758 726 0035"
           className="flex-1 min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-v79-navy dark:bg-v79-navy-light text-white text-xs font-bold shadow transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50"
         >
           <Phone className="w-4 h-4 text-v79-teal-light" />
@@ -950,7 +950,7 @@ export default function App() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Chat with V79 Digital on WhatsApp (opens in new tab)"
-          className="flex-1 min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+          className="flex-1 min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
         >
           <MessageSquare className="w-4 h-4 text-white" />
           <span>WhatsApp</span>

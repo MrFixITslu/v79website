@@ -72,6 +72,43 @@
     radial-gradient(circle at 80% 60%, rgba(232, 98, 47, 0.08) 0%, transparent 40%);
 }
 
+/* Mobile-only rendering optimisation: semantic section content remains in the DOM,
+   but Chrome can skip paint/layout offscreen. Each intrinsic block size is based on
+   measured live mobile geometry, preventing unpredictable scroll jumps. */
+@media (max-width: 639px) {
+  .defer-offscreen-paint {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 1200px;
+  }
+  #services-overview.defer-offscreen-paint { contain-intrinsic-size: auto 1516px; }
+  #why-v79.defer-offscreen-paint { contain-intrinsic-size: auto 1064px; }
+  #cost-of-downtime.defer-offscreen-paint { contain-intrinsic-size: auto 901px; }
+  #free-assessment.defer-offscreen-paint { contain-intrinsic-size: auto 972px; }
+  #about.defer-offscreen-paint { contain-intrinsic-size: auto 4325px; }
+  #services.defer-offscreen-paint { contain-intrinsic-size: auto 2950px; }
+  #industries.defer-offscreen-paint { contain-intrinsic-size: auto 1501px; }
+  #solutions.defer-offscreen-paint { contain-intrinsic-size: auto 2940px; }
+  #contact.defer-offscreen-paint { contain-intrinsic-size: auto 2190px; }
+}
+
+/* Desktop: reserve measured large-screen section geometry; real contents are
+   still in the DOM for search, accessibility, anchor links and navigation. */
+@media (min-width: 1280px) {
+  .defer-offscreen-paint {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 1200px;
+  }
+  #services-overview.defer-offscreen-paint { contain-intrinsic-size: auto 580px; }
+  #why-v79.defer-offscreen-paint { contain-intrinsic-size: auto 520px; }
+  #cost-of-downtime.defer-offscreen-paint { contain-intrinsic-size: auto 716px; }
+  #free-assessment.defer-offscreen-paint { contain-intrinsic-size: auto 570px; }
+  #about.defer-offscreen-paint { contain-intrinsic-size: auto 2229px; }
+  #services.defer-offscreen-paint { contain-intrinsic-size: auto 2089px; }
+  #industries.defer-offscreen-paint { contain-intrinsic-size: auto 889px; }
+  #solutions.defer-offscreen-paint { contain-intrinsic-size: auto 1522px; }
+  #contact.defer-offscreen-paint { contain-intrinsic-size: auto 1093px; }
+}
+
 @layer base {
   :root {
     --bg-app: #faf8f4; /* warm off-white — easier on eyes in bright Caribbean office light */
@@ -98,7 +135,7 @@
     --bg-aside: rgba(11, 31, 51, 0.35);
     --text-primary: #f4ecdc; /* warm sand-light for contrast on navy */
     --text-secondary: #a9bac8; /* muted cool gray */
-    --text-muted: #5f7488;
+    --text-muted: #a1b2c2;
     --border-color: rgba(79, 196, 184, 0.16); /* faint teal-tinted border */
     --glass-bg: rgba(22, 50, 77, 0.4); /* navy-light glass */
     --glass-border: rgba(79, 196, 184, 0.18);
