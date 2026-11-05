@@ -8,7 +8,7 @@ const TEAM = [
     name: "Neil Verdant",
     role: "Founder & Lead Systems Architect",
     bio: "More than 20 years of ICT experience across telecommunications, fibre networks, and enterprise technology.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/v79digital",
     email: "vision79slu@gmail.com",
     initials: "NV",
   },
@@ -79,7 +79,7 @@ export default function AboutPage() {
         </div>
         <div className="relative z-10 max-w-3xl mx-auto text-center space-y-4">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">About Vision79</span>
+            <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">About Vision79</span>
           </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
@@ -206,7 +206,7 @@ export default function AboutPage() {
           transition={{ duration: 0.5 }}
           className="text-center space-y-2"
         >
-          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">Why It Matters</span>
+          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">Why It Matters</span>
           <h2 className="text-3xl sm:text-4xl font-extrabold font-display text-app-text dark:text-white tracking-tight">The Challenge Facing Caribbean Organizations</h2>
           <p className="max-w-2xl mx-auto text-sm text-app-text-sec font-light leading-relaxed">
             Technology is critical to modern enterprise survival. Yet most Caribbean organizations are hamstrung by the same severe vulnerabilities.
@@ -276,7 +276,7 @@ export default function AboutPage() {
       {/* ── Team ──────────────────────────────────────────────────── */}
       <section className="px-6 lg:px-8 space-y-8 max-w-5xl mx-auto">
         <div className="text-center space-y-2">
-          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">The Team</span>
+          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal dark:text-v79-teal-light">The Team</span>
           <h2 className="text-3xl sm:text-4xl font-extrabold font-display text-app-text dark:text-white tracking-tight">The People Behind Vision79</h2>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -302,7 +302,7 @@ export default function AboutPage() {
               <p className="text-xs text-app-text-sec font-light leading-relaxed">{member.bio}</p>
               <div className="flex items-center gap-3 pt-1 border-t border-app-border">
                 {member.linkedin && (
-                  <a href={member.linkedin} target="_blank" rel="noopener noreferrer" className="text-app-text-muted hover:text-v79-teal transition">
+                  <a href={member.linkedin} target="_blank" rel="noopener noreferrer" aria-label="Visit V79 Digital on LinkedIn (opens in a new tab)" className="inline-flex min-w-6 min-h-6 items-center justify-center text-app-text-muted hover:text-v79-teal transition">
                     <Linkedin className="w-4 h-4" />
                   </a>
                 )}
