@@ -129,6 +129,7 @@ export function renderProduct(product) {
     '<meta name="twitter:card" content="summary_large_image">',
     '<link rel="icon" href="/favicon.ico">',
     '<script type="application/ld+json">' + structuredData + "</script>",
+    '<script defer src="/ga4-consent.js?v=20261105-ga4idcorrect"></script>',
     "<style>" + CSS + "</style></head><body>",
     '<header class="header"><div class="container header-inner"><a class="brand" href="/">V79 <span>Digital</span></a>',
     '<nav aria-label="Main navigation"><a href="/">Home</a><a href="/services">Services</a><a href="/solutions">Solutions</a><a href="/contact">Contact</a></nav></div></header>',
@@ -144,7 +145,7 @@ export function renderProduct(product) {
     '<p class="notice">Available features and access depend on the current release and your organisation’s subscription or eligibility. Contact V79 Digital for availability and pricing.</p></article>',
     "</section>",
     '<section class="container related"><h2>Explore the V79 ecosystem</h2><div class="related-links">' + related + "</div></section></main>",
-    '<footer><div class="container">V79 Digital · Caribbean business technology · <a href="/contact">Contact us</a> · <a href="/privacy">Privacy</a></div></footer>',
+    '<footer><div class="container">V79 Digital · Caribbean business technology · <a href="/contact">Contact us</a> · <a href="/privacy">Privacy</a> · <button type="button" data-v79-ga4-preferences style="border:0;background:none;color:#087b77;text-decoration:underline;cursor:pointer;font:inherit">Analytics preferences</button></div></footer>',
     "</body></html>",
   ].join("\n");
 }

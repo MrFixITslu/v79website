@@ -907,6 +907,7 @@ export default function App() {
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-end">
             <a href="/privacy" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Privacy Policy</a>
+            <button type="button" data-v79-ga4-preferences className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer">Analytics preferences</button>
             <a href="/terms" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Terms of Service</a>
             <a href="/data-deletion" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Data Deletion</a>
             <span>© 2026 V79 Digital. All rights reserved.</span>
