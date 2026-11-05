@@ -2,7 +2,7 @@
 (() => {
   "use strict";
 
-  const measurementId = "G-RY6Y7F15TN";
+  const measurementId = "G-51J5TCR1PM";
   const storageKey = "v79-public-analytics-consent-v1";
   const domain = "https://v79sl.com";
 

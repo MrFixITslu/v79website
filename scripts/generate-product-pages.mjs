@@ -129,7 +129,7 @@ export function renderProduct(product) {
     '<meta name="twitter:card" content="summary_large_image">',
     '<link rel="icon" href="/favicon.ico">',
     '<script type="application/ld+json">' + structuredData + "</script>",
-    '<script defer src="/ga4-consent.js?v=20261105"></script>',
+    '<script defer src="/ga4-consent.js?v=20261105-ga4idcorrect"></script>',
     "<style>" + CSS + "</style></head><body>",
     '<header class="header"><div class="container header-inner"><a class="brand" href="/">V79 <span>Digital</span></a>',
     '<nav aria-label="Main navigation"><a href="/">Home</a><a href="/services">Services</a><a href="/solutions">Solutions</a><a href="/contact">Contact</a></nav></div></header>',

@@ -82,8 +82,8 @@ test("opt-in loads GA4 exactly once, allows revocation, and excludes private URL
   b.buttons['[data-v79-ga4-choice="accept"]'].handler();
   assert.equal(b.storage.get("v79-public-analytics-consent-v1"), "granted");
   assert.equal(b.scripts.length, 1);
-  assert.match(b.scripts[0].src, /G-RY6Y7F15TN$/);
-  assert.equal(events(b, "config")[0][1], "G-RY6Y7F15TN");
+  assert.match(b.scripts[0].src, /G-51J5TCR1PM$/);
+  assert.equal(events(b, "config")[0][1], "G-51J5TCR1PM");
   assert.equal(events(b, "config")[0][2].send_page_view, false);
   assert.equal(events(b, "event").length, 1);
   b.window.history.pushState({}, "", "/solutions?utm_source=linkedin&password=sensitive");
