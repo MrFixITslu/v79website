@@ -95,12 +95,12 @@
     <p>For normal office runs, Cat6 or Cat6A copper cabling is common. Four-pair Ethernet channels are generally limited to <strong>100 metres, including patch cords</strong>. Fibre is often considered for longer distances, high interference or separate buildings. Outdoor routes require professional assessment.</p>
     <div class="cable-tool">
      <div class="cable-top"><label for="cableLength">Distance between devices</label><output for="cableLength" id="lengthValue">35 metres</output></div>
-     <input type="range" id="cableLength" min="5" max="150" step="5" value="35" aria-describedby="cableHelp">
+     <input type="range" id="cableLength" min="5" max="150" step="5" value="35" aria-describedby="cableHint">
      <div class="cable-scale" aria-hidden="true"><span>5 m</span><span>75 m</span><span>150 m</span></div>
      <label class="toggle-label"><input id="separateBuilding" type="checkbox"> The connection goes between separate buildings or outdoors</label>
      <div class="cable-response" role="status" aria-live="polite"><span class="cable-icon" id="cableIcon">✓</span><div><strong id="cableTitle">Copper may be suitable</strong><p id="cableDescription">35 metres is within the normal 100-metre four-pair Ethernet channel limit. Cable category, placement and installation still matter.</p></div></div>
     </div>
-    <p class="source-note">These are planning hints, not installation specifications. A competent installer must assess equipment, earthing, lightning protection, outdoor routing and fibre type. <a href="https://www.cisco.com/c/en/us/td/docs/sanity/suman/CPwE-Physical-Infrastructure_Feb2023.html" target="_blank" rel="noopener noreferrer">Source: Cisco infrastructure guide ↗</a></p>
+    <p class="source-note" id="cableHint">These are planning hints, not installation specifications. A competent installer must assess equipment, earthing, lightning protection, outdoor routing and fibre type. <a href="https://www.cisco.com/c/en/us/td/docs/sanity/suman/CPwE-Physical-Infrastructure_Feb2023.html" target="_blank" rel="noopener noreferrer">Source: Cisco infrastructure guide ↗</a></p>
    </section>
    <section id="power" class="section">
     <p class="section-label">PART 05 · STORM READINESS</p><h2>What happens when the power goes off?</h2>
