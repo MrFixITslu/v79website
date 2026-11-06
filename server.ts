@@ -1,3 +1,4 @@
+import { SERVICE_PAGES, PRODUCT_PAGES } from "./src/data/siteOfferings";
 import { cookie, cookieOptions, mountLearners, publicCourse, learner } from "./server/learners";
 import express from "express";
 import { atomicWrite, encryptionKey, seal, unseal, readJSON, writeJSON, transaction, storageReady } from "./server/persistence";
@@ -2888,8 +2889,8 @@ async function startServer() {
       const normalizedPath = (req.path || "/").replace(/\/+$/, "") || "/";
       const staticPages: Record<string, { title: string; description: string }> = {
         "/": {
-          title: "Managed IT, Cloud & Business Software Saint Lucia | V79 Digital",
-          description: "V79 Digital helps Saint Lucia businesses with managed IT, cloud services, cybersecurity, business software, automation, and practical technology training.",
+          title: "Managed IT, Business Software & AI in the Caribbean | V79 Digital",
+          description: "V79 Digital helps Caribbean businesses with practical managed ICT, cybersecurity, business software, AI and digital transformation.",
         },
         "/about": {
           title: "About V79 Digital | Caribbean ICT Experience",
@@ -2938,8 +2939,8 @@ async function startServer() {
       // The copy mirrors the visible sections and is replaced by React on mount.
       const seoFallbacks: Record<string, { heading: string; summary: string; points: string[] }> = {
         "/": {
-          heading: "Managed IT Services & Cybersecurity Built for the Caribbean",
-          summary: "V79 Digital helps Saint Lucia organisations manage, secure, and improve the technology their businesses depend on.",
+          heading: "Technology that helps your business move forward",
+          summary: "Managed IT, cybersecurity, practical software and AI guidance for businesses with Saint Lucia roots and Caribbean ambitions.",
           points: ["Managed IT support", "Cybersecurity", "Cloud and backup", "Networks and VoIP", "Business software", "Technology training"],
         },
         "/about": {
@@ -2993,6 +2994,32 @@ async function startServer() {
           points: ["Request V79 data deletion", "Disconnect provider accounts", "Revoke Google and YouTube access", "Provider-held data is managed separately"],
         },
       };
+
+      staticPages["/software"] = {
+        title: "V79 Business Software & Apps | V79 Digital",
+        description: "Discover V79 Hub, V79 Tiquet and practical business applications. See how V79 helps manage service requests and everyday operations."
+      };
+      seoFallbacks["/software"] = {
+        heading: "V79 Business Software & Apps",
+        summary: "Explore connected V79 applications, learn how they work and ask about current access options.",
+        points: ["V79 Hub", "V79 Tiquet", "POS", "FFPRO", "Marketing", "Academy"]
+      };
+      for (const service of SERVICE_PAGES) {
+        staticPages[service.path] = { title: service.metaTitle, description: service.metaDescription };
+        seoFallbacks[service.path] = {
+          heading: service.title,
+          summary: service.summary,
+          points: service.includes
+        };
+      }
+      for (const product of PRODUCT_PAGES) {
+        staticPages[product.path] = { title: product.metaTitle, description: product.metaDescription };
+        seoFallbacks[product.path] = {
+          heading: product.title,
+          summary: product.summary,
+          points: product.capabilities
+        };
+      }
 
       const articleSlug = (req.query.article as string) || (normalizedPath.startsWith("/resources/") ? normalizedPath.slice("/resources/".length) : "");
       if (articleSlug) {
@@ -3275,6 +3302,14 @@ ${fields.content || ""}`;
       console.error("Error generating sitemap articles:", err);
     }
 
+    const marketingOfferingsXml = [
+      "/software",
+      ...SERVICE_PAGES.map(page => page.path),
+      ...PRODUCT_PAGES.map(page => page.path)
+    ].map(routePath =>
+      "  <url>\\n    <loc>" + domain + routePath + "</loc>\\n    <changefreq>monthly</changefreq>\\n    <priority>0.8</priority>\\n  </url>\\n"
+    ).join("");
+
     const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -3343,7 +3378,7 @@ ${fields.content || ""}`;
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
-${articlesXml}</urlset>`;
+${marketingOfferingsXml}${articlesXml}</urlset>`;
     
     res.send(sitemap);
   });
@@ -3361,7 +3396,7 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
-    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
+    const allowed = ['/', '/services', '/software', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin', ...SERVICE_PAGES.map(page => page.path), ...PRODUCT_PAGES.map(page => page.path)];
     if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });

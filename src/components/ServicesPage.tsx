@@ -162,7 +162,7 @@ export default function ServicesPage({
             Services
           </h1>
           <p className="max-w-xl mx-auto text-sm text-app-text-sec font-light leading-relaxed">
-            Enterprise ICT services, cloud solutions, custom software, AI automation, and cybersecurity designed for Caribbean businesses.
+            Practical ICT support, cybersecurity, cloud, networks, software and AI services for Caribbean businesses.
           </p>
         </motion.div>
       </section>
@@ -219,14 +219,22 @@ export default function ServicesPage({
                       </div>
                       <div className="flex items-center justify-between pt-2 border-t border-app-border/50">
                         <span className={`text-[10px] font-mono font-bold uppercase tracking-widest ${s.iconColor} ${s.iconBg} border ${s.border} px-3 py-1 rounded-full`}>
-                          SLA: {s.sla}
+                          Response arrangements agreed by plan
                         </span>
-                        <button
-                          onClick={() => onNavigate("contact")}
-                          className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition cursor-pointer"
-                        >
-                          Get a quote <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-4">
+                          <a href={({
+                            "managed-it": "/services/managed-it-support",
+                            "cloud": "/services/cloud-backup",
+                            "software": "/services/business-software",
+                            "ai-automation": "/services/ai-automation",
+                            "networking": "/services/networks-voip",
+                            "cybersecurity": "/services/cybersecurity"
+                          } as Record<string, string>)[s.id] || "/services"}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-v79-teal hover:underline">
+                            Full details <ArrowRight className="h-3.5 w-3.5" />
+                          </a>
+                          <button onClick={() => onNavigate("contact")} className="text-xs font-semibold text-v79-teal hover:underline">Ask for a quote</button>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
