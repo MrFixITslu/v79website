@@ -11,3 +11,5 @@ Validation: final tsc --noEmit and npm run build passed in this isolated worktre
 Preservation: source files were matched to their exact Git blob hashes before the initial update. Development is based on local reconciled c39ea96, not a production rebuild. PR #76 documents that the deployed overlay is still not fully represented by Git. This branch does not resolve that release consolidation issue and must not be blindly merged/deployed. A production release requires source reconciliation and integrated-site preview against the protected live behaviour.
 
 Operational scope: no authentication, customer data, payments or API requests were added. No new dependency, hosted service, background task or monitoring promise. Rollback at this stage is discarding this isolated branch; production rollback is unchanged.
+
+Integrated release check: the existing overflow-x-hidden page wrapper prevented sticky positioning. A service-scoped overflow-x:clip fix restored the document scroll container. Retested desktop scene top=130px at the middle and assembled state, with reverse navigation. Final type check and build passed again after this CSS correction.
