@@ -17,6 +17,18 @@ const CHALLENGES = [
 
 const EMPLOYEE_RANGES = ["1–5", "6–20", "21–50", "51–100", "100+"];
 
+const TOPIC_PRESETS: Record<string, { action: string; challenge: string; message: string }> = {
+  "managed-it-support": { action: "Managed IT Services Inquiry", challenge: "Lack of IT support & maintenance", message: "I would like to discuss managed IT support." },
+  cybersecurity: { action: "Cybersecurity Audit Request", challenge: "Cybersecurity threats & data breaches", message: "I would like to discuss practical cybersecurity support." },
+  "cloud-backup": { action: "Book a Free ICT Consultation", challenge: "Disaster recovery & backup concerns", message: "I would like to discuss cloud services and backups." },
+  "networks-voip": { action: "Book a Free ICT Consultation", challenge: "Network speed or Wi-Fi issues", message: "I would like to discuss networks or VoIP." },
+  "ai-automation": { action: "Custom Software / AI Automation", challenge: "Other / Not sure yet", message: "I would like to discuss AI training or automation." },
+  "business-software": { action: "Custom Software / AI Automation", challenge: "Custom software or application needs", message: "I would like to discuss business software." },
+  software: { action: "Custom Software / AI Automation", challenge: "Custom software or application needs", message: "I would like to explore V79 software." },
+  hub: { action: "Custom Software / AI Automation", challenge: "Custom software or application needs", message: "I would like to ask about V79 Hub access." },
+  tiquet: { action: "Custom Software / AI Automation", challenge: "Custom software or application needs", message: "I would like to see V79 Tiquet." }
+};
+
 async function fetchRecaptchaToken(siteKey?: string): Promise<string> {
   if (!siteKey || typeof window === "undefined") return "";
   return new Promise<string>((resolve) => {
@@ -59,10 +71,12 @@ async function fetchRecaptchaToken(siteKey?: string): Promise<string> {
 }
 
 export default function ContactPage() {
+  const selectedTopic = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("topic") || "" : "";
+  const topicPreset = Object.prototype.hasOwnProperty.call(TOPIC_PRESETS, selectedTopic) ? TOPIC_PRESETS[selectedTopic] : undefined;
   const submissionId = useRef(crypto.randomUUID());
   const [form, setForm] = useState({
     name: "", company: "", email: "", phone: "",
-    employees: "", biggestChallenge: "", requestedAction: "", message: "",
+    employees: "", biggestChallenge: topicPreset?.challenge || "", requestedAction: topicPreset?.action || "", message: topicPreset?.message || "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);

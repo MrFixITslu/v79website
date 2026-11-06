@@ -6,36 +6,19 @@ import { Button } from "./ui/Button";
 const TEAM = [
   {
     name: "Neil Verdant",
-    role: "Founder & Lead Systems Architect",
-    bio: "More than 20 years of ICT experience across telecommunications, fibre networks, and enterprise technology.",
-    linkedin: "https://linkedin.com",
+    role: "Founder & Service Delivery Manager",
+    bio: "More than 20 years of experience in Caribbean telecommunications, ICT operations and service delivery.",
+    linkedin: null,
     email: "vision79slu@gmail.com",
+    isOpen: false,
     initials: "NV",
-  },
-  {
-    name: "Open Position",
-    role: "Senior Network Engineer",
-    bio: "We're growing our team. If you have hands-on experience with enterprise networking and fibre, we want to hear from you.",
-    linkedin: null,
-    email: "vision79slu@gmail.com",
-    isOpen: true,
-    initials: "?",
-  },
-  {
-    name: "Open Position",
-    role: "IT Solutions Consultant",
-    bio: "Join our growing team. Help Caribbean businesses identify their ICT challenges and present tailored solutions.",
-    linkedin: null,
-    email: "vision79slu@gmail.com",
-    isOpen: true,
-    initials: "?",
   },
 ];
 
 const VALUES = [
   { label: "Resiliency", icon: ShieldCheck },
-  { label: "Affordable Enterprise Class", icon: Compass },
-  { label: "Proactive Sovereignty", icon: Zap },
+  { label: "Clear Scope & Value", icon: Compass },
+  { label: "Security & Resilience", icon: Zap },
 ];
 
 // NOTE: "Why Choose Us" was merged into the "Why Choose Vision79 Digital"
@@ -58,10 +41,10 @@ const CARIBBEAN_BUILT = [
 ];
 
 const SERVICE_PROMISE = [
-  { title: "Professional Comms", desc: "Clear, prompt updates.", detail: "Every email, phone call, or dispatch is logged in our ticketing portal and explained in straightforward, jargon-free English." },
+  { title: "Professional Comms", desc: "Clear, prompt updates.", detail: "We explain how to request help, how updates will be shared and what response arrangements apply to your service plan." },
   { title: "Clear Expectations", desc: "Defined responsibilities.", detail: "We establish precise operational frameworks, ensuring you always know exactly who handles password resets, router reboots, or hardware upgrades." },
-  { title: "Transparent Reporting", desc: "Comprehensive audits.", detail: "On the first Monday of every month, retainers receive automated reports auditing ticket resolution speed, system utilization, server health, and backup verification logs." },
-  { title: "Security-First", desc: "Zero compromised shortcuts.", detail: "Every change we configure adheres to the principle of least-privilege, utilizing strong MFA, segregated WiFi access controls, and localized database firewalls." },
+  { title: "Transparent Reporting", desc: "Comprehensive audits.", detail: "Reporting, review intervals and the information included are agreed as part of your support arrangement." },
+  { title: "Security-First", desc: "Zero compromised shortcuts.", detail: "We recommend appropriate account protection, network controls and safe configuration practices for each environment." },
   { title: "Business-Focused", desc: "ROI-based choices.", detail: "We prioritize practical, cost-effective recommendations that improve your bottom line rather than upselling unnecessary technology." },
 ];
 
@@ -276,10 +259,10 @@ export default function AboutPage() {
       {/* ── Team ──────────────────────────────────────────────────── */}
       <section className="px-6 lg:px-8 space-y-8 max-w-5xl mx-auto">
         <div className="text-center space-y-2">
-          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">The Team</span>
-          <h2 className="text-3xl sm:text-4xl font-extrabold font-display text-app-text dark:text-white tracking-tight">The People Behind Vision79</h2>
+          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-v79-teal">Our approach</span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold font-display text-app-text dark:text-white tracking-tight">Meet the Founder</h2>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="mx-auto grid max-w-xl gap-5">
           {TEAM.map((member, i) => (
             <motion.div
               key={member.name + i}

@@ -1,6 +1,6 @@
 # V79 Digital (v79sl.com)
 
-> Managed IT, cloud services, cybersecurity, business software, automation, and practical technology training for organisations in Saint Lucia.
+> Practical managed IT, cybersecurity, cloud, business software and AI guidance rooted in Saint Lucia and serving suitable business needs across the Caribbean.
 
 ## Overview
 V79 Digital helps small and medium businesses improve how they use technology. The company combines Caribbean telecommunications and ICT experience with managed support, cloud services, network engineering, custom software, SaaS products, automation, and business-focused training.
@@ -27,6 +27,15 @@ V79 Digital helps small and medium businesses improve how they use technology. T
 ## Key URLs
 - Home: https://v79sl.com/
 - Services: https://v79sl.com/services
+- Managed IT Support: https://v79sl.com/services/managed-it-support
+- Cybersecurity: https://v79sl.com/services/cybersecurity
+- Cloud & Backup: https://v79sl.com/services/cloud-backup
+- Networks & VoIP: https://v79sl.com/services/networks-voip
+- AI & Automation: https://v79sl.com/services/ai-automation
+- Business Software & Development: https://v79sl.com/services/business-software
+- V79 Software & Apps: https://v79sl.com/software
+- V79 Hub: https://v79sl.com/software/hub
+- V79 Tiquet: https://v79sl.com/software/tiquet
 - About: https://v79sl.com/about
 - Solutions & SaaS: https://v79sl.com/solutions
 - V79 Digital Academy: https://academy.v79sl.com/

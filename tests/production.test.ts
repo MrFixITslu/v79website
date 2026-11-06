@@ -44,6 +44,26 @@ await test('production regression suite',{timeout:30000},async t=>{
   assert.ok(services.text.includes('IT, Cloud, Cybersecurity &amp; Automation Services | V79 Digital'));
   assert.ok(services.text.includes('Managed technology services are V79 Digital'));
   assert.ok(services.text.includes('href="/contact"'));
+  // New public marketing routes must work through the compiled Express
+  // server, not merely exist as client-side React components.
+  const offeringRoutes = [
+    '/software',
+    '/services/managed-it-support',
+    '/services/cybersecurity',
+    '/services/cloud-backup',
+    '/services/networks-voip',
+    '/services/ai-automation',
+    '/services/business-software',
+    '/software/hub',
+    '/software/tiquet'
+  ];
+  for (const route of offeringRoutes) {
+    const response = await anon.call(route);
+    assert.equal(response.status, 200, 'public route ' + route);
+    assert.ok(response.text.includes('<link rel="canonical" href="' + base + route + '" />'), 'canonical ' + route);
+    assert.ok(response.text.includes('<noscript><main'), 'crawlable no-JS copy ' + route);
+  }
+  assert.equal((await anon.call('/services/not-a-real-service')).status, 404);
   const blog=await fetch(base+'/blog',{redirect:'manual'});
   assert.equal(blog.status,301);
   assert.equal(blog.headers.get('location'),'/resources');
