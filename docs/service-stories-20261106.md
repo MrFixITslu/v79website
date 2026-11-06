@@ -1,0 +1,13 @@
+# Visual service stories — 6 November 2026
+
+Status: implemented and built on isolated feature/service-stories-20261106. No deployment, production container changes or database changes.
+
+Decision: reuse the approved lightweight SVG exploded-scroll direction. Compared static illustrated explanations, layered scroll stories and full 3D; selected layered stories for clarity and modest payload. Red-team: motion must not hide essential explanations, imply a guaranteed SLA or present an illustration as a live system. All content stays readable; mobile and reduced-motion use static compositions and manual controls; scenarios are explicitly illustrative.
+
+Six routes: managed-it-support, cybersecurity, cloud-backup, networks-voip, business-software, ai-automation. Reusable ServiceExperience mounts and cleans up native scroll/media/control listeners. Distinct rack, cloud, shield, support, application-stack and human-approval workflow diagrams. Homepage and services directory use a compact selector; the business assessment, existing service scopes, delivery process, FAQs, contact routes and product pages remain in place.
+
+Validation: final tsc --noEmit and npm run build passed in this isolated worktree using the existing reconciled development dependencies. Only changed UI compilation and review checks were run; previously passed unrelated application tests were not repeated. Review pages use the same authored markup, CSS and motion runtime as the React integration. Browser checks: desktop separation/reassembly/reverse, support/security/cloud/software/AI scenarios, power scenario and pause/reduced controls; all six narratives rendered in 320- and 390-pixel iframe layouts with no horizontal overflow. Static checks verified seven pages, unique IDs, chapter/component counts and internal links. Physical phones, OS preference switching, alternate browsers and full integrated-site visual regression remain unverified.
+
+Preservation: source files were matched to their exact Git blob hashes before the initial update. Development is based on local reconciled c39ea96, not a production rebuild. PR #76 documents that the deployed overlay is still not fully represented by Git. This branch does not resolve that release consolidation issue and must not be blindly merged/deployed. A production release requires source reconciliation and integrated-site preview against the protected live behaviour.
+
+Operational scope: no authentication, customer data, payments or API requests were added. No new dependency, hosted service, background task or monitoring promise. Rollback at this stage is discarding this isolated branch; production rollback is unchanged.

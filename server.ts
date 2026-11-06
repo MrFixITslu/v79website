@@ -3467,6 +3467,15 @@ ${marketingOfferingsXml}${articlesXml}</urlset>`;
     console.log("[Production] Serving static distribution assets.");
     const distPath = path.resolve(process.env.CLIENT_DIST || path.join(process.cwd(), "dist/client"));
     
+    // Approved lessons must open directly even from older shared article URLs.
+    app.get("/", (req, res, next) => {
+      if (req.query.article === "chatgpt-skills-how-to") {
+        res.setHeader("Cache-Control", "no-store");
+        return res.redirect(302, "/resources/chatgpt-skills-how-to.html");
+      }
+      next();
+    });
+
     // Dist hashed assets get 1-year immutable cache
     app.use("/assets", express.static(path.join(distPath, "assets"), {
       maxAge: "365d",

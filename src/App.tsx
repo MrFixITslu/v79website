@@ -629,6 +629,10 @@ export default function App() {
                 setTimeout(() => scrollTo(sec), 50);
               }}
               onSelectArticle={(slug) => {
+                if (slug === "chatgpt-skills-how-to") {
+                  window.location.assign("/resources/chatgpt-skills-how-to.html");
+                  return;
+                }
                 setSelectedArticleSlug(slug);
                 const url = new URL(window.location.href);
                 url.searchParams.set("article", slug);
@@ -833,6 +837,10 @@ export default function App() {
             <ResourcesPage
               onNavigate={(v) => scrollTo(SECTIONS.some(s => s.id === v) ? v : "resources")}
               onSelectArticle={(slug) => {
+                if (slug === "chatgpt-skills-how-to") {
+                  window.location.assign("/resources/chatgpt-skills-how-to.html");
+                  return;
+                }
                 setSelectedArticleSlug(slug);
                 const url = new URL(window.location.href);
                 url.searchParams.set("article", slug);
