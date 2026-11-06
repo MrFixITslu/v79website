@@ -1,0 +1,21 @@
+# Reusable interactive-post brief (copy for each post)
+
+- **Article title / slug:**
+- **Revision / review date / owner approval:**
+- **Audience:** Caribbean readers, about 18 years old; assume no technical expertise.
+- **What reader will achieve in 10–15 minutes:**
+- **Three practical learning outcomes:**
+- **What they need to begin (accounts, access, prerequisites):**
+- **Source-of-truth URLs and last-verified date:**
+- **Plan A / B / C with pros and cons:**
+- **/REDTEAM findings and mitigations:**
+- **Step-by-step outline (numbered):**
+- **Original visual or verified screenshot per key step:** alt text; explain “illustration” vs “screenshot”; original/licensing evidence.
+- **Interactive activities and expected results:** clicks, copy, quiz, checker; mobile and keyboard.
+- **Troubleshooting and safety notes:**
+- **CTA:** open relevant official product; no share to read.
+- **Share:** optional, after content.
+- **SEO:** article title, description, canonical, structured data, alt text, noindex on preview.
+- **Testing:** content, mobile 360px+, keyboard, reduced motion, no-JS reading, external links, security, page health.
+- **Preview location (noindex) / production location after approval:**
+- **Next step:** stop and request the owner's explicit approval before another post.
