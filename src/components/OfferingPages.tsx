@@ -1,3 +1,4 @@
+import { ServiceExperience } from "./ServiceExperience";
 import {
   ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, CheckCircle2,
   ClipboardCheck, Headphones, Layers, MessageSquareText, ShieldCheck,
@@ -59,6 +60,8 @@ export function ServiceDetailPage({ page }: { page: ServicePage }) {
           </aside>
         </div>
       </header>
+
+      <ServiceExperience key={page.slug} slug={page.slug} />
 
       <section aria-labelledby="included-heading" className="mx-auto grid max-w-7xl gap-12 px-6 py-20 lg:grid-cols-[1fr_0.72fr] lg:px-12">
         <div>

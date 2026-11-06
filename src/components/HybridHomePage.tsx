@@ -1,12 +1,11 @@
+import { ServiceSelector } from "./ServiceExperience";
 import { useState } from "react";
 import {
-  ArrowRight, ArrowUpRight, BookOpen, CheckCircle2, ChevronRight, Cloud,
-  Headphones, LockKeyhole, MessageSquareText, Network, ShieldCheck,
-  Sparkles, Workflow, Wrench, MonitorCheck, MapPin, ClipboardList
+  ArrowRight, ArrowUpRight, BookOpen, CheckCircle2, ChevronRight,
+  LockKeyhole, MessageSquareText,
+  Wrench, MonitorCheck, MapPin, ClipboardList
 } from "lucide-react";
-import { SERVICE_PAGES } from "../data/siteOfferings";
 
-const ICONS = [Headphones, ShieldCheck, Cloud, Network, Sparkles, Workflow];
 
 const NEEDS = [
   {
@@ -149,7 +148,7 @@ export default function HybridHomePage() {
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-v79-teal-dark dark:text-v79-teal-light">Start with the problem</p>
           <h2 id="needs-heading" className="mt-3 font-display text-3xl font-extrabold text-app-text sm:text-4xl dark:text-white">What would you like to improve?</h2>
-          <p className="mt-3 text-app-text-sec">Choose a challenge to see a sensible first step. You can still explore every service below.</p>
+          <p className="mt-3 text-app-text-sec">Choose a challenge to see a sensible first step. Explore a visual explanation of each solution below.</p>
         </div>
         <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_1.05fr]">
           <div className="grid gap-3" role="group" aria-label="Choose a business challenge">
@@ -183,21 +182,7 @@ export default function HybridHomePage() {
             <h2 id="services-heading" className="mt-3 font-display text-3xl font-extrabold tracking-tight text-app-text sm:text-4xl dark:text-white">The right help, without the jargon.</h2>
             <p className="mt-3 text-app-text-sec">From day-to-day support to smarter ways of working, explore the service that fits your needs.</p>
           </div>
-          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {SERVICE_PAGES.map((service, i) => {
-              const Icon = ICONS[i] || Wrench;
-              return (
-                <article key={service.slug} className="group flex h-full flex-col rounded-2xl border border-app-border bg-app-bg p-6 transition hover:-translate-y-0.5 hover:border-v79-teal/40 hover:shadow-lg motion-reduce:transform-none">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-v79-teal/10 text-v79-teal-dark dark:text-v79-teal-light"><Icon aria-hidden="true" className="h-6 w-6" /></div>
-                  <h3 className="mt-6 font-display text-xl font-bold text-app-text dark:text-white">{service.title}</h3>
-                  <p className="mt-3 flex-1 text-sm leading-7 text-app-text-sec">{service.summary}</p>
-                  <a href={service.path} className="mt-7 inline-flex min-h-11 items-center gap-2 self-start text-sm font-semibold text-v79-teal-dark dark:text-v79-teal-light hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v79-teal">
-                    Learn more <ArrowRight aria-hidden="true" className="h-4 w-4" />
-                  </a>
-                </article>
-              );
-            })}
-          </div>
+          <div className="mt-8"><ServiceSelector /></div>
         </div>
       </section>
 
