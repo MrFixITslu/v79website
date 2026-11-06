@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="theme-color" content="#092d36">
+<title>Design a Safer Small-Business Network | V79 Digital — Review Preview</title>
+<meta name="description" content="An interactive guide for Caribbean businesses: learn network basics, test guest Wi-Fi isolation, plan cabling and power protection, and build your own checklist.">
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="./network-design-v1.css">
+<script defer src="./network-design-v1.js"></script>
+</head>
+<body>
+<a class="skip" href="#lesson">Skip to lesson</a>
+<header class="site-header">
+ <a class="brand" href="https://v79sl.com" aria-label="Vision79 Digital homepage"><span class="mark">V<span>79</span></span><span class="brand-copy">DIGITAL<span class="brand-sub">Practical technology</span></span></a>
+ <div class="right-head"><span class="preview-label">REVIEW PREVIEW · V0.1</span><a class="home-link" href="https://v79sl.com/resources">All resources <span aria-hidden="true">↗</span></a></div>
+</header>
+<main id="lesson">
+ <header class="hero page-width">
+  <div class="hero-copy">
+   <p class="eyebrow"><span class="small-dot"></span> LEARN BY DOING <span class="mid-dot">·</span> CARIBBEAN SMALL BUSINESS</p>
+   <h1>Build a network that <span>works and stays safe.</span></h1>
+   <p class="lede">Imagine your café, shop or office has internet, staff laptops, guest Wi-Fi and a card machine. Where should everything connect? You'll design a safer network, test common mistakes and leave with a useful plan.</p>
+   <div class="hero-actions"><a href="#basics" class="button primary">Start learning <span aria-hidden="true">→</span></a><a href="#simulator" class="button secondary">Try the network simulator</a></div>
+   <div class="meta"><span>No technical experience needed</span><b>·</b><span>15-minute practical</span><b>·</b><span>Reviewed 6 Nov 2026</span></div>
+  </div>
+  <figure class="hero-illustration">
+    <svg class="hero-art" viewBox="0 0 560 425" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="networkArtTitle networkArtDesc">
+      <title id="networkArtTitle">Simple illustrated small-business network</title>
+      <desc id="networkArtDesc">Internet connects to a firewall and router, then a managed switch, which serves staff devices, a guest wireless network and a payment terminal. A power battery protects the network equipment.</desc>
+      <rect x="10" y="20" width="540" height="390" rx="32" fill="#e5f2ed"/><circle cx="515" cy="83" r="40" fill="#d3e6de"/><circle cx="63" cy="355" r="42" fill="#d3e6de"/>
+      <path d="M90 105 H210 M328 105 H448 M280 150 V215 M280 250 V295 M280 315 H125 V335 M280 315 H280 V335 M280 315 H430 V335" fill="none" stroke="#77b5a5" stroke-width="4" stroke-linecap="round" stroke-dasharray="9 9" class="art-path"/>
+      <g class="art-float"><rect x="27" y="65" width="128" height="80" rx="16" fill="#fff" stroke="#bdd7cc"/><text x="91" y="100" text-anchor="middle" font-size="29">☁</text><text x="91" y="122" text-anchor="middle" font-size="13" fill="#21464e" font-family="Arial" font-weight="700">Internet</text></g>
+      <rect x="209" y="55" width="141" height="101" rx="18" fill="#113e46"/><text x="279" y="94" text-anchor="middle" font-size="30" fill="#b0e6ce">⬡</text><text x="279" y="119" text-anchor="middle" fill="#fff" font-size="14" font-family="Arial" font-weight="700">Firewall + router</text><text x="279" y="137" text-anchor="middle" fill="#b7d7d2" font-size="10" font-family="Arial">Checks what gets through</text>
+      <rect x="420" y="65" width="120" height="80" rx="15" fill="#fff" stroke="#bdd7cc"/><text x="480" y="100" text-anchor="middle" font-size="25">🔒</text><text x="480" y="122" text-anchor="middle" font-size="12" font-family="Arial" fill="#21464e" font-weight="700">Protected</text>
+      <rect x="209" y="212" width="142" height="57" rx="13" fill="#fff" stroke="#b7d2c6"/><text x="280" y="235" text-anchor="middle" font-size="18" font-family="Arial" fill="#0c7770" font-weight="700">▤ ▤ ▤ ▤</text><text x="280" y="256" text-anchor="middle" font-size="12" font-family="Arial" fill="#21464e" font-weight="700">Managed switch</text>
+      <g class="art-float-delayed"><rect x="36" y="332" width="167" height="63" rx="12" fill="#fff" stroke="#bdd7cc"/><text x="119" y="355" text-anchor="middle" font-size="21">💻</text><text x="119" y="377" text-anchor="middle" font-size="12" font-family="Arial" fill="#21464e">Staff devices</text></g>
+      <rect x="218" y="332" width="125" height="63" rx="12" fill="#fff" stroke="#bdd7cc"/><text x="281" y="355" text-anchor="middle" font-size="20">📶</text><text x="281" y="377" text-anchor="middle" font-size="11" font-family="Arial" fill="#21464e">Guest Wi-Fi</text>
+      <rect x="357" y="332" width="167" height="63" rx="12" fill="#fff" stroke="#bdd7cc"/><text x="440" y="355" text-anchor="middle" font-size="21">💳</text><text x="440" y="377" text-anchor="middle" font-size="12" font-family="Arial" fill="#21464e">Payment terminal</text>
+    </svg>
+    <figcaption>Original teaching illustration, not a diagram of a real customer network. Exact wiring and device roles vary.</figcaption>
+  </figure>
+ </header>
+ <div class="outcomes page-width">
+  <div class="outcome"><span class="outcome-icon">01</span><div><strong>Understand the parts</strong><span>Router, firewall, switch, Wi-Fi</span></div></div>
+  <div class="outcome"><span class="outcome-icon">02</span><div><strong>Spot risky setups</strong><span>Separate guests and payments</span></div></div>
+  <div class="outcome"><span class="outcome-icon">03</span><div><strong>Make a plan</strong><span>Practical steps for your business</span></div></div>
+ </div>
+ <div class="layout page-width">
+  <aside class="side" aria-label="Lesson contents"><div class="sticky"><p class="side-title">IN THIS LESSON</p><nav>
+    <a href="#basics">01 · Network basics</a><a href="#pieces">02 · Know your devices</a><a href="#simulator">03 · Test guest isolation</a><a href="#cabling">04 · Choose cabling</a><a href="#power">05 · Prepare for outages</a><a href="#planner">06 · Build your plan</a><a href="#test">07 · Mini quiz</a><a href="#sources">08 · Sources & share</a>
+   </nav><div class="side-note"><span>YOUR GOAL</span><p>Leave with a network checklist you can discuss with your IT provider.</p></div></div></aside>
+  <article class="article">
+   <section id="basics" class="section">
+    <p class="section-label">PART 01 · THE IDEA</p><h2>A business network is like a small town.</h2>
+    <p class="intro">The internet is the road into town. Your firewall is the security gate. Your switch connects different buildings, and Wi-Fi gives mobile devices a way in.</p>
+    <p>A strong network does two jobs: <strong>people can work</strong> and <strong>people only reach what they are allowed to use</strong>. Internet speed alone does not solve every problem.</p>
+    <div class="before-after">
+      <div class="example-before"><span class="tag muted">RISKY SETUP</span><p>Guest phones, staff computers and the payment terminal all share one network.</p><span class="note-small">One compromised device could reach places it should not.</span></div>
+      <div class="example-after"><span class="tag green">SAFER DESIGN</span><p>Staff, guests and payment devices are separated, with rules controlling traffic.</p><span class="note-small">Separating networks reduces what one device can access.</span></div>
+    </div>
+    <div class="callout"><strong>Important:</strong> This is a planning lesson, not a live network configuration tool. Network rules should be changed by someone with authorised access, a backup and a recovery plan.</div>
+   </section>
+   <section id="pieces" class="section">
+    <p class="section-label">PART 02 · IDENTIFY</p><h2>Tap each piece to see what it does.</h2><p>These items sometimes come combined in one physical box. Their jobs still matter.</p>
+    <div class="device-grid" id="deviceGrid" role="group" aria-label="Choose a network device">
+      <button type="button" class="device-choice selected" data-device="router" aria-pressed="true"><span aria-hidden="true">↔</span><strong>Router</strong><small>Directs traffic</small></button>
+      <button type="button" class="device-choice" data-device="firewall" aria-pressed="false"><span aria-hidden="true">⬡</span><strong>Firewall</strong><small>Checks access</small></button>
+      <button type="button" class="device-choice" data-device="switch" aria-pressed="false"><span aria-hidden="true">▤</span><strong>Switch</strong><small>Connects devices</small></button>
+      <button type="button" class="device-choice" data-device="ap" aria-pressed="false"><span aria-hidden="true">◉</span><strong>Access point</strong><small>Provides Wi-Fi</small></button>
+    </div>
+    <div class="device-explainer" role="status" aria-live="polite"><div class="device-explainer-symbol" id="deviceIcon" aria-hidden="true">↔</div><div><strong id="deviceTitle">Router</strong><p id="deviceDetail">Moves information between your local network and other networks, usually including the internet.</p><p class="device-why" id="deviceExample">Example: your office computer opens a website.</p></div></div>
+    <h3>Five steps to a better network</h3>
+    <ol class="reader-steps"><li>Write down every device: staff laptops, printers, payment terminals, cameras and guest devices.</li><li>Draw a simple map showing how devices connect to the router or switch.</li><li>Protect the router: update its software, change default admin credentials and use WPA2 or WPA3 for Wi-Fi.</li><li>Create separate guest access; isolate payment and other sensitive devices based on their requirements.</li><li>Test Wi-Fi coverage and connection quality in real rooms, then document changes.</li></ol>
+   </section>
+   <section id="simulator" class="section">
+    <p class="section-label">PART 03 · INTERACTIVE SECURITY LAB</p><h2>Can a visitor's phone reach your payment system?</h2>
+    <p>Try both settings below. This is a <strong>simulation</strong>, not a test of your real network. A VLAN is one way to create separate network groups; firewall rules decide whether those groups can communicate.</p>
+    <div class="simulation">
+     <div class="sim-top"><span>EXAMPLE: COFFEE SHOP NETWORK</span><span class="sim-label">SAFE PRACTICE</span></div>
+     <div class="sim-scene">
+      <div class="sim-device"><span aria-hidden="true">📱</span><strong>Guest phone</strong><small>Guest Wi-Fi</small></div>
+      <div class="sim-wire" aria-hidden="true"><span id="simSignal" class="signal-line"></span></div>
+      <div class="sim-device"><span aria-hidden="true">💳</span><strong>Payment terminal</strong><small>Private network</small></div>
+     </div>
+     <div class="sim-controls"><label for="segmentation">Guest network access rules</label><select id="segmentation"><option value="protected">Isolated (recommended)</option><option value="open">No isolation (unsafe example)</option></select><button class="button primary" type="button" id="simulateButton">Test guest → payment access</button></div>
+     <div id="simResult" class="sim-result safe" role="status" aria-live="polite"><strong>Ready to test.</strong><p>Choose a rule, then run the simulated connection attempt.</p></div>
+    </div>
+    <div class="notice"><strong>Remember:</strong> A separate Wi-Fi name alone may not provide isolation. Ask whether the guest network blocks access to your staff, POS and management devices. <a href="https://www.ftc.gov/business-guidance/small-businesses/cybersecurity" target="_blank" rel="noopener noreferrer">FTC small-business advice ↗</a></div>
+   </section>
+   <section id="cabling" class="section">
+    <p class="section-label">PART 04 · CONNECTIONS</p><h2>Should you use copper cable or fibre?</h2>
+    <p>For normal office runs, Cat6 or Cat6A copper cabling is common. Four-pair Ethernet channels are generally limited to <strong>100 metres, including patch cords</strong>. Fibre is often considered for longer distances, high interference or separate buildings. Outdoor routes require professional assessment.</p>
+    <div class="cable-tool">
+     <div class="cable-top"><label for="cableLength">Distance between devices</label><output for="cableLength" id="lengthValue">35 metres</output></div>
+     <input type="range" id="cableLength" min="5" max="150" step="5" value="35" aria-describedby="cableHint">
+     <div class="cable-scale" aria-hidden="true"><span>5 m</span><span>75 m</span><span>150 m</span></div>
+     <label class="toggle-label"><input id="separateBuilding" type="checkbox"> The connection goes between separate buildings or outdoors</label>
+     <div class="cable-response" role="status" aria-live="polite"><span class="cable-icon" id="cableIcon">✓</span><div><strong id="cableTitle">Copper may be suitable</strong><p id="cableDescription">35 metres is within the normal 100-metre four-pair Ethernet channel limit. Cable category, placement and installation still matter.</p></div></div>
+    </div>
+    <p class="source-note" id="cableHint">These are planning hints, not installation specifications. A competent installer must assess equipment, earthing, lightning protection, outdoor routing and fibre type. <a href="https://www.cisco.com/c/en/us/td/docs/sanity/suman/CPwE-Physical-Infrastructure_Feb2023.html" target="_blank" rel="noopener noreferrer">Source: Cisco infrastructure guide ↗</a></p>
+   </section>
+   <section id="power" class="section">
+    <p class="section-label">PART 05 · STORM READINESS</p><h2>What happens when the power goes off?</h2>
+    <p>In the Caribbean, network planning should consider outages and storm disruptions. A <strong>UPS</strong> is a battery backup that gives equipment time to keep running briefly or shut down safely. It cannot guarantee internet service when your provider's network is down.</p>
+    <div class="power-lab"><div class="power-illustration" aria-hidden="true"><span class="power-pill">⚡ Power interruption</span><div class="power-devices"><span>🌐 Router</span><span>▤ Switch</span><span>📶 Wi-Fi</span></div><div id="powerLight" class="power-light"></div></div>
+    <div class="power-options"><strong>Which items are connected to backup power?</strong><label><input type="checkbox" class="power-check" value="router" checked> Router / firewall</label><label><input type="checkbox" class="power-check" value="switch" checked> Main switch</label><label><input type="checkbox" class="power-check" value="wifi"> Access point</label><p id="powerFeedback" role="status" aria-live="polite">2 of 3 core network components are on your example UPS. Without Wi-Fi power, wireless users lose local access during an outage.</p></div></div>
+    <div class="notice"><strong>Check the right numbers:</strong> Add the power draw of each connected device, allow headroom, then check the UPS's <strong>watt rating</strong> and manufacturer's <strong>runtime chart</strong>. A VA number alone cannot tell you how long it will run. <a href="https://www.eaton.com/us/en-us/products/backup-power-ups-surge-it-power-distribution/backup-power-ups/ups-sizing-guide.html" target="_blank" rel="noopener noreferrer">Eaton sizing guide ↗</a></div>
+   </section>
+   <section id="planner" class="section lab-section">
+    <p class="section-label">PART 06 · YOUR TURN</p><h2>Create your first network action plan.</h2>
+    <p>Choose what describes your business. The tool makes a starting checklist you can copy into your notes. <strong>Nothing is uploaded or saved</strong> by this lesson.</p>
+    <div class="builder"><div class="builder-fields">
+     <label for="businessType">What kind of business?</label><select id="businessType"><option value="small office">Small office</option><option value="shop or café">Shop or café</option><option value="guesthouse or hotel">Guesthouse or hotel</option><option value="training centre">Training centre</option></select>
+     <label for="deviceCount">How many devices?</label><select id="deviceCount"><option value="1–10">1–10</option><option value="11–25">11–25</option><option value="26–50">26–50</option><option value="over 50">Over 50</option></select>
+     <label for="guestUse">Do customers need Wi-Fi?</label><select id="guestUse"><option value="yes">Yes</option><option value="no">No</option></select>
+     <label for="paymentUse">Do you use a card/POS system?</label><select id="paymentUse"><option value="yes">Yes</option><option value="no">No</option></select>
+     <label for="outageUse">Do outages affect you?</label><select id="outageUse"><option value="yes">Yes or sometimes</option><option value="no">Rarely</option></select>
+    </div><div class="builder-result"><div class="result-head"><span>YOUR PRACTICAL CHECKLIST</span><button type="button" class="mini-button" id="copyPlan">Copy plan ↗</button></div><pre id="planOutput" aria-live="polite">Building your plan…</pre><p class="copy-status" id="copyPlanStatus" role="status" aria-live="polite"></p></div></div>
+    <div class="try-row"><span class="try-icon">→</span><p><strong>Try it yourself:</strong> Copy the plan and review it with a trusted IT person before buying equipment or changing network settings.</p></div>
+   </section>
+   <section id="test" class="section">
+    <p class="section-label">PART 07 · QUICK CHECK</p><h2>Can you make the safe choice?</h2>
+    <p>You do not need a perfect score. Each question teaches one useful idea.</p>
+    <div class="checklist"><div class="check-head"><strong>Your practical checklist</strong><span id="progressText">0 of 4 done</span></div><div class="bar"><span id="progressFill"></span></div>
+      <label><input type="checkbox" class="task-check"> I can name the router, firewall, switch and access point.</label>
+      <label><input type="checkbox" class="task-check"> I tested isolated versus open guest Wi-Fi.</label>
+      <label><input type="checkbox" class="task-check"> I checked the copper/fibre distance tool.</label>
+      <label><input type="checkbox" class="task-check"> I copied or reviewed my network plan.</label>
+      <button type="button" class="text-button" id="resetTasks">Reset checklist</button>
+    </div>
+    <form id="quiz">
+      <fieldset class="question"><legend>1. What should guest Wi-Fi normally be able to access?</legend><label><input type="radio" name="q1" value="a"> Your business POS terminals</label><label><input type="radio" name="q1" value="b"> The internet, not your sensitive business networks</label><label><input type="radio" name="q1" value="c"> The network's admin settings</label></fieldset>
+      <fieldset class="question"><legend>2. What is the usual maximum four-pair copper Ethernet channel length?</legend><label><input type="radio" name="q2" value="a"> 100 metres, including patch cords</label><label><input type="radio" name="q2" value="b"> 500 metres</label><label><input type="radio" name="q2" value="c"> Any distance</label></fieldset>
+      <fieldset class="question"><legend>3. What should you check when choosing a UPS?</legend><label><input type="radio" name="q3" value="a"> Only the outside colour</label><label><input type="radio" name="q3" value="b"> Only its VA label</label><label><input type="radio" name="q3" value="c"> The load, watt rating and runtime chart</label></fieldset>
+      <fieldset class="question"><legend>4. What is the safest first step before changing firewall rules?</legend><label><input type="radio" name="q4" value="a"> Change everything at once</label><label><input type="radio" name="q4" value="b"> Make a backup and plan a rollback</label><label><input type="radio" name="q4" value="c"> Disable logging</label></fieldset>
+      <div class="quiz-buttons"><button type="submit" class="button primary">Check my answers</button><button type="reset" class="button secondary">Try again</button></div><p id="quizResult" class="quiz-result" aria-live="polite" role="status"></p>
+    </form>
+   </section>
+   <section id="sources" class="section">
+    <p class="section-label">PART 08 · KEEP LEARNING</p><h2>Useful sources and next steps</h2>
+    <div class="faqs">
+     <details><summary>Do I need an expensive firewall?</summary><p>Not necessarily. Start with your real risks, supported equipment, good updates, strong passwords, guest separation, MFA and regular backups. Avoid buying more features than you can maintain.</p></details>
+     <details><summary>Does a second Wi-Fi name mean my guests are isolated?</summary><p>No. Guest isolation depends on the underlying network design and access rules, not just the network name.</p></details>
+     <details><summary>Will a UPS keep the internet working during a storm?</summary><p>It helps your equipment stay powered for a limited time, but the internet provider's connection may still fail. Consider a tested backup connection for critical operations.</p></details>
+    </div>
+    <div class="source-box"><strong>Sources checked 6 November 2026</strong><p><a href="https://www.ftc.gov/business-guidance/small-businesses/cybersecurity" target="_blank" rel="noopener noreferrer">FTC — Cybersecurity for Small Business</a> · <a href="https://csrc.nist.gov/pubs/cswp/50/small-business-cybersecurity-non-employer-firms/final" target="_blank" rel="noopener noreferrer">NIST — Small Business Cybersecurity</a> · <a href="https://www.cisco.com/c/en/us/td/docs/sanity/suman/CPwE-Physical-Infrastructure_Feb2023.html" target="_blank" rel="noopener noreferrer">Cisco — Copper and fibre considerations</a> · <a href="https://www.eaton.com/us/en-us/products/backup-power-ups-surge-it-power-distribution/backup-power-ups/ups-sizing-guide.html" target="_blank" rel="noopener noreferrer">Eaton — UPS sizing</a></p></div>
+   </section>
+   <div class="finish"><div class="finish-icon">✓</div><h2>You have a practical network plan.</h2><p>Start with one safer change, test it, document it, then move on. For sensitive networks, let an authorised technician implement the final design.</p><a class="button primary" href="https://v79sl.com/contact">Ask V79 Digital a question <span aria-hidden="true">↗</span></a></div>
+   <div class="share-at-end"><div><h2>Found this lesson useful?</h2><p>Reading and learning are free. Sharing is completely optional.</p></div><div class="share-actions"><button class="button secondary" type="button" id="shareLink">Copy article link</button><button class="button primary" type="button" id="nativeShare">Share if you want</button></div><p id="shareStatus" role="status" aria-live="polite"></p></div>
+  </article>
+ </div>
+</main>
+<footer class="site-footer"><div class="page-width"><div class="footer-main"><div><div class="footer-brand">V<span>79</span> <strong>DIGITAL</strong></div><p>Technology explained so you can use it.</p></div><a href="https://v79sl.com/resources">Explore more free resources →</a></div><div class="footer-legal"><span>© V79 Digital · Educational content only</span><span>This simulation does not change real network settings.</span></div></div></footer>
+</body>
+</html>
