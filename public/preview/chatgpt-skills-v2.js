@@ -193,7 +193,8 @@
   });
 
   /* Optional sharing, placed after all article content. */
-  const liveUrl = location.pathname.startsWith("/preview/")
+  const isPreview = Boolean(document.querySelector('meta[name="robots"][content*="noindex"]'));
+  const liveUrl = isPreview
     ? (location.origin + location.pathname)
     : "https://v79sl.com/?article=chatgpt-skills-how-to";
   $("shareLink").addEventListener("click", async () => {
