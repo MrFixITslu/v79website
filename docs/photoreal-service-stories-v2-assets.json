@@ -1,0 +1,27 @@
+[
+  {
+    "path": "public/illustrations/service-stories-v2/cloud-equipment.webp",
+    "bytes": 158092,
+    "sha256": "fb64f28995e4f1052b87d9c413f9d12df3dff72a6a79d26f1f614cc466ea2b0b"
+  },
+  {
+    "path": "public/illustrations/service-stories-v2/human-review.webp",
+    "bytes": 202072,
+    "sha256": "1e3cba44e59e6e49cb7b457c89d02d0d16547e34e3a08b248d1db73ea3fedf5c"
+  },
+  {
+    "path": "public/illustrations/service-stories-v2/network-hardware.webp",
+    "bytes": 180034,
+    "sha256": "dc03f7e3f19e2335a04247ad96e70020503c6acc7fec80cde460735b2b310632"
+  },
+  {
+    "path": "public/illustrations/service-stories-v2/security-equipment.webp",
+    "bytes": 222866,
+    "sha256": "43cbc738d7064d8fd5b4565d57a7fa0b3e7db82f554c8f5baf747701c5be815b"
+  },
+  {
+    "path": "public/illustrations/service-stories-v2/support-workplace.webp",
+    "bytes": 243810,
+    "sha256": "01621cf8929fda52c61e4d19b27fd64989005e17481929bab706c79610b609d6"
+  }
+]
