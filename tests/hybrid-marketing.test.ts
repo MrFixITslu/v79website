@@ -41,8 +41,10 @@ test("homepage has genuine selectable guidance and links to real detail routes",
   assert.match(home, /aria-pressed=\{needId === need\.id\}/);
   assert.match(home, /aria-pressed=\{tourId === step\.id\}/);
   assert.match(home, /aria-live="polite"/);
-  assert.match(home, /SERVICE_PAGES\.map/);
-  assert.match(home, /href=\{service\.path\}/);
+  const selector = read("src/components/ServiceExperience.tsx");
+  assert.match(home, /<ServiceSelector \/>/);
+  const rendered = renderToStaticMarkup(React.createElement(HybridHomePage));
+  for (const service of SERVICE_PAGES) assert.ok(rendered.includes('href="' + service.path + '"'), "Missing service navigation: " + service.path);
   assert.match(home, /Illustrated workflow · not a product screenshot/);
   assert.match(home, /href="\/resources"/);
   assert.match(home, /focus-visible:outline/);
