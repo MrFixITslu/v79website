@@ -9,7 +9,7 @@
     "start": "node dist/server/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit && tsc -p tsconfig.server.json",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import ./tests/register-css.mjs --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",

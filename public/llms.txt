@@ -25,21 +25,21 @@ V79 Digital helps small and medium businesses improve how they use technology. T
 8. **ICT Health Assessment**: Formal technical assessments are scoped to the organisation and quoted after discovery.
 
 ## Key URLs
-- Home: https://v79sl.com/
-- Services: https://v79sl.com/services
-- Managed IT Support: https://v79sl.com/services/managed-it-support
-- Cybersecurity: https://v79sl.com/services/cybersecurity
-- Cloud & Backup: https://v79sl.com/services/cloud-backup
-- Networks & VoIP: https://v79sl.com/services/networks-voip
-- AI & Automation: https://v79sl.com/services/ai-automation
-- Business Software & Development: https://v79sl.com/services/business-software
-- V79 Software & Apps: https://v79sl.com/software
-- V79 Hub: https://v79sl.com/software/hub
-- V79 Tiquet: https://v79sl.com/software/tiquet
-- About: https://v79sl.com/about
-- Solutions & SaaS: https://v79sl.com/solutions
-- V79 Digital Academy: https://academy.v79sl.com/
-- Resources: https://v79sl.com/resources
-- Contact: https://v79sl.com/contact
-- Privacy: https://v79sl.com/privacy
-- WhatsApp: https://wa.me/17587260035
+- [Home](https://v79sl.com/)
+- [Services](https://v79sl.com/services)
+- [Managed IT Support](https://v79sl.com/services/managed-it-support)
+- [Cybersecurity](https://v79sl.com/services/cybersecurity)
+- [Cloud & Backup](https://v79sl.com/services/cloud-backup)
+- [Networks & VoIP](https://v79sl.com/services/networks-voip)
+- [AI & Automation](https://v79sl.com/services/ai-automation)
+- [Business Software & Development](https://v79sl.com/services/business-software)
+- [V79 Software & Apps](https://v79sl.com/software)
+- [V79 Hub](https://v79sl.com/software/hub)
+- [V79 Tiquet](https://v79sl.com/software/tiquet)
+- [About](https://v79sl.com/about)
+- [Solutions & SaaS](https://v79sl.com/solutions)
+- [V79 Digital Academy](https://academy.v79sl.com/)
+- [Resources](https://v79sl.com/resources)
+- [Contact](https://v79sl.com/contact)
+- [Privacy](https://v79sl.com/privacy)
+- [WhatsApp](https://wa.me/17587260035)
