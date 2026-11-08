@@ -9,7 +9,8 @@ interface CrmLeadDetailModalProps {
   tasks: CRMTask[];
   onClose: () => void;
   onUpdateLead: (leadId: number, updates: Partial<CRMLead>) => void;
-  onAddActivity: (leadId: number, type: string, title: string, description: string) => void;
+  onAddActivity: (leadId: number, type: string, title: string, description: string) => Promise<boolean>;
+  onSaveAdminNotes: (leadId: number, notes: string) => Promise<boolean>;
   onAddCall: (leadId: number, outcome: CallOutcome, durationSecs: number, notes: string, nextFollowUpAt?: string) => void;
   onAddTask: (leadId: number, title: string, dueAt: string, priority: "Low" | "Medium" | "High") => void;
   onToggleTaskStatus: (taskId: string, currentStatus: string) => void;
@@ -27,6 +28,7 @@ export function CrmLeadDetailModal({
   onClose,
   onUpdateLead,
   onAddActivity,
+  onSaveAdminNotes,
   onAddCall,
   onAddTask,
   onToggleTaskStatus,
@@ -39,6 +41,9 @@ export function CrmLeadDetailModal({
 
   // Note form state
   const [noteText, setNoteText] = useState("");
+  const [adminNotesDraft, setAdminNotesDraft] = useState(lead.adminNotes || "");
+  const [savingAdminNotes, setSavingAdminNotes] = useState(false);
+  const [notesStatus, setNotesStatus] = useState("");
   const [addingNote, setAddingNote] = useState(false);
 
   // Call form state
@@ -55,7 +60,7 @@ export function CrmLeadDetailModal({
   const [savingTask, setSavingTask] = useState(false);
 
   // Conversion form state
-  const [contractValue, setContractValue] = useState(lead.estimatedValue || 10000);
+  const [contractValue, setContractValue] = useState(lead.estimatedValue ? String(lead.estimatedValue) : "");
   const [billingEmail, setBillingEmail] = useState(lead.email);
   const [conversionNotes, setConversionNotes] = useState("");
 
@@ -67,11 +72,28 @@ export function CrmLeadDetailModal({
     e.preventDefault();
     if (!noteText.trim()) return;
     setAddingNote(true);
+    setNotesStatus("");
     try {
-      await onAddActivity(lead.id, "note", "Note Added", noteText.trim());
-      setNoteText("");
+      if (await onAddActivity(lead.id, "note", "Note Added", noteText.trim())) {
+        setNoteText("");
+        setNotesStatus("Timeline note saved.");
+      } else {
+        setNotesStatus("Note could not be saved. The draft is preserved.");
+      }
     } finally {
       setAddingNote(false);
+    }
+  };
+
+  const saveAdminNotes = async () => {
+    setSavingAdminNotes(true);
+    setNotesStatus("");
+    try {
+      setNotesStatus(await onSaveAdminNotes(lead.id, adminNotesDraft)
+        ? "Customer notes saved."
+        : "Could not save customer notes. Your draft is preserved.");
+    } finally {
+      setSavingAdminNotes(false);
     }
   };
 
@@ -113,8 +135,10 @@ export function CrmLeadDetailModal({
 
   const handleConvert = (e: React.FormEvent) => {
     e.preventDefault();
+    const amount = Number(contractValue);
+    if (!contractValue.trim() || !Number.isFinite(amount) || amount <= 0) return;
     onConvertLead(lead.id, {
-      contractValue: Number(contractValue),
+      contractValue: amount,
       billingEmail,
       notes: conversionNotes
     });
@@ -418,11 +442,19 @@ export function CrmLeadDetailModal({
                 <h3 className="text-xs font-bold font-mono text-app-text-muted uppercase">Internal Admin Notes</h3>
                 <textarea
                   rows={3}
-                  defaultValue={lead.adminNotes || ""}
-                  onBlur={(e) => onUpdateLead(lead.id, { adminNotes: e.target.value })}
+                  value={adminNotesDraft}
+                  onChange={e => { setAdminNotesDraft(e.target.value); setNotesStatus(""); }}
                   placeholder="Record internal consultation notes, client objections, or specific agreements..."
                   className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-3 text-xs focus:outline-none focus:border-sky-500/80"
                 />
+                <div className="flex items-center justify-between gap-2">
+                  <span role="status" className="text-xs text-app-text-sec">{notesStatus}</span>
+                  <button type="button" disabled={savingAdminNotes}
+                    onClick={saveAdminNotes}
+                    className="px-3 py-2 rounded-lg text-xs bg-sky-600 text-white disabled:opacity-50">
+                    {savingAdminNotes ? "Saving…" : "Save notes"}
+                  </button>
+                </div>
               </div>
 
               {/* Quick Actions Footer */}
@@ -788,8 +820,11 @@ export function CrmLeadDetailModal({
                   <input
                     type="number"
                     required
+                    min="0.01"
+                    step="0.01"
+                    placeholder="Enter project value"
                     value={contractValue}
-                    onChange={(e) => setContractValue(Number(e.target.value))}
+                    onChange={(e) => setContractValue(e.target.value)}
                     className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs focus:outline-none"
                   />
                 </div>
