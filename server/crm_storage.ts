@@ -1,4 +1,8 @@
 import { readJSON, writeJSON, transaction } from "./persistence";
+import { discoverPublicBusinesses } from "./crm_public_discovery";
+import { discoverExportSaintLucia } from "./crm_export_directory";
+import { discoverGeoapifyBusinesses } from "./crm_geoapify";
+import { getExportProfileContact } from "./crm_export_profile";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -464,6 +468,76 @@ export class CRMStorage {
   }
 
   // --- Prospects & Prospect Finder ---
+  /**
+   * Stage already-imported directory businesses for admin review.
+   * No external requests, lead creation, emails or calls. The full operation
+   * is idempotent and commits atomically with an import, including backfills.
+   */
+  stageImportedDirectoryProspects(): { staged: number; total: number; directoryCount: number; skipped: number } {
+    return transaction(() => {
+      const directory = readJSON<any[]>("business-directory.json", []);
+      const prospects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const leads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
+      const normalise = (name: string) => name.trim().toLocaleLowerCase("en");
+      const known = new Set([
+        ...prospects.map(p => normalise(p.businessName)),
+        ...leads.map(l => normalise(l.company))
+      ]);
+      let staged = 0;
+      let skipped = 0;
+      const pending: Prospect[] = [];
+      for (const record of directory) {
+        const businessName = typeof record?.businessName === "string" ? record.businessName.trim() : "";
+        if (!businessName || businessName.length > 200 || known.has(normalise(businessName))) {
+          skipped++;
+          continue;
+        }
+        known.add(normalise(businessName));
+        const business = {
+          businessName,
+          category: typeof record.category === "string" ? record.category : "",
+          industry: typeof record.industry === "string" ? record.industry : "",
+          location: typeof record.location === "string" ? record.location : "",
+          website: typeof record.website === "string" ? record.website : "",
+          phone: typeof record.phone === "string" ? record.phone : "",
+          email: typeof record.email === "string" ? record.email : "",
+          facebookUrl: typeof record.facebookUrl === "string" ? record.facebookUrl : "",
+          instagramUrl: typeof record.instagramUrl === "string" ? record.instagramUrl : "",
+          linkedinUrl: typeof record.linkedinUrl === "string" ? record.linkedinUrl : "",
+          description: typeof record.description === "string" ? record.description : ""
+        };
+        const analysis = calculateDeterministicAnalysis(business);
+        pending.push({
+          id: "prospect-" + crypto.randomUUID(),
+          businessName,
+          category: business.category || "Commercial",
+          industry: business.industry || business.category || "General Industry",
+          location: business.location || "Saint Lucia",
+          phone: business.phone || undefined,
+          email: business.email || undefined,
+          website: business.website || undefined,
+          facebookUrl: business.facebookUrl || undefined,
+          instagramUrl: business.instagramUrl || undefined,
+          linkedinUrl: business.linkedinUrl || undefined,
+          description: business.description,
+          sourceUrl: typeof record.sourceUrl === "string" ? record.sourceUrl : "",
+          discoveredAt: new Date().toISOString(),
+          workflowStatus: "discovered",
+          aiAnalysis: analysis,
+          leadScore: analysis.leadScore,
+          scoreCategory: analysis.scoreCategory
+        });
+        staged++;
+      }
+      if (prospects.length + pending.length > 5000) {
+        throw Object.assign(new Error("The prospect review queue limit is 5000 businesses."), { status: 413 });
+      }
+      if (pending.length) writeJSON(CRM_PROSPECTS_FILE, [...pending, ...prospects]);
+      return { staged, total: prospects.length + pending.length, directoryCount: directory.length, skipped };
+    });
+  }
+
+
 
   getProspects(filters?: {
     status?: string;
@@ -499,16 +573,23 @@ export class CRMStorage {
     category?: string;
     query?: string;
     searchProviderKey?: string;
+    source?: "directory" | "public" | "exports" | "geoapify";
     limit?: number;
   }): Promise<{ discovered: Prospect[]; duplicatesCount: number; newCount: number }> {
-    const existingProspects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    const existingLeads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
-    const limit = params.limit || 10;
+    const limit = Math.max(1, Math.min(20, Number(params.limit) || 10));
+    const source = params.source === "geoapify" ? "geoapify" : params.source === "public" ? "public" : params.source === "exports" ? "exports" : "directory";
 
-    // Filter through Saint Lucia public directory and query matches
-    let candidates = readJSON<any[]>("business-directory.json", []);
-    if (!candidates.length) throw new Error("Import your business directory first. No live social-network search is configured.");
-
+    // Public discovery is opt-in; preserve the existing imported-directory mode.
+    let candidates = source === "geoapify"
+      ? await discoverGeoapifyBusinesses({ location: params.location, category: params.category, query: params.query, limit })
+      : source === "public"
+      ? await discoverPublicBusinesses({ location: params.location, category: params.category, query: params.query, limit })
+      : source === "exports"
+        ? await discoverExportSaintLucia({ location: params.location, category: params.category, query: params.query, limit })
+        : readJSON<any[]>("business-directory.json", []);
+    if (!candidates.length && source === "directory") {
+      throw new Error("Import your business directory first. No live social-network search is configured.");
+    }
     if (params.location && params.location !== "all") {
       candidates = candidates.filter(b => (b.location || "").toLowerCase().includes(params.location!.toLowerCase()));
     }
@@ -523,22 +604,21 @@ export class CRMStorage {
       );
     }
 
-    let duplicatesCount = 0;
-    const newlyDiscovered: Prospect[] = [];
-
+    // Run AI outside the short synchronous transaction. No stale prospect
+    // snapshot is held during the network call.
+    const prepared: Prospect[] = [];
+    const preparedNames = new Set<string>();
     for (const b of candidates.slice(0, limit)) {
-      const existsInProspects = existingProspects.some(p => p.businessName.toLowerCase() === b.businessName.toLowerCase());
-      const existsInLeads = existingLeads.some(l => l.company.toLowerCase() === b.businessName.toLowerCase());
-
-      if (existsInProspects || existsInLeads) {
-        duplicatesCount++;
-        continue;
-      }
-
+      if (typeof b.businessName !== "string" || !b.businessName.trim()) continue;
+      const normalizedName = b.businessName.trim().toLocaleLowerCase("en");
+      if (preparedNames.has(normalizedName)) continue;
+      preparedNames.add(normalizedName);
+      // Keep discovery responsive and protect the Dell's CPU. An operator
+      // can explicitly request local Ollama analysis on each prospect card.
       const analysis = calculateDeterministicAnalysis(b);
-      const newProspect: Prospect = {
-        id: `prospect-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        businessName: b.businessName,
+      prepared.push({
+        id: "prospect-" + crypto.randomUUID(),
+        businessName: b.businessName.trim(),
         category: b.category || "Commercial",
         industry: b.industry || "General Industry",
         location: b.location || params.location || "Saint Lucia",
@@ -549,44 +629,86 @@ export class CRMStorage {
         instagramUrl: b.instagramUrl,
         linkedinUrl: b.linkedinUrl,
         description: b.description || "",
-        companySize: b.companySize || "1–10",
-        sourceUrl: b.facebookUrl || b.website || "https://stlucia.org/business",
+        companySize: b.companySize,
+        sourceUrl: b.sourceUrl || b.website || b.facebookUrl || "",
         discoveredAt: new Date().toISOString(),
         workflowStatus: "discovered",
+        sourceProvider: source === "geoapify" ? "geoapify" : undefined,
         aiAnalysis: analysis,
         leadScore: analysis.leadScore,
         scoreCategory: analysis.scoreCategory
-      };
-
-      existingProspects.unshift(newProspect);
-      newlyDiscovered.push(newProspect);
+      });
     }
 
-    writeJSON(CRM_PROSPECTS_FILE, existingProspects);
+    // Re-read at commit time so an AI delay cannot erase concurrent records.
+    return transaction(() => {
+      const existingProspects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const existingLeads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
+      const known = new Set([
+        ...existingProspects.map(p => p.businessName.toLocaleLowerCase("en")),
+        ...existingLeads.map(l => l.company.toLocaleLowerCase("en"))
+      ]);
+      const discovered: Prospect[] = [];
+      let duplicatesCount = 0;
+      for (const candidate of prepared) {
+        const name = candidate.businessName.toLocaleLowerCase("en");
+        if (known.has(name)) {
+          duplicatesCount++;
+          continue;
+        }
+        known.add(name);
+        existingProspects.unshift(candidate);
+        discovered.push(candidate);
+      }
 
-    // Record Search Log
-    const searchLogs = readJSON<ProspectSearchLog[]>(CRM_SEARCHES_FILE, []);
-    const newLog: ProspectSearchLog = {
-      id: crypto.randomUUID(),
-      query: params.query || `Search in ${params.location || "All Saint Lucia"}`,
-      location: params.location || "All Saint Lucia",
-      category: params.category || "All Categories",
-      totalFound: candidates.length,
-      newProspects: newlyDiscovered.length,
-      duplicates: duplicatesCount,
-      approvedCount: 0,
-      rejectedCount: 0,
-      searchProvider: "Curated local directory (not a live web search)",
-      timestamp: new Date().toISOString()
-    };
-    searchLogs.unshift(newLog);
-    writeJSON(CRM_SEARCHES_FILE, searchLogs);
+      const searchLogs = readJSON<ProspectSearchLog[]>(CRM_SEARCHES_FILE, []);
+      searchLogs.unshift({
+        id: crypto.randomUUID(),
+        query: params.query || ("Search in " + (params.location || "All Saint Lucia")),
+        location: params.location || "All Saint Lucia",
+        category: params.category || "All Categories",
+        totalFound: candidates.length,
+        newProspects: discovered.length,
+        duplicates: duplicatesCount,
+        approvedCount: 0,
+        rejectedCount: 0,
+        searchProvider: source === "geoapify" ? "Geoapify Places (OpenStreetMap ODbL)" : source === "public" ? "OpenStreetMap public listings + optional local Ollama" : source === "exports" ? "Export Saint Lucia public directory + optional local Ollama" : "Curated local directory (not a live web search)",
+        timestamp: new Date().toISOString()
+      });
+      writeJSON(CRM_PROSPECTS_FILE, existingProspects);
+      writeJSON(CRM_SEARCHES_FILE, searchLogs);
+      return { discovered, duplicatesCount, newCount: discovered.length };
+    });
+  }
 
-    return {
-      discovered: newlyDiscovered,
-      duplicatesCount,
-      newCount: newlyDiscovered.length
-    };
+  async enrichPublicProspect(prospectId: string): Promise<Prospect> {
+    const original = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, [])
+      .find(p => p.id === prospectId);
+    if (!original) throw Object.assign(new Error("Prospect not found."), { status: 404 });
+    if (original.workflowStatus === "approved" || original.workflowStatus === "rejected") {
+      throw Object.assign(new Error("Only prospects awaiting review can be enriched."), { status: 409 });
+    }
+
+    const details = await getExportProfileContact(original.sourceUrl);
+    return transaction(() => {
+      const current = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const index = current.findIndex(p => p.id === prospectId);
+      if (index === -1) throw Object.assign(new Error("Prospect was removed during lookup."), { status: 409 });
+      const entry = current[index];
+      if (entry.sourceUrl !== original.sourceUrl || entry.workflowStatus === "approved" || entry.workflowStatus === "rejected") {
+        throw Object.assign(new Error("Prospect changed during lookup; reload before retrying."), { status: 409 });
+      }
+      const updated = {
+        ...entry,
+        phone: entry.phone || details.phone,
+        email: entry.email || details.email,
+        website: entry.website || details.website,
+        contactCheckedAt: new Date().toISOString()
+      };
+      current[index] = updated;
+      writeJSON(CRM_PROSPECTS_FILE, current);
+      return updated;
+    });
   }
 
   getSearchHistory(): ProspectSearchLog[] {
@@ -634,6 +756,7 @@ export class CRMStorage {
     if (idx === -1) throw new Error(`Prospect ${prospectId} not found`);
 
     const p = list[idx];
+    if (p.workflowStatus === "rejected") throw new Error("Restore this archived prospect before approving.");
     if (p.convertedLeadId) { const existing = this.getLeadById(p.convertedLeadId); if (existing) return existing; }
     return transaction(() => {
     const { lead } = this.addLead({
@@ -658,6 +781,7 @@ export class CRMStorage {
     }, author);
 
     list[idx].workflowStatus = "approved";
+    list[idx].approvedAt = new Date().toISOString();
     list[idx].convertedLeadId = lead.id;
     writeJSON(CRM_PROSPECTS_FILE, list);
 
@@ -678,27 +802,48 @@ export class CRMStorage {
     return leads;
   }
 
+  // A rejected prospect is archived, never deleted. Its contacts and analysis
+  // remain available for later review, with an explicit restore action.
   rejectProspect(prospectId: string): boolean {
-    const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    const idx = list.findIndex(p => p.id === prospectId);
-    if (idx === -1) return false;
-    list[idx].workflowStatus = "rejected";
-    writeJSON(CRM_PROSPECTS_FILE, list);
-    return true;
+    return transaction(() => {
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const candidate = list.find(p => p.id === prospectId);
+      if (!candidate || candidate.workflowStatus === "approved") return false;
+      if (candidate.workflowStatus === "rejected") return true;
+      candidate.workflowStatus = "rejected";
+      candidate.archivedAt = new Date().toISOString();
+      writeJSON(CRM_PROSPECTS_FILE, list);
+      return true;
+    });
   }
 
   bulkRejectProspects(prospectIds: string[]): number {
-    const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    let count = 0;
-    for (const id of prospectIds) {
-      const idx = list.findIndex(p => p.id === id);
-      if (idx !== -1) {
-        list[idx].workflowStatus = "rejected";
-        count++;
+    return transaction(() => {
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const ids = new Set(prospectIds);
+      let count = 0;
+      for (const p of list) {
+        if (ids.has(p.id) && p.workflowStatus !== "approved" && p.workflowStatus !== "rejected") {
+          p.workflowStatus = "rejected";
+          p.archivedAt = new Date().toISOString();
+          count++;
+        }
       }
-    }
-    writeJSON(CRM_PROSPECTS_FILE, list);
-    return count;
+      if (count) writeJSON(CRM_PROSPECTS_FILE, list);
+      return count;
+    });
+  }
+
+  restoreArchivedProspect(prospectId: string): Prospect | null {
+    return transaction(() => {
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const candidate = list.find(p => p.id === prospectId);
+      if (!candidate || candidate.workflowStatus !== "rejected") return null;
+      candidate.workflowStatus = "discovered";
+      delete candidate.archivedAt;
+      writeJSON(CRM_PROSPECTS_FILE, list);
+      return candidate;
+    });
   }
 
   // --- Analytics & Reports ---

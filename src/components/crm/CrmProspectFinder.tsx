@@ -1,17 +1,24 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, MapPin, Sparkles, CheckCircle2, XCircle, ShieldCheck, Globe, Phone, Mail, History, ExternalLink, RefreshCw } from "lucide-react";
 import { Prospect, ProspectSearchLog, SAINT_LUCIA_LOCATIONS } from "../../crm/types";
+import { safeExternalLink, safeSocialLink, safeEmail } from "../../crm/linkSafety";
+import { filterAndSortProspects, industryChoices, type IndustryOrder } from "../../crm/prospectFilters";
 
 interface CrmProspectFinderProps {
   prospects: Prospect[];
   searchHistory: ProspectSearchLog[];
-  onRunSearch: (params: { location?: string; category?: string; query?: string; limit?: number }) => Promise<void>;
+  sourceCapabilities: { directory: boolean; exports: boolean; osm: boolean; geoapify: boolean };
+  onImportDirectory: (file: File) => Promise<{ count: number; skipped: number; total: number; staged: number; reviewTotal: number }>;
+  onRunSearch: (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports" | "geoapify"; limit?: number }) => Promise<void>;
   onAnalyzeProspect: (prospectId: string) => Promise<void>;
+  onEnrichProspect: (prospectId: string) => Promise<boolean>;
   onApproveProspect: (prospectId: string) => Promise<void>;
   onBulkApprove: (ids: string[]) => Promise<void>;
   onRejectProspect: (prospectId: string) => Promise<void>;
+  onRestoreProspect: (prospectId: string) => Promise<boolean>;
   onBulkReject: (ids: string[]) => Promise<void>;
   isSearching: boolean;
+  searchError?: string | null;
 }
 
 const CATEGORIES = [
@@ -32,31 +39,102 @@ const CATEGORIES = [
 export function CrmProspectFinder({
   prospects,
   searchHistory,
+  sourceCapabilities,
+  onImportDirectory,
   onRunSearch,
   onAnalyzeProspect,
+  onEnrichProspect,
   onApproveProspect,
   onBulkApprove,
   onRejectProspect,
+  onRestoreProspect,
   onBulkReject,
-  isSearching
+  isSearching,
+  searchError
 }: CrmProspectFinderProps) {
   const [activeSubTab, setActiveSubTab] = useState<"catalog" | "history">("catalog");
+  const [viewMode, setViewMode] = useState<"review" | "archive">("review");
+  const [showApproved, setShowApproved] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [source, setSource] = useState<"directory" | "public" | "exports" | "geoapify">("directory");
   const [location, setLocation] = useState("all");
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(10);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [visibleCount, setVisibleCount] = useState(20);
+  const [industryFilter, setIndustryFilter] = useState("all");
+  const [localKeyword, setLocalKeyword] = useState("");
+  const [industryOrder, setIndustryOrder] = useState<IndustryOrder>("industry");
+  const availableIndustries = useMemo(() => industryChoices(prospects), [prospects]);
+  const filteredProspects = useMemo(
+    () => filterAndSortProspects(prospects, { industry: industryFilter, text: localKeyword, order: industryOrder }),
+    [prospects, industryFilter, localKeyword, industryOrder]
+  );
+  const matchingProspects = filteredProspects.filter(p => viewMode === "archive"
+    ? p.workflowStatus === "rejected"
+    : p.workflowStatus !== "rejected" && p.workflowStatus !== "approved");
+  const approvedProspects = filteredProspects.filter(p => p.workflowStatus === "approved");
+  const visibleProspects = matchingProspects.slice(0, visibleCount);
+  const pendingCount = prospects.filter(p => p.workflowStatus !== "approved" && p.workflowStatus !== "rejected").length;
+  const archivedCount = prospects.filter(p => p.workflowStatus === "rejected").length;
+  const approvedCount = prospects.filter(p => p.workflowStatus === "approved").length;
+  const shortcutCounts = useMemo(() => ({
+    electricians: filterAndSortProspects(prospects, { industry: "preset:electricians", text: "", order: "score" }).length,
+    accommodation: filterAndSortProspects(prospects, { industry: "preset:accommodation", text: "", order: "score" }).length,
+    lawFirms: filterAndSortProspects(prospects, { industry: "preset:law-firms", text: "", order: "score" }).length
+  }), [prospects]);
+  const updateIndustry = (value: string) => {
+    setIndustryFilter(value);
+    setVisibleCount(20);
+    setSelectedIds([]);
+  };
+  const updateKeyword = (value: string) => {
+    setLocalKeyword(value);
+    setVisibleCount(20);
+    setSelectedIds([]);
+  };
+  const updateOrder = (value: IndustryOrder) => {
+    setIndustryOrder(value);
+    setVisibleCount(20);
+    setSelectedIds([]);
+  };
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [enrichingId, setEnrichingId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await onRunSearch({
+      source,
       location: location === "all" ? undefined : location,
       category: category === "all" ? undefined : category,
       query: query.trim() || undefined,
       limit
     });
+  };
+
+  const handleFileImport = async (file?: File) => {
+    if (!file) return;
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const result = await onImportDirectory(file);
+      setImportMessage(`Imported ${result.count} businesses; skipped ${result.skipped} duplicates. ${result.staged} added to Prospect Finder for review (${result.reviewTotal} total). Leads are only created after approval.`);
+      setVisibleCount(20);
+      setIndustryFilter("all");
+      setLocalKeyword("");
+      setSelectedIds([]);
+      setActiveSubTab("catalog");
+      setViewMode("review");
+      setSource("directory");
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : "Directory import failed.");
+    } finally {
+      setImporting(false);
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -66,10 +144,14 @@ export function CrmProspectFinder({
   };
 
   const selectAll = () => {
-    if (selectedIds.length === prospects.length) {
-      setSelectedIds([]);
+    const visible = visibleProspects
+      .filter(p => p.workflowStatus !== "approved" && p.workflowStatus !== "rejected")
+      .map(p => p.id);
+    if (visible.length === 0) return;
+    if (visible.every(id => selectedIds.includes(id))) {
+      setSelectedIds(ids => ids.filter(id => !visible.includes(id)));
     } else {
-      setSelectedIds(prospects.map((p) => p.id));
+      setSelectedIds(ids => Array.from(new Set([...ids, ...visible])));
     }
   };
 
@@ -79,6 +161,15 @@ export function CrmProspectFinder({
       await onAnalyzeProspect(id);
     } finally {
       setAnalyzingId(null);
+    }
+  };
+
+  const handleEnrich = async (id: string) => {
+    setEnrichingId(id);
+    try {
+      await onEnrichProspect(id);
+    } finally {
+      setEnrichingId(null);
     }
   };
 
@@ -95,6 +186,19 @@ export function CrmProspectFinder({
     setActionLoading(id);
     try {
       await onRejectProspect(id);
+      setSelectedIds(ids => ids.filter(x => x !== id));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRestore = async (id: string) => {
+    setActionLoading(id);
+    setRestoreError(null);
+    try {
+      if (!await onRestoreProspect(id)) {
+        setRestoreError("Could not restore this business. Refresh and try again.");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -131,11 +235,11 @@ export function CrmProspectFinder({
             <div className="flex items-center gap-2">
               <Search className="w-5 h-5 text-sky-500" />
               <h2 className="text-base font-bold text-app-text font-display">
-                Saint Lucia Business Directory
+                AI Business Prospect Finder
               </h2>
             </div>
             <p className="text-xs text-app-text-sec mt-0.5">
-              Search the curated local directory and add prospects to your CRM. This is not a live Facebook, Instagram or LinkedIn search. Suggestions are estimates to verify before outreach.
+              Find businesses from public listings or your imported directory, then analyse them using local Ollama. Public contact details may be incomplete.
             </p>
           </div>
 
@@ -146,7 +250,7 @@ export function CrmProspectFinder({
                 activeSubTab === "catalog" ? "bg-app-text text-app-bg" : "bg-app-btn-sec text-app-text"
               }`}
             >
-              Discovered Prospects ({prospects.length})
+              Prospect Finder ({pendingCount})
             </button>
             <button
               onClick={() => setActiveSubTab("history")}
@@ -163,6 +267,33 @@ export function CrmProspectFinder({
         {/* Discovery Query Form */}
         {activeSubTab === "catalog" && (
           <form onSubmit={handleSearchSubmit} className="space-y-3 pt-2 border-t border-app-border/40">
+            <label className="block text-xs text-app-text-sec">Discovery source
+              <select value={source} onChange={(e) => setSource(e.target.value as "directory" | "public" | "exports" | "geoapify")} className="block mt-1 w-full sm:w-80 bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+                {sourceCapabilities.geoapify && <option value="geoapify">Geoapify Places — Saint Lucia businesses</option>}
+                {sourceCapabilities.exports && <option value="exports">Export Saint Lucia business directory</option>}
+                <option value="directory">My imported business directory</option>
+              </select>
+            </label>
+            <div className="rounded-xl border border-app-border p-3 bg-app-aside-bg/50 space-y-2">
+              <label htmlFor="crm-directory-import" className="block font-semibold text-xs text-app-text">
+                Add businesses you are authorised to use
+              </label>
+              <p className="text-xs text-app-text-sec">Import CSV or JSON with a businessName column. Optional: category, location, email, phone, website and social links. New records are merged, never replace existing entries.</p>
+              <input id="crm-directory-import" type="file" accept=".csv,.json,text/csv,application/json"
+                disabled={importing} className="text-xs max-w-full text-app-text-sec"
+                onChange={async e => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  await handleFileImport(file);
+                }} />
+              {importing && <p role="status" className="text-xs text-app-text-sec">Importing directory…</p>}
+              {importMessage && <p role="status" className="text-xs text-app-text-sec">{importMessage}</p>}
+            </div>
+            {!sourceCapabilities.exports && !sourceCapabilities.geoapify && (
+              <p className="text-xs text-app-text-sec" role="status">
+                Public directory discovery is not enabled. You can search your imported business directory and use local AI to assess prospects.
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div>
                 <label className="text-[10px] font-mono uppercase text-app-text-muted block mb-1">
@@ -231,27 +362,97 @@ export function CrmProspectFinder({
                   className="flex-1 py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
                 >
                   <Search className={`w-4 h-4 ${isSearching ? "animate-spin" : ""}`} />
-                  <span>{isSearching ? "Searching..." : "Search directory"}</span>
+                  <span>{isSearching ? "Searching..." : "Find businesses"}</span>
                 </button>
               </div>
             </div>
           </form>
         )}
+        {searchError && <p role="alert" className="text-xs text-red-500">{searchError}</p>}
 
         {/* Compliance & Policy Footer */}
         <div className="pt-2 flex items-center gap-2 text-[11px] text-app-text-sec">
           <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
           <span>
-            Compliant Public Discovery: Gathers verified public business contact points. Strictly adheres to robots.txt, terms of service, with zero scraping or CAPTCHA circumvention.
+            Public business directories only. Details may be incomplete; review the source before outreach. No login-based social scraping or automated outreach.
           </span>
         </div>
+        <p className="text-[11px] text-app-text-muted">
+          Public listing data: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline">© OpenStreetMap contributors (ODbL)</a>.
+          Verify each contact before outreach.
+        </p>
       </div>
 
       {/* SUB-TAB 1: PROSPECT CATALOG */}
       {activeSubTab === "catalog" && (
         <div className="space-y-4">
+          {/* These controls filter ONLY existing prospects; no provider calls or CRM writes. */}
+          <div className="glass rounded-2xl border border-app-border bg-app-aside-bg/30 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h3 className="text-sm font-semibold text-app-text">Browse existing prospects by industry</h3>
+              <span className="text-xs text-app-text-sec" role="status">
+                {matchingProspects.length} matching of {prospects.length} total
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label className="text-xs text-app-text-sec">
+                Industry or trade
+                <select aria-label="Filter existing prospects by industry"
+                  value={industryFilter} onChange={e => updateIndustry(e.target.value)}
+                  className="block mt-1 w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+                  <option value="all">All industries ({prospects.length})</option>
+                  <optgroup label="Popular trades">
+                    <option value="preset:electricians">Electricians ({shortcutCounts.electricians})</option>
+                    <option value="preset:accommodation">Accommodation &amp; lodging ({shortcutCounts.accommodation})</option>
+                    <option value="preset:law-firms">Law firms ({shortcutCounts.lawFirms})</option>
+                  </optgroup>
+                  <optgroup label="Industries found in your records">
+                    {availableIndustries.map(item => (
+                      <option value={item.value} key={item.value}>{item.label} ({item.count})</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </label>
+              <label className="text-xs text-app-text-sec">
+                Search existing businesses
+                <input type="search" aria-label="Search existing prospects"
+                  value={localKeyword} onChange={e => updateKeyword(e.target.value)}
+                  placeholder="Name, trade, location..."
+                  className="block mt-1 w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs" />
+              </label>
+              <label className="text-xs text-app-text-sec">
+                Sort results
+                <select aria-label="Sort existing prospects"
+                  value={industryOrder} onChange={e => updateOrder(e.target.value as IndustryOrder)}
+                  className="block mt-1 w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs">
+                  <option value="industry">Industry A–Z</option>
+                  <option value="business">Business name A–Z</option>
+                  <option value="score">Lead score (highest first)</option>
+                </select>
+              </label>
+            </div>
+            {(industryFilter !== "all" || localKeyword || industryOrder !== "industry") && (
+              <button type="button"
+                onClick={() => { updateIndustry("all"); setLocalKeyword(""); setIndustryOrder("industry"); }}
+                className="text-xs text-sky-500 hover:underline">Clear filters</button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 items-center" role="group" aria-label="Prospect lifecycle view">
+            <button type="button" onClick={() => { setViewMode("review"); setVisibleCount(20); setSelectedIds([]); }}
+              aria-pressed={viewMode === "review"}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold ${viewMode === "review" ? "bg-sky-600 text-white" : "bg-app-btn-sec text-app-text"}`}>
+              For review ({pendingCount})
+            </button>
+            <button type="button" onClick={() => { setViewMode("archive"); setVisibleCount(20); setSelectedIds([]); }}
+              aria-pressed={viewMode === "archive"}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold ${viewMode === "archive" ? "bg-sky-600 text-white" : "bg-app-btn-sec text-app-text"}`}>
+              Archived / Rejected ({archivedCount})
+            </button>
+            <span className="text-xs text-app-text-sec">Approved ({approvedCount}) appears at the bottom of this page.</span>
+          </div>
+          {restoreError && <p role="alert" className="text-red-500 text-xs">{restoreError}</p>}
           {/* Bulk Action Controls */}
-          {selectedIds.length > 0 && (
+          {viewMode === "review" && selectedIds.length > 0 && (
             <div className="glass p-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 flex items-center justify-between text-xs animate-fade-in-once">
               <span className="font-semibold text-sky-500">
                 {selectedIds.length} {selectedIds.length === 1 ? "prospect" : "prospects"} selected
@@ -277,14 +478,31 @@ export function CrmProspectFinder({
             </div>
           )}
 
+          {(sourceCapabilities.geoapify || prospects.some(p => p.sourceProvider === "geoapify")) && (
+            <p className="text-xs text-app-text-sec">
+              Place data from <a className="underline" href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Geoapify</a> and{" "}
+              <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors (ODbL)</a>.
+              Listings are unverified leads for human review, not confirmed customer problems.
+            </p>
+          )}
           {/* Prospects Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {prospects.length === 0 ? (
+            {matchingProspects.length === 0 ? (
               <div className="col-span-2 glass p-12 text-center text-xs text-app-text-muted rounded-2xl border border-app-border">
-                No prospects in current pool. Search the local directory above.
+                {viewMode === "archive"
+                  ? "Nothing archived matches these filters. Rejected businesses will be available here for future restoration."
+                  : pendingCount === 0
+                    ? "Your review queue is clear. Import or discover more businesses, or view approved records below."
+                    : "No matching businesses in the review queue. Try another industry or clear the filters."}
               </div>
             ) : (
-              prospects.map((p) => {
+              visibleProspects.map((p) => {
+                const websiteHref = safeExternalLink(p.website);
+                const facebookHref = safeSocialLink(p.facebookUrl, "facebook");
+                const instagramHref = safeSocialLink(p.instagramUrl, "instagram");
+                const linkedinHref = safeSocialLink(p.linkedinUrl, "linkedin");
+                const sourceHref = safeExternalLink(p.sourceUrl);
+                const email = safeEmail(p.email);
                 const isSelected = selectedIds.includes(p.id);
                 const isApproved = p.workflowStatus === "approved";
                 const isRejected = p.workflowStatus === "rejected";
@@ -331,6 +549,9 @@ export function CrmProspectFinder({
                             <span>{p.location}</span>
                             <span>•</span>
                             <span>{p.category}</span>
+                            {p.industry && p.industry.toLocaleLowerCase("en") !== p.category.toLocaleLowerCase("en") && (
+                              <span className="text-sky-500">· {p.industry}</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -358,23 +579,38 @@ export function CrmProspectFinder({
 
                     {/* Contact points discovered */}
                     <div className="flex items-center flex-wrap gap-2 text-[11px]">
-                      {p.phone && (
+                      {p.phone ? (
                         <a href={`tel:${p.phone}`} className="flex items-center gap-1 text-app-text font-mono hover:text-sky-500">
                           <Phone className="w-3 h-3 text-emerald-500" />
                           <span>{p.phone}</span>
                         </a>
-                      )}
-                      {p.website ? (
-                        <a href={p.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-500 hover:underline truncate max-w-[150px]">
+                      ) : <span className="text-app-text-muted">Phone not listed</span>}
+                      {email ? (
+                        <a href={`mailto:${email}`} className="flex items-center gap-1 text-app-text hover:text-sky-500">
+                          <Mail className="w-3 h-3 text-emerald-500" />
+                          <span>{email}</span>
+                        </a>
+                      ) : <span className="text-app-text-muted">Email not listed</span>}
+                      {websiteHref ? (
+                        <a href={websiteHref} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-500 hover:underline truncate max-w-[150px]">
                           <Globe className="w-3 h-3" />
                           <span>Website</span>
                         </a>
                       ) : (
                         <span className="text-amber-500 font-mono text-[10px]">No website listed</span>
                       )}
-                      {p.facebookUrl && (
-                        <a href={p.facebookUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">
-                          Facebook
+                      {facebookHref && (
+                        <a href={facebookHref} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Facebook</a>
+                      )}
+                      {instagramHref && (
+                        <a href={instagramHref} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Instagram</a>
+                      )}
+                      {linkedinHref && (
+                        <a href={linkedinHref} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">LinkedIn</a>
+                      )}
+                      {sourceHref && (
+                        <a href={sourceHref} target="_blank" rel="noopener noreferrer" className="text-app-text-sec hover:underline flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3" /> Source
                         </a>
                       )}
                     </div>
@@ -401,6 +637,20 @@ export function CrmProspectFinder({
                         <span>{analyzingId === p.id ? "Analyzing..." : "Re-Score with AI"}</span>
                       </button>
 
+                      {!isApproved && !isRejected && p.sourceUrl?.startsWith("https://exportsaintlucia.org/directories/") && (
+                        <button type="button" onClick={() => handleEnrich(p.id)}
+                          disabled={enrichingId === p.id}
+                          className="text-xs text-sky-500 hover:underline font-semibold disabled:opacity-50">
+                          {enrichingId === p.id ? "Checking..." : p.contactCheckedAt ? "Refresh contact" : "Find contact info"}
+                        </button>
+                      )}
+                      {isRejected && viewMode === "archive" && (
+                        <button type="button" onClick={() => handleRestore(p.id)}
+                          disabled={actionLoading === p.id}
+                          className="px-3 py-1.5 rounded-lg bg-sky-600 text-white text-xs disabled:opacity-50">
+                          {actionLoading === p.id ? "Restoring…" : "Restore to review"}
+                        </button>
+                      )}
                       {!isApproved && !isRejected && (
                         <div className="flex items-center gap-2">
                           <button
@@ -426,6 +676,44 @@ export function CrmProspectFinder({
               })
             )}
           </div>
+          {matchingProspects.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-app-text-sec">
+              <span>Showing {Math.min(visibleCount, matchingProspects.length)} of {matchingProspects.length} matching prospects ({prospects.length} total).</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={selectAll} className="px-3 py-1.5 rounded-lg border border-app-border text-app-text">
+                  Select visible prospects
+                </button>
+                {matchingProspects.length > visibleCount && (
+                  <button type="button" onClick={() => setVisibleCount(n => n + 20)}
+                    className="px-3 py-1.5 rounded-lg border border-app-border text-sky-500">
+                    Show 20 more
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {viewMode === "review" && (
+            <div className="glass rounded-2xl border border-app-border bg-app-aside-bg/30 p-4 space-y-3">
+              <button type="button" aria-expanded={showApproved}
+                onClick={() => setShowApproved(value => !value)}
+                className="w-full text-left text-xs font-semibold flex justify-between gap-3 text-app-text">
+                <span>Approved businesses — now in CRM ({approvedCount})</span>
+                <span>{showApproved ? "Hide" : "Show"}</span>
+              </button>
+              {showApproved && (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {approvedProspects.length === 0
+                    ? <p className="text-xs text-app-text-sec">No approved businesses match these filters.</p>
+                    : approvedProspects.map(p => (
+                      <div key={p.id} className="flex justify-between gap-3 rounded-xl border border-app-border p-3 text-xs">
+                        <span className="font-medium text-app-text">{p.businessName}</span>
+                        <span className="text-app-text-sec">CRM Lead #{p.convertedLeadId ?? "saved"}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

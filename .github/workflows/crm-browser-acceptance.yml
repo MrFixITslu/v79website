@@ -1,0 +1,59 @@
+name: CRM isolated browser acceptance
+on:
+  pull_request:
+    paths:
+      - "src/components/crm/**"
+      - "src/crm/**"
+      - "server/crm_*.ts"
+      - "server.ts"
+      - "tests/crm-browser-acceptance.mjs"
+      - ".github/workflows/crm-browser-acceptance.yml"
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Install isolated browser tools
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts playwright@1.58.2
+          npx playwright install --with-deps chromium
+      - name: Start standalone disposable website
+        run: |
+          export PORT=3299
+          export NODE_ENV=production
+          export CANONICAL_DOMAIN=http://127.0.0.1:3299
+          export CAPTCHA_MODE=disabled
+          export ADMIN_PASSWORD=BrowserFixturePass-2026-Only
+          export ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          export CRM_PUBLIC_DISCOVERY_ENABLED=false
+          export OLLAMA_BASE_URL=http://127.0.0.1:9
+          export OLLAMA_MODEL=qwen2.5:1.5b
+          nohup node dist/server/server.cjs > /tmp/crm-browser-preview.log 2>&1 &
+          for n in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3299/api/ready >/dev/null; then
+              echo "Isolated website is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -40 /tmp/crm-browser-preview.log
+          exit 1
+      - name: Run CRM browser acceptance (synthetic contacts only)
+        run: node tests/crm-browser-acceptance.mjs
+      - name: Store synthetic-only screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-browser-acceptance
+          path: crm-browser-acceptance.png
+          if-no-files-found: ignore
+          retention-days: 3

@@ -6,6 +6,7 @@ import { CrmLeadTable } from "./CrmLeadTable";
 import { CrmLeadDetailModal } from "./CrmLeadDetailModal";
 import { CrmColdCallCockpit } from "./CrmColdCallCockpit";
 import { CrmProspectFinder } from "./CrmProspectFinder";
+import { parseDirectoryFile } from "../../crm/directoryImport";
 import { CrmTasksList } from "./CrmTasksList";
 import { CrmSettings } from "./CrmSettings";
 import { CrmNewLeadModal } from "./CrmNewLeadModal";
@@ -47,6 +48,10 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   // Status & Loading states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [sourceCapabilities, setSourceCapabilities] = useState<{ directory: boolean; exports: boolean; osm: boolean; geoapify: boolean }>({
+    directory: true, exports: false, osm: false, geoapify: false
+  });
   const [ollamaStatus, setOllamaStatus] = useState<{ connected: boolean; model?: string }>({
     connected: false
   });
@@ -65,6 +70,25 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
   }, [adminToken]);
+
+  const fetchDiscoveryCapabilities = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/crm/discovery-capabilities", { headers: getHeaders() });
+      if (res.status === 401) { onUnauthorized?.(); return; }
+      if (res.ok) {
+        const data = await res.json();
+        setSourceCapabilities({
+          directory: true,
+          exports: data?.exports === true,
+          osm: data?.osm === true,
+          geoapify: data?.geoapify === true
+        });
+      }
+    } catch (err) {
+      // Fail closed. The imported directory continues to work.
+      setSourceCapabilities({ directory: true, exports: false, osm: false, geoapify: false });
+    }
+  }, [getHeaders, onUnauthorized]);
 
   // Fetch metrics & pipeline stats
   const fetchMetrics = useCallback(async () => {
@@ -119,6 +143,30 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
       console.error("Failed to load prospects:", e);
     }
   }, [getHeaders]);
+
+  // Synchronise previously imported directory entries on opening Prospect Finder.
+  // Idempotent: existing prospects/leads are preserved; no lead is created.
+  const syncImportedDirectory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/crm/directory/sync", {
+        method: "POST", headers: getHeaders()
+      });
+      if (res.status === 401) { onUnauthorized?.(); return; }
+      if (!res.ok) {
+        console.error("Could not stage imported business directory.");
+        return;
+      }
+      await fetchProspects();
+    } catch {
+      console.error("Directory synchronisation is temporarily unavailable.");
+    }
+  }, [getHeaders, onUnauthorized, fetchProspects]);
+
+  useEffect(() => {
+    if (activeTab === "prospects") {
+      void syncImportedDirectory();
+    }
+  }, [activeTab, syncImportedDirectory]);
 
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
@@ -182,7 +230,8 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
         fetchLeads(),
         fetchProspects(),
         fetchTasks(),
-        checkOllamaStatus()
+        checkOllamaStatus(),
+        fetchDiscoveryCapabilities()
       ]);
       if (selectedLead) {
         await fetchLeadDetails(selectedLead.id);
@@ -190,7 +239,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchMetrics, fetchLeads, fetchProspects, fetchTasks, checkOllamaStatus, selectedLead, fetchLeadDetails]);
+  }, [fetchMetrics, fetchLeads, fetchProspects, fetchTasks, checkOllamaStatus, fetchDiscoveryCapabilities, selectedLead, fetchLeadDetails]);
 
   // Initial load
   useEffect(() => {
@@ -261,20 +310,35 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     }
   };
 
-  // Add activity note
-  const handleAddActivity = async (leadId: number, type: string, title: string, description: string) => {
+  // Notes are confirmed only after the server persists them successfully.
+  const handleAddActivity = async (leadId: number, type: string, title: string, description: string): Promise<boolean> => {
     try {
       const res = await fetch(`/api/admin/crm/leads/${leadId}/activities`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify({ type, title, description })
+        method: "POST", headers: getHeaders(), body: JSON.stringify({ type, title, description })
       });
-      if (res.ok) {
-        const act = await res.json();
-        setSelectedLeadActivities((prev) => [act, ...prev]);
-      }
-    } catch (e) {
-      console.error("Failed to add activity:", e);
+      if (res.status === 401) { onUnauthorized?.(); return false; }
+      if (!res.ok) return false;
+      const activity: CRMActivity = await res.json();
+      setSelectedLeadActivities(prev => [activity, ...prev.filter(a => a.id !== activity.id)]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleSaveAdminNotes = async (leadId: number, adminNotes: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admin/crm/leads/${leadId}`, {
+        method: "PUT", headers: getHeaders(), body: JSON.stringify({ adminNotes })
+      });
+      if (res.status === 401) { onUnauthorized?.(); return false; }
+      if (!res.ok) return false;
+      const updated: CRMLead = await res.json();
+      setLeads(prev => prev.map(l => l.id === leadId ? updated : l));
+      setSelectedLead(prev => prev?.id === leadId ? updated : prev);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -408,23 +472,69 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   };
 
   // Run public business search
-  const handleRunSearch = async (params: { location?: string; category?: string; query?: string; limit?: number }) => {
+  const handleRunSearch = async (params: { location?: string; category?: string; query?: string; source?: "directory" | "public" | "exports" | "geoapify"; limit?: number }) => {
     setIsSearching(true);
+    setSearchError(null);
     try {
       const res = await fetch("/api/admin/crm/prospects/search", {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify(params)
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProspects(data.prospects);
-        fetchProspects();
+      if (res.status === 401) {
+        onUnauthorized?.();
+        return;
       }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSearchError(data.error || "Search failed. No new prospects were saved.");
+        return;
+      }
+      await fetchProspects();
     } catch (e) {
       console.error("Search failed:", e);
+      setSearchError("Search failed. Please check the server connection.");
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleImportDirectory = async (file: File): Promise<{ count: number; skipped: number; total: number; staged: number; reviewTotal: number }> => {
+    if (file.size > 1_000_000) throw Error("Directory file exceeds 1 MB.");
+    const records = parseDirectoryFile(file.name, await file.text());
+    const response = await fetch("/api/admin/crm/directory", {
+      method: "POST", headers: getHeaders(), body: JSON.stringify({ entries: records })
+    });
+    if (response.status === 401) { onUnauthorized?.(); throw Error("Please sign in again."); }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw Error(result.error || "Could not import business directory.");
+    await fetchProspects();
+    return result;
+  };
+
+  // On-demand business-profile enrichment (admin only, never auto-outreach).
+  const handleEnrichProspect = async (prospectId: string): Promise<boolean> => {
+    setSearchError(null);
+    try {
+      const res = await fetch(`/api/admin/crm/prospects/${prospectId}/enrich`, {
+        method: "POST",
+        headers: getHeaders()
+      });
+      if (res.status === 401) {
+        onUnauthorized?.();
+        return false;
+      }
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        setSearchError(error.error || "Could not retrieve public contact details.");
+        return false;
+      }
+      const prospect: Prospect = await res.json();
+      setProspects(prev => prev.map(p => p.id === prospectId ? prospect : p));
+      return true;
+    } catch {
+      setSearchError("Unable to reach the contact enrichment service.");
+      return false;
     }
   };
 
@@ -502,6 +612,21 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   };
 
   // Bulk reject prospects
+  const handleRestoreProspect = async (id: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/admin/crm/prospects/${encodeURIComponent(id)}/restore`, {
+        method: "POST", headers: getHeaders()
+      });
+      if (response.status === 401) { onUnauthorized?.(); return false; }
+      if (!response.ok) return false;
+      const restored: Prospect = await response.json();
+      setProspects(prev => prev.map(p => p.id === id ? restored : p));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleBulkReject = async (ids: string[]) => {
     try {
       const res = await fetch("/api/admin/crm/prospects/bulk-reject", {
@@ -590,13 +715,18 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
         <CrmProspectFinder
           prospects={prospects}
           searchHistory={searchHistory}
+          sourceCapabilities={sourceCapabilities}
+          onImportDirectory={handleImportDirectory}
           onRunSearch={handleRunSearch}
           onAnalyzeProspect={handleAnalyzeProspect}
+          onEnrichProspect={handleEnrichProspect}
           onApproveProspect={handleApproveProspect}
           onBulkApprove={handleBulkApprove}
           onRejectProspect={handleRejectProspect}
+          onRestoreProspect={handleRestoreProspect}
           onBulkReject={handleBulkReject}
           isSearching={isSearching}
+          searchError={searchError}
         />
       )}
 
@@ -623,6 +753,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
       {/* Modals */}
       {selectedLead && (
         <CrmLeadDetailModal
+          key={selectedLead.id}
           lead={selectedLead}
           activities={selectedLeadActivities}
           calls={selectedLeadCalls}
@@ -630,6 +761,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
           onClose={() => setSelectedLead(null)}
           onUpdateLead={handleUpdateLead}
           onAddActivity={handleAddActivity}
+          onSaveAdminNotes={handleSaveAdminNotes}
           onAddCall={handleAddCall}
           onAddTask={handleAddTask}
           onToggleTaskStatus={handleToggleTaskStatus}
