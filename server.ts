@@ -13,6 +13,7 @@ import { crmStorage } from "./server/crm_storage";
 import { pingOllama, analyzeBusinessWithAI } from "./server/crm_engine";
 import { deliverPlatformEvent, hubEventsConfigured, hubOrganizationRef } from "./server/platformEvents";
 import { generateAiPromptGuidePdf } from "./server/aiPromptGuidePdf";
+import { shouldReplayHubLead } from "./server/hub-event-replay";
 
 // Configure environment variable definitions
 dotenv.config();
@@ -718,7 +719,7 @@ class DocumentDatabase {
 
   getPendingHubLeadEvents(): any[] {
     return this.readLeads()
-      .filter(l => ["pending", "disabled"].includes(l.hubEventStatus) && l.hubEventId)
+      .filter(l => shouldReplayHubLead(l) && l.hubEventId)
       .map(l => ({
         ...l,
         name: decryptPII(l.name),
