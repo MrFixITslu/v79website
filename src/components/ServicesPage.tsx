@@ -1,329 +1,232 @@
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import {
-  Shield, Cloud, Monitor, Network, Cpu, BarChart3, ChevronDown, CheckCircle, ArrowRight, Phone,
-  ShieldCheck, Lightbulb, Map
+  ArrowRight, BarChart3, BookOpen, CheckCircle2, ChevronDown, Cloud,
+  Cpu, FileText, Headphones, Monitor, Network, ShieldCheck, Workflow
 } from "lucide-react";
-import { Button } from "./ui/Button";
-
-const ASSESSMENT_SCOPE = [
-  { num: "1", title: "Infrastructure Review", items: ["Computer Health", "Router Diagnostics", "ISP Speed Verification", "WiFi Signal Mapping"], badgeClasses: "bg-indigo-500/10 text-indigo-400" },
-  { num: "2", title: "Security Audit", items: ["Password Practices", "Multi-Factor Status", "Endpoint Security", "Active User Access"], badgeClasses: "bg-rose-500/10 text-rose-400" },
-  { num: "3", title: "Data Protection", items: ["Backup Integrity", "Cloud Storage Setup", "M365 Email Audits", "Recovery Testing"], badgeClasses: "bg-sky-500/10 text-sky-400" },
-];
-
-const ASSESSMENT_DELIVERABLES = [
-  { icon: BarChart3, label: "Current ICT Security Score" },
-  { icon: ShieldCheck, label: "Identified Risks & Vulnerabilities" },
-  { icon: Lightbulb, label: "Recommended Practical Solutions" },
-  { icon: Map, label: "90-Day Priority Action Roadmap" },
-];
 
 const SERVICES = [
   {
-    id: "managed-it",
-    icon: Monitor,
-    title: "Managed IT Services",
-    tagline: "Reliable IT support that keeps your business running.",
-    color: "emerald",
-    iconBg: "bg-emerald-500/10",
-    iconColor: "text-emerald-400",
-    border: "border-emerald-500/20",
-    description: "Reliable IT support that keeps your business running smoothly with proactive maintenance and responsive support.",
-    features: [
-      "Remote Support",
-      "On-site Support",
-      "Preventative Maintenance",
-      "Network Monitoring",
-      "Help Desk",
-    ],
-    sla: "Response Targets by Service Plan",
-  },
-  {
-    id: "cloud",
-    icon: Cloud,
-    title: "Cloud Solutions",
-    tagline: "Move your business securely into the cloud.",
-    color: "sky",
-    iconBg: "bg-sky-500/10",
-    iconColor: "text-sky-400",
-    border: "border-sky-500/20",
-    description: "Secure, redundant cloud environments and productivity suites designed to keep your team connected anywhere.",
-    features: [
-      "Microsoft 365",
-      "Google Workspace",
-      "Cloud Backups",
-      "Cloud Migration",
-      "Disaster Recovery",
-    ],
-    sla: "Recovery Targets by Service Plan",
-  },
-  {
-    id: "software",
-    icon: BarChart3,
-    title: "Software Development",
-    tagline: "Custom applications built around your business.",
-    color: "rose",
-    iconBg: "bg-rose-500/10",
-    iconColor: "text-rose-400",
-    border: "border-rose-500/20",
-    description: "Custom applications built around your business workflows and operational goals.",
-    features: [
-      "Fire Finance Pro",
-      "Ticket Management Systems",
-      "Inventory Systems",
-      "KPI Dashboards",
-      "Customer Portals",
-      "Business Directories",
-    ],
-    sla: "Fixed-Price Project Delivery",
+    id: "digital-transformation",
+    icon: Workflow,
+    title: "Digital Transformation & Process Improvement",
+    tagline: "Make everyday work simpler.",
+    intro: "When paperwork, repeated tasks and disconnected tools slow people down, we help find a better way to work.",
+    features: ["Business process assessments", "Workflow mapping and improvement", "Document digitisation and searchable records", "System integration", "Automation and reporting dashboards"],
+    outcome: "Less repetitive work, easier access to information and clearer operational visibility.",
+    cta: "Improve my business processes",
   },
   {
     id: "ai-automation",
     icon: Cpu,
-    title: "AI & Automation",
-    tagline: "Reduce manual work with intelligent solutions.",
-    color: "indigo",
-    iconBg: "bg-indigo-500/10",
-    iconColor: "text-indigo-400",
-    border: "border-indigo-500/20",
-    description: "We build AI-powered solutions that automate repetitive business tasks and elevate team productivity.",
-    features: [
-      "AI Customer Support",
-      "AI Reporting",
-      "Workflow Automation",
-      "Document Processing",
-      "Internal Knowledge Assistants",
-    ],
-    sla: "Custom AI Implementation",
+    title: "AI & Intelligent Automation",
+    tagline: "Put AI to work where it makes sense.",
+    intro: "Explore useful AI opportunities with attention to staff readiness, information security and responsible adoption.",
+    features: ["AI opportunity assessments", "Practical AI awareness and team training", "AI-assisted document processing", "Internal knowledge assistants", "Workflow automation and reporting"],
+    outcome: "Improved productivity and more confident use of appropriate AI tools.",
+    cta: "Explore AI for my business",
+  },
+  {
+    id: "software",
+    icon: BarChart3,
+    title: "Business Software & SaaS Solutions",
+    tagline: "Tools that fit how your business actually operates.",
+    intro: "Evaluate, build and implement software around real operational needs, including suitable products within the evolving V79 ecosystem.",
+    features: ["Custom web applications and portals", "Customer service and ticket management", "Inventory and sales tools", "Finance and performance reporting", "Website development and integrations"],
+    outcome: "Less fragmented work and more useful information across business activities.",
+    cta: "Discuss a business software solution",
   },
   {
     id: "networking",
     icon: Network,
-    title: "Networking & Infrastructure",
-    tagline: "Enterprise-grade networking solutions.",
-    color: "violet",
-    iconBg: "bg-violet-500/10",
-    iconColor: "text-violet-400",
-    border: "border-violet-500/20",
-    description: "Robust physical and wireless infrastructure designed for reliable performance across your facility.",
-    features: [
-      "Wi-Fi",
-      "Fibre",
-      "Switching",
-      "Firewalls",
-      "VPN",
-      "Structured Cabling",
-    ],
-    sla: "Same-Day Emergency Response",
+    title: "ICT Infrastructure & Network Solutions",
+    tagline: "Dependable foundations for everything else.",
+    intro: "Your digital tools depend on connectivity, equipment and infrastructure that work reliably.",
+    features: ["Structured cabling", "Wired and wireless networking", "Network installation and upgrades", "Routers, switches and connectivity troubleshooting", "Infrastructure and equipment assessments"],
+    outcome: "A stronger technology foundation with fewer avoidable interruptions.",
+    cta: "Discuss my ICT environment",
+  },
+  {
+    id: "managed-it",
+    icon: Headphones,
+    title: "Managed ICT Services & Support",
+    tagline: "Support beyond installation.",
+    intro: "Choose practical ongoing ICT assistance and maintenance arrangements matched to your organisation's needs.",
+    features: ["Remote and on-site support where available", "Preventative maintenance", "Fault investigation and management", "ICT inventory and vendor coordination", "Monitoring where included in the agreement"],
+    outcome: "More predictable support and improved continuity.",
+    cta: "Explore ICT support packages",
   },
   {
     id: "cybersecurity",
-    icon: Shield,
-    title: "Cybersecurity",
-    tagline: "Protect your business from emerging threats.",
-    color: "amber",
-    iconBg: "bg-amber-500/10",
-    iconColor: "text-amber-400",
-    border: "border-amber-500/20",
-    description: "Proactive security audits, endpoint protection, and training to safeguard your corporate data.",
-    features: [
-      "Security Audits",
-      "Vulnerability Assessments",
-      "Backup Solutions",
-      "Endpoint Protection",
-      "Security Awareness Training",
-    ],
-    sla: "48-Hour Audit Turnaround",
+    icon: ShieldCheck,
+    title: "Cybersecurity & Business Continuity",
+    tagline: "Protect what keeps your business running.",
+    intro: "Understand your risks and choose proportionate safeguards for systems, people and information.",
+    features: ["ICT security reviews and MFA guidance", "Access and password practice assessments", "Backup and recovery planning", "Security awareness training", "Business continuity readiness"],
+    outcome: "Stronger day-to-day practices and better preparation for disruption.",
+    cta: "Review my business risks",
   },
+  {
+    id: "cloud",
+    icon: Cloud,
+    title: "Cloud & Productivity Systems",
+    tagline: "Connect people, files and work more effectively.",
+    intro: "Assess practical cloud services that help people collaborate while considering cost, access control and recovery needs.",
+    features: ["Microsoft 365 and Google Workspace support", "Cloud migration planning", "User and permission configuration", "Cloud backup planning", "Collaboration and productivity systems"],
+    outcome: "Better collaboration and clearer management of essential business information.",
+    cta: "Explore cloud solutions",
+  }
+];
+
+const packages = [
+  { title: "Essential", who: "Small businesses needing occasional assistance", offer: "Scoped installations, assessments and support when needed." },
+  { title: "Business Care", who: "Businesses needing ongoing ICT assistance", offer: "Scheduled maintenance, remote support and agreed response targets." },
+  { title: "Managed Plus", who: "More technology-dependent organisations", offer: "A broader support scope, with monitoring and planned maintenance where agreed." }
+];
+
+const challenges = [
+  { title: "Too much paperwork", answer: "Digitise documents, make records easier to find and simplify approvals.", service: "digital-transformation" },
+  { title: "Customer requests getting lost", answer: "Improve ticket tracking, follow-up and team communication.", service: "software" },
+  { title: "Disconnected applications", answer: "Map data flows and explore integration opportunities.", service: "digital-transformation" },
+  { title: "Unreliable infrastructure", answer: "Review your network and support arrangements.", service: "networking" },
+  { title: "Unclear opportunities for AI", answer: "Identify useful, responsible applications and train staff.", service: "ai-automation" },
+  { title: "Not enough operational visibility", answer: "Bring key data into meaningful dashboards and reports.", service: "software" }
+];
+
+const steps = [
+  { n: "01", title: "Understand", text: "We listen to your goals, challenges and current ways of working." },
+  { n: "02", title: "Recommend", text: "We outline practical options and explain trade-offs and costs." },
+  { n: "03", title: "Implement", text: "We deliver the agreed solution with your team." },
+  { n: "04", title: "Support", text: "Where agreed, we provide ongoing help, training and improvements." }
 ];
 
 export default function ServicesPage({
-  onNavigate,
-  openId,
-  setOpenId,
+  onNavigate, openId, setOpenId
 }: {
   onNavigate: (v: string) => void;
-  // Lifted up to App.tsx so the nav's Services dropdown can open a specific
-  // card directly (e.g. clicking "Cloud Solutions" arrives with that card
-  // already expanded, not just scrolled to its collapsed header).
   openId: string | null;
   setOpenId: (id: string | null) => void;
 }) {
+  const reduce = useReducedMotion();
+  const reveal = reduce ? {} : {
+    initial: { opacity: 0, y: 20 },
+    whileInView: { opacity: 1, y: 0 },
+    viewport: { once: true, amount: 0.12 },
+    transition: { duration: 0.55, ease: "easeOut" as const }
+  };
   return (
-    <div className="space-y-16 pb-16">
-      {/* Hero */}
-      <section className="pt-10 px-6 lg:px-8 text-center space-y-4 relative">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-0 left-1/3 w-[350px] h-[350px] bg-indigo-500/6 rounded-full blur-3xl" />
+    <div className="space-y-20 pb-16 sm:space-y-28">
+      <section className="px-6 pt-12 sm:pt-20">
+        <div className="mx-auto max-w-6xl">
+          <motion.p {...reveal} className="text-xs font-bold uppercase tracking-[.2em] text-v79-teal">Our services</motion.p>
+          <motion.h1 {...reveal} className="mt-5 max-w-5xl text-4xl font-bold leading-[1.1] tracking-[-.05em] sm:text-6xl">
+            Better systems. Smoother operations. <span className="text-v79-teal">More room to grow.</span>
+          </motion.h1>
+          <motion.p {...reveal} className="mt-7 max-w-3xl text-lg leading-8 text-app-text-sec">
+            Your business doesn't need technology that creates more work. V79 Digital brings together digital transformation, business software and ICT expertise to help Caribbean organisations work more efficiently.
+          </motion.p>
+          <button onClick={() => onNavigate("contact")} className="mt-8 inline-flex items-center gap-2 rounded-full bg-v79-teal px-7 py-4 text-sm font-bold text-white hover:bg-v79-teal-dark">Book a discovery call <ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
         </div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="relative z-10 space-y-4">
-          <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-indigo-400">What We Offer</span>
-          <h1 className="text-4xl sm:text-5xl font-extrabold font-display tracking-tight text-app-text dark:text-white">
-            Services
-          </h1>
-          <p className="max-w-xl mx-auto text-sm text-app-text-sec font-light leading-relaxed">
-            Enterprise ICT services, cloud solutions, custom software, AI automation, and cybersecurity designed for Caribbean businesses.
-          </p>
-        </motion.div>
       </section>
 
-      {/* Accordion Service Cards */}
-      <section className="px-6 lg:px-8 space-y-3 max-w-4xl mx-auto w-full">
-        {SERVICES.map((s, i) => {
-          const Icon = s.icon;
-          const isOpen = openId === s.id;
-          return (
-            <motion.div
-              id={s.id}
-              key={s.id}
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.06 }}
-              className={`glass rounded-2xl border overflow-hidden transition-colors duration-300 scroll-mt-24 ${isOpen ? s.border : "border-app-border hover:border-app-text/15"}`}
-            >
-              <button
-                onClick={() => setOpenId(isOpen ? null : s.id)}
-                className="w-full flex items-center gap-4 px-6 py-5 cursor-pointer text-left group"
-              >
-                <div className={`w-11 h-11 rounded-xl shrink-0 ${s.iconBg} border ${s.border} flex items-center justify-center`}>
-                  <Icon className={`w-5 h-5 ${s.iconColor}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm text-app-text dark:text-white group-hover:text-indigo-400 transition font-display">{s.title}</div>
-                  <div className="text-[11px] text-app-text-muted font-mono mt-0.5">{s.tagline}</div>
-                </div>
-                <div className={`shrink-0 ml-2 transition-transform duration-300 ${isOpen ? "rotate-180" : ""} ${s.iconColor}`}>
-                  <ChevronDown className="w-4 h-4" />
-                </div>
-              </button>
-              <AnimatePresence>
-                {isOpen && (
-                  <motion.div
-                    key="content"
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25, ease: "easeInOut" }}
-                    className="overflow-hidden"
-                  >
-                    <div className="px-6 pb-6 space-y-5 border-t border-app-border/50 pt-5">
-                      <p className="text-sm text-app-text-sec font-light leading-relaxed">{s.description}</p>
-                      <div className="grid sm:grid-cols-2 gap-2">
-                        {s.features.map((f) => (
-                          <div key={f} className="flex items-start gap-2.5">
-                            <CheckCircle className={`w-4 h-4 ${s.iconColor} shrink-0 mt-0.5`} />
-                            <span className="text-xs text-app-text-sec font-light">{f}</span>
-                          </div>
-                        ))}
+      <section className="px-6">
+        <div className="mx-auto max-w-6xl">
+          <motion.div {...reveal} className="mb-10 max-w-3xl">
+            <p className="text-xs font-bold uppercase tracking-[.2em] text-v79-teal">How we help</p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">Start with the challenge. Find the right solution.</h2>
+            <p className="mt-5 leading-8 text-app-text-sec">Digital transformation leads our approach. ICT infrastructure, ongoing support and business software are the foundations that make change practical.</p>
+          </motion.div>
+          <div className="grid gap-4">
+            {SERVICES.map((s, i) => {
+              const Icon = s.icon;
+              const expanded = s.id === openId;
+              return (
+                <motion.article {...reveal} key={s.id} id={s.id} className={"scroll-mt-36 overflow-hidden rounded-[1.5rem] border bg-app-bg transition-colors " + (expanded ? "border-v79-teal/50 shadow-lg" : "border-app-border hover:border-v79-teal/30")}>
+                  <button type="button" onClick={() => setOpenId(expanded ? null : s.id)} aria-expanded={expanded} aria-controls={s.id + "-details"} className="flex w-full items-center gap-4 p-5 text-left sm:p-7">
+                    <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-v79-teal/10 text-v79-teal"><Icon className="h-6 w-6" aria-hidden="true" /></span>
+                    <span className="min-w-0 flex-1"><span className="block text-xs font-bold uppercase tracking-[.15em] text-v79-teal">{String(i + 1).padStart(2, "0")} / {String(SERVICES.length).padStart(2, "0")}</span><span className="mt-1 block text-lg font-bold sm:text-2xl">{s.title}</span><span className="mt-1 block text-sm text-app-text-sec">{s.tagline}</span></span>
+                    <ChevronDown className={"h-5 w-5 shrink-0 text-v79-teal transition-transform " + (expanded ? "rotate-180" : "")} aria-hidden="true" />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {expanded && <motion.div id={s.id + "-details"} initial={reduce ? false : {height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={reduce ? undefined : {height:0,opacity:0}} transition={{duration:0.25}} className="overflow-hidden">
+                      <div className="grid gap-7 border-t border-app-border px-6 py-7 sm:grid-cols-[1fr_.95fr] sm:px-9">
+                        <div>
+                          <p className="leading-8 text-app-text-sec">{s.intro}</p>
+                          <p className="mt-6 text-xs font-bold uppercase tracking-[.13em] text-v79-teal">What this can improve</p>
+                          <p className="mt-2 text-sm leading-7 text-app-text-sec">{s.outcome}</p>
+                          <button onClick={() => onNavigate("contact")} className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-v79-teal hover:underline">{s.cta} <ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
+                        </div>
+                        <ul className="space-y-3">{s.features.map(feature => <li key={feature} className="flex items-start gap-3 rounded-xl bg-app-aside-bg/40 p-3 text-sm leading-6 text-app-text-sec"><CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-v79-teal" aria-hidden="true" />{feature}</li>)}</ul>
                       </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-app-border/50">
-                        <span className={`text-[10px] font-mono font-bold uppercase tracking-widest ${s.iconColor} ${s.iconBg} border ${s.border} px-3 py-1 rounded-full`}>
-                          SLA: {s.sla}
-                        </span>
-                        <button
-                          onClick={() => onNavigate("contact")}
-                          className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition cursor-pointer"
-                        >
-                          Get a quote <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          );
-        })}
+                    </motion.div>}
+                  </AnimatePresence>
+                </motion.article>
+              );
+            })}
+          </div>
+          <p className="mt-6 text-sm leading-7 text-app-text-muted">Services, delivery locations, response times and technical scope are confirmed in each proposal or service agreement.</p>
+        </div>
       </section>
 
-      {/* ── ICT Business Health Assessment ───────────────────────────
-           The discovery conversation is free. Formal assessment scope and
-           pricing are quoted after the environment is understood. */}
-      <section id="assessment" className="px-6 lg:px-8 max-w-7xl mx-auto scroll-mt-24">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="glass rounded-3xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/[0.04] to-transparent p-6 sm:p-10 space-y-8"
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-mono uppercase font-extrabold tracking-[0.25em] text-indigo-400">Business Assessment</span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold font-display text-app-text dark:text-white tracking-tight max-w-xl">
-                Know Your Technology Risks Before They Become Costly Business Blockades
-              </h2>
-              <p className="text-sm text-app-text-sec font-light max-w-xl leading-relaxed">
-                A thorough diagnostic sweep uncovering hidden system bugs, network limits, server performance issues, and password vulnerabilities.
-              </p>
-            </div>
-            <div className="shrink-0 bg-indigo-600 border border-indigo-400 rounded-xl px-5 py-3 text-white text-center">
-              <span className="text-[10px] font-mono block text-indigo-200">ICT Business Health Assessment</span>
-              <span className="text-xl font-black font-display tracking-tighter block">Custom Scope</span>
-              <span className="text-[9px] font-mono block text-indigo-200">Quoted after discovery</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {ASSESSMENT_SCOPE.map((s) => (
-              <div key={s.title} className="p-4 rounded-xl border border-app-border bg-app-aside-bg/25 space-y-2">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs font-mono ${s.badgeClasses}`}>{s.num}</div>
-                <p className="text-xs font-bold text-app-text dark:text-white">{s.title}</p>
-                <ul className="text-[10px] text-app-text-muted space-y-1 leading-normal font-mono">
-                  {s.items.map((it) => <li key={it}>• {it}</li>)}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          <div className="p-5 rounded-xl border border-emerald-500/15 bg-emerald-500/[0.02] space-y-3">
-            <span className="text-[10px] font-mono uppercase text-emerald-400 font-bold block tracking-wider">The Deliverable: Business Intelligence Report</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {ASSESSMENT_DELIVERABLES.map((d) => {
-                const Icon = d.icon;
-                return (
-                  <div key={d.label} className="flex items-center gap-2 text-xs font-mono text-app-text-sec">
-                    <Icon className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>{d.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 border-t border-app-border/40">
-            <Button onClick={() => onNavigate("contact")} variant="primary" icon={<ArrowRight className="w-4 h-4" />}>
-              Book a Free ICT Consultation
-            </Button>
-            <a href="tel:+17587260035" className="flex items-center gap-2 text-sm font-semibold text-app-text-sec hover:text-indigo-400 transition">
-              <Phone className="w-4 h-4" /> Or call +1 758 726 0035
-            </a>
-          </div>
-        </motion.div>
+      <section id="assessment" className="scroll-mt-32 bg-v79-navy px-6 py-16 text-white sm:py-20">
+        <div className="mx-auto grid max-w-6xl gap-9 lg:grid-cols-[1fr_.85fr] lg:items-center">
+          <motion.div {...reveal}>
+            <p className="text-xs font-bold uppercase tracking-[.18em] text-v79-teal-light">Business discovery</p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">Not sure what needs to change first?</h2>
+            <p className="mt-5 leading-8 text-white/75">Start with a conversation about your business. We'll discuss priorities and immediate concerns, then recommend whether a more detailed, separately quoted technical or process assessment is worthwhile.</p>
+            <button onClick={() => onNavigate("contact")} className="mt-7 inline-flex items-center gap-2 rounded-full bg-v79-teal px-6 py-3.5 text-sm font-bold text-white hover:bg-v79-teal-dark">Book a free discovery call <ArrowRight size={17} aria-hidden="true" /></button>
+          </motion.div>
+          <motion.div {...reveal} className="grid gap-3">
+            {[
+              [Monitor, "Technology foundations", "Networks, equipment, systems and support arrangements."],
+              [ShieldCheck, "Risks and continuity", "Security practices, backups and operational dependencies."],
+              [Workflow, "Workflows and information", "Paperwork, manual tasks, reporting and systems integration."]
+            ].map(([Icon,heading,desc]) => { const Graphic=Icon as typeof Monitor; return <div key={heading as string} className="flex gap-4 rounded-2xl border border-white/15 bg-white/[.06] p-5"><Graphic className="mt-1 h-5 w-5 shrink-0 text-v79-teal-light" aria-hidden="true" /><div><h3 className="font-bold">{heading as string}</h3><p className="mt-1 text-sm leading-6 text-white/70">{desc as string}</p></div></div>; })}
+          </motion.div>
+        </div>
       </section>
 
-      {/* CTA */}
-      <section className="px-6 lg:px-8 max-w-4xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="glass rounded-2xl border border-indigo-500/20 p-8 sm:p-10 flex flex-col sm:flex-row items-center justify-between gap-6"
-        >
-          <div className="space-y-1">
-            <h2 className="text-lg font-extrabold font-display text-app-text dark:text-white">Not sure which service you need?</h2>
-            <p className="text-sm text-app-text-sec font-light">Request a free ICT assessment. We'll audit your current setup and recommend exactly what fits your budget.</p>
+      <section className="px-6">
+        <div className="mx-auto max-w-6xl">
+          <motion.div {...reveal} className="mb-10 max-w-3xl">
+            <p className="text-xs font-bold uppercase tracking-[.2em] text-v79-teal">ICT support packages</p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">Support that fits your business.</h2>
+            <p className="mt-5 leading-8 text-app-text-sec">The right level of support depends on your systems, locations and team. These are example package structures for discussion, not published offers or guaranteed SLAs.</p>
+          </motion.div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {packages.map(p => <motion.article {...reveal} key={p.title} className="rounded-[1.5rem] border border-app-border bg-app-aside-bg/35 p-7">
+              <h3 className="text-2xl font-bold">{p.title}</h3><p className="mt-4 text-sm font-semibold text-v79-teal">{p.who}</p><p className="mt-4 leading-7 text-app-text-sec">{p.offer}</p>
+              <button onClick={() => onNavigate("contact")} className="mt-7 inline-flex items-center gap-2 text-sm font-bold text-v79-teal hover:underline">Ask about this package <ArrowRight size={16} aria-hidden="true" /></button>
+            </motion.article>)}
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-            <Button onClick={() => onNavigate("contact")} variant="primary" icon={<ArrowRight className="w-4 h-4" />}>
-              Request Affordable ICT Support
-            </Button>
-            <Button href="tel:+17587260035" variant="secondary" iconBefore={<Phone className="w-4 h-4" />}>
-              Call Us
-            </Button>
+          <p className="mt-5 text-xs leading-6 text-app-text-muted">Package naming, scope, prices, availability and service levels require separate commercial confirmation.</p>
+        </div>
+      </section>
+
+      <section className="px-6">
+        <div className="mx-auto max-w-6xl">
+          <motion.div {...reveal} className="mb-9 max-w-3xl">
+            <p className="text-xs font-bold uppercase tracking-[.2em] text-v79-teal">Everyday business problems</p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">Tell us what's slowing you down.</h2>
+          </motion.div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {challenges.map(c=><motion.button {...reveal} type="button" key={c.title} className="rounded-2xl border border-app-border p-6 text-left transition hover:border-v79-teal/40 hover:shadow-lg" onClick={() => {setOpenId(c.service);document.getElementById(c.service)?.scrollIntoView({behavior:reduce?"auto":"smooth",block:"center"});}}>
+              <h3 className="font-bold">{c.title}</h3><p className="mt-3 text-sm leading-7 text-app-text-sec">{c.answer}</p><span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-v79-teal">Explore solution <ArrowRight size={15} aria-hidden="true" /></span>
+            </motion.button>)}
           </div>
+        </div>
+      </section>
+
+      <section className="px-6">
+        <div className="mx-auto max-w-6xl">
+          <motion.div {...reveal} className="max-w-3xl"><p className="text-xs font-bold uppercase tracking-[.2em] text-v79-teal">Our approach</p><h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">A clearer path forward.</h2></motion.div>
+          <div className="mt-9 grid gap-4 md:grid-cols-2 lg:grid-cols-4">{steps.map(s=><motion.div {...reveal} key={s.n} className="rounded-2xl border border-app-border bg-app-bg p-6"><span className="text-sm font-bold text-v79-teal">{s.n}</span><h3 className="mt-5 text-xl font-bold">{s.title}</h3><p className="mt-3 text-sm leading-7 text-app-text-sec">{s.text}</p></motion.div>)}</div>
+        </div>
+      </section>
+
+      <section className="px-6">
+        <motion.div {...reveal} className="mx-auto flex max-w-6xl flex-col gap-6 rounded-[2rem] bg-v79-navy p-9 text-white sm:p-12 lg:flex-row lg:items-center lg:justify-between">
+          <div><p className="text-xs font-bold uppercase tracking-[.2em] text-v79-teal-light">From Idea to Advantage</p><h2 className="mt-3 text-3xl font-bold tracking-tight">Your next improvement starts with a conversation.</h2><p className="mt-3 max-w-2xl leading-7 text-white/70">Let's identify the right priorities and a practical way forward for your business.</p></div>
+          <button onClick={()=>onNavigate("contact")} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-v79-teal px-7 py-4 text-sm font-bold text-white hover:bg-v79-teal-dark">Book a discovery call <ArrowRight size={17} aria-hidden="true" /></button>
         </motion.div>
       </section>
     </div>
