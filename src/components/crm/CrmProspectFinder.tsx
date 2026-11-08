@@ -1,3 +1,4 @@
+import { offeringByLabel } from "../../crm/offerings";
 import { useState } from "react";
 import { Search, MapPin, Sparkles, CheckCircle2, XCircle, ShieldCheck, Globe, Phone, Mail, History, ExternalLink, RefreshCw } from "lucide-react";
 import { Prospect, ProspectSearchLog, SAINT_LUCIA_LOCATIONS } from "../../crm/types";
@@ -364,13 +365,11 @@ export function CrmProspectFinder({
                           <span>{p.phone}</span>
                         </a>
                       )}
-                      {p.website ? (
+                      {p.website && (
                         <a href={p.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-500 hover:underline truncate max-w-[150px]">
                           <Globe className="w-3 h-3" />
-                          <span>Website</span>
+                          <span>Business link</span>
                         </a>
-                      ) : (
-                        <span className="text-amber-500 font-mono text-[10px]">No website listed</span>
                       )}
                       {p.facebookUrl && (
                         <a href={p.facebookUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">
@@ -379,14 +378,24 @@ export function CrmProspectFinder({
                       )}
                     </div>
 
-                    {/* AI Opportunities detected */}
-                    {p.aiAnalysis?.problems && p.aiAnalysis.problems.length > 0 && (
-                      <div className="p-2.5 rounded-xl bg-app-bg/80 border border-app-border text-[11px] space-y-1">
+                    {/* Explain which V79 offerings might fit; keep unverified sector matches labelled. */}
+                    {p.aiAnalysis && (
+                      <div className="p-2.5 rounded-xl bg-app-bg/80 border border-app-border text-[11px] space-y-2">
                         <span className="font-bold text-app-text flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-amber-500" />
-                          <span>Opportunity Detected:</span>
+                          <span>Potential V79 ICT & SaaS Matches</span>
                         </span>
-                        <p className="text-app-text-sec line-clamp-1">{p.aiAnalysis.problems[0]}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(p.aiAnalysis.recommendedServices || []).filter((name) => offeringByLabel(name)).map((name) => (
+                            <span key={name} className="px-2 py-1 rounded border border-sky-500/20 bg-sky-500/10 text-sky-500">
+                              {name} · {offeringByLabel(name)?.kind === "Hub App" ? "SaaS" : "ICT"}
+                            </span>
+                          ))}
+                          {!(p.aiAnalysis.recommendedServices || []).some((name) => offeringByLabel(name)) && (
+                            <span className="text-app-text-sec">No specific match yet. Confirm their operational needs.</span>
+                          )}
+                        </div>
+                        <p className="text-app-text-sec">Suggestions based on supplied details, not verified customer problems.</p>
                       </div>
                     )}
 

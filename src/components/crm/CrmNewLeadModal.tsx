@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, UserPlus, Building, Mail, Phone, MapPin, DollarSign, Briefcase } from "lucide-react";
 import { SAINT_LUCIA_LOCATIONS } from "../../crm/types";
+import { V79_OFFERINGS } from "../../crm/offerings";
 
 interface CrmNewLeadModalProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [location, setLocation] = useState("Castries");
-  const [serviceRequested, setServiceRequested] = useState("Managed IT Support");
+  const [serviceRequested, setServiceRequested] = useState("General ICT Inquiry");
   const [estimatedValue, setEstimatedValue] = useState(5000);
   const [priority, setPriority] = useState<"Low" | "Medium" | "High" | "Urgent">("Medium");
   const [leadSource, setLeadSource] = useState("Direct Phone Call");
@@ -150,13 +151,14 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
                 onChange={(e) => setServiceRequested(e.target.value)}
                 className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs focus:outline-none"
               >
-                <option value="Managed IT Support">Managed IT Support</option>
-                <option value="Network Infrastructure & Wi-Fi">Network Infrastructure & Wi-Fi</option>
-                <option value="VoIP Phone Systems">VoIP Phone Systems</option>
-                <option value="Cybersecurity & Backup">Cybersecurity & Backup</option>
-                <option value="Web & SaaS Development">Web & SaaS Development</option>
-                <option value="Cloud Migration">Cloud Migration</option>
-                <option value="Hardware Procurement">Hardware Procurement</option>
+                <option value="General ICT Inquiry">Not yet specified — confirm customer need</option>
+                {(["ICT Service", "Hub App"] as const).map((kind) => (
+                  <optgroup key={kind} label={kind === "Hub App" ? "V79 Hub SaaS Products" : "V79 ICT Services"}>
+                    {V79_OFFERINGS.filter((item) => item.kind === kind).map((item) => (
+                      <option key={item.id} value={item.label}>{item.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
 
