@@ -1,0 +1,8 @@
+/* V79 reader-first presentation. Hide only the redundant social toolbar
+   ABOVE an article. The full share section BELOW the article remains. */
+#main-content article > header > div.border-y {
+  display: none !important;
+}
+#article-reader h1 + div:has([aria-label="Share article"]) {
+  display: none !important;
+}

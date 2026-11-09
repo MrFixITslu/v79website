@@ -5,7 +5,9 @@ import {
   LayoutDashboard, WalletCards, Megaphone, ShoppingCart,
   GraduationCap, ArrowRight, ShieldCheck, CheckCircle2,
 } from "lucide-react";
-import HomePage from "./components/HomePage";
+import HybridHomePage from "./components/HybridHomePage";
+import { ServiceDetailPage, ProductDetailPage, SoftwareOverviewPage } from "./components/OfferingPages";
+import { getServicePage, getProductPage } from "./data/siteOfferings";
 import AboutPage from "./components/AboutPage";
 import ServicesPage from "./components/ServicesPage";
 import IndustriesPage from "./components/IndustriesPage";
@@ -37,27 +39,24 @@ function getCourseIdFromUrl(): number | null {
 const SECTIONS = [
   { id: "home", label: "Home", subItems: [
     { id: "services-overview", label: "What We Do" },
-    { id: "why-v79", label: "Why Choose V79" },
-    { id: "cost-of-downtime", label: "Cost of Downtime" },
-    ...(CLIENT_STORIES.length > 0 ? [{ id: "testimonials", label: "Client Stories" }] : []),
-    { id: "free-assessment", label: "ICT Health Assessment" },
+    { id: "why-v79", label: "Why V79" },
+    { id: "how-we-work", label: "How We Work" },
+    { id: "inside-v79", label: "Inside V79" },
+    { id: "free-assessment", label: "Talk to Us" },
   ]},
-  { id: "about", label: "About" },
   { id: "services", label: "Services", subItems: [
-    { id: "managed-it", label: "Managed IT Services" },
-    { id: "cloud", label: "Cloud Solutions" },
-    { id: "software", label: "Custom Software" },
-    { id: "ai-automation", label: "AI Automation" },
-    { id: "networking", label: "Network & VoIP" },
+    { id: "managed-it", label: "Managed IT Support" },
+    { id: "cloud", label: "Cloud & Backup" },
+    { id: "software", label: "Business Software" },
+    { id: "ai-automation", label: "AI & Automation" },
+    { id: "networking", label: "Networks & VoIP" },
     { id: "cybersecurity", label: "Cybersecurity" },
-    { id: "assessment", label: "ICT Health Assessment" },
   ]},
-  { id: "industries", label: "Industries" },
-  { id: "solutions", label: "Solutions" },
-  { id: "resources", label: "Resources" },
+  { id: "solutions", label: "Software & Apps" },
+  { id: "resources", label: "Training & Resources" },
+  { id: "about", label: "About" },
   { id: "contact", label: "Contact" },
 ];
-
 // The subset of Services sub-items that are actual accordion cards in
 // ServicesPage (as opposed to "assessment", which is always-visible
 // content with nothing to expand). Clicking one of these in the nav should
@@ -95,8 +94,8 @@ export default function App() {
   // its (still collapsed) header and making the user click it again.
   const [openServiceId, setOpenServiceId] = useState<string | null>("managed-it");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
-    try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "dark"; }
-    catch { return "dark"; }
+    try { return (localStorage.getItem("vision79-theme") as "light" | "dark") || "light"; }
+    catch { return "light"; }
   });
 
   // Legacy course deep-links remain supported, but course discovery now lives in V79 Academy.
@@ -255,6 +254,14 @@ export default function App() {
   const navTransitionSeq = useRef(0);
 
   const scrollTo = (id: string, parentId?: string) => {
+    // Deep service and product pages use full, accessible route navigation.
+    const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
+    if (currentPath === "/software" || /^\/(?:services|software)\//.test(currentPath)) {
+      const parent = parentId || id;
+      const section = parent === "home" ? "/" : "/" + parent;
+      window.location.assign(section + (id !== parent ? "#" + id : ""));
+      return;
+    }
     if (selectedArticleSlug) {
       setSelectedArticleSlug(null);
       const url = new URL(window.location.href);
@@ -329,10 +336,36 @@ export default function App() {
     }, NAV_FADE_IN_MS);
   };
 
+  // Detail pages highlight their owning section, not the homepage.
+  const detailNavigationSection = /^\/services\//.test(window.location.pathname)
+    ? "services"
+    : /^\/software(?:\/|$)/.test(window.location.pathname) ? "solutions" : null;
   const isSectionActive = (sec: typeof SECTIONS[number]) =>
-    activeSection === sec.id || (sec.subItems?.some(si => si.id === activeSection) ?? false);
+    detailNavigationSection
+      ? sec.id === detailNavigationSection
+      : activeSection === sec.id || (sec.subItems?.some(si => si.id === activeSection) ?? false);
+
+  const serviceDetailLinks: Record<string, string> = {
+    "managed-it": "/services/managed-it-support",
+    cloud: "/services/cloud-backup",
+    software: "/services/business-software",
+    "ai-automation": "/services/ai-automation",
+    networking: "/services/networks-voip",
+    cybersecurity: "/services/cybersecurity",
+  };
+  const navigateSubItem = (section: string, subItem: string) => {
+    if (section === "services" && serviceDetailLinks[subItem]) {
+      window.location.assign(serviceDetailLinks[subItem]);
+      return;
+    }
+    scrollTo(subItem, section);
+  };
 
   const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
+  const serviceDetail = getServicePage(normalizedPath);
+  const productDetail = getProductPage(normalizedPath);
+  const isOfferingRoute = normalizedPath === "/software" || Boolean(serviceDetail || productDetail);
+
   if (normalizedPath === "/privacy") return <LegalPage type="privacy" />;
   if (normalizedPath === "/terms") return <LegalPage type="terms" />;
   if (normalizedPath === "/data-deletion") return <LegalPage type="data-deletion" />;
@@ -396,7 +429,7 @@ export default function App() {
                     <span className="absolute inset-0 rounded-lg opacity-0 hover:opacity-100 bg-app-aside-bg transition-opacity" />
                   )}
                   <button
-                    onClick={() => scrollTo(sec.id)}
+                    onClick={() => sec.id === "solutions" ? window.location.assign("/software") : scrollTo(sec.id)}
                     className="relative z-10 pl-3.5 pr-1.5 py-1.5 text-xs font-semibold tracking-wide cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded-lg"
                   >
                     {sec.label}
@@ -428,7 +461,7 @@ export default function App() {
                       {sec.subItems!.map(sub => (
                         <button
                           key={sub.id}
-                          onClick={() => scrollTo(sub.id, sec.id)}
+                          onClick={() => navigateSubItem(sec.id, sub.id)}
                           className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 ${
                             activeSection === sub.id
                               ? "text-v79-teal bg-v79-teal/10"
@@ -524,7 +557,7 @@ export default function App() {
                       />
                     )}
                     <button
-                      onClick={() => scrollTo(sec.id)}
+                      onClick={() => sec.id === "solutions" ? window.location.assign("/software") : scrollTo(sec.id)}
                       className="relative z-10 flex-1 px-4 py-3 text-sm font-semibold text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded-xl"
                     >
                       {sec.label}
@@ -552,7 +585,7 @@ export default function App() {
                         {sec.subItems!.map(sub => (
                           <button
                             key={sub.id}
-                            onClick={() => scrollTo(sub.id, sec.id)}
+                            onClick={() => navigateSubItem(sec.id, sub.id)}
                             className={`w-full text-left px-4 py-2.5 rounded-lg text-sm cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 ${
                               activeSection === sub.id
                                 ? "text-v79-teal font-semibold"
@@ -572,7 +605,11 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {selectedArticleSlug ? (
+      {isOfferingRoute ? (
+        <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
+          {serviceDetail ? <ServiceDetailPage page={serviceDetail} /> : productDetail ? <ProductDetailPage page={productDetail} /> : <SoftwareOverviewPage />}
+        </main>
+      ) : selectedArticleSlug ? (
         <main id="main-content" tabIndex={-1} className="flex-1 min-h-[75vh] focus:outline-none">
           <Suspense fallback={<SectionLoadingFallback />}>
             <ArticleDetailPage
@@ -609,7 +646,7 @@ export default function App() {
         /* Continuous One-Page Apple-Inspired Flow */
         <main id="main-content" tabIndex={-1} className="flex-1 space-y-32 pb-24 pt-28 focus:outline-none">
         <section id="home" className="scroll-mt-32">
-          <HomePage onNavigate={(v) => scrollTo(SECTIONS.some(s => s.id === v) ? v : "services")} />
+          <HybridHomePage />
         </section>
 
         <div className="w-full max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-app-border to-transparent" /></div>
@@ -837,10 +874,12 @@ export default function App() {
           <div className="space-y-2 text-xs">
             <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono text-[11px]">Services</div>
             <ul className="space-y-1.5 text-slate-600 dark:text-white/60 font-light">
-              <li><button onClick={() => scrollTo("services")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Cybersecurity</button></li>
-              <li><button onClick={() => scrollTo("services")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Cloud &amp; Backup</button></li>
-              <li><button onClick={() => scrollTo("services")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Managed IT Support</button></li>
-              <li><button onClick={() => scrollTo("services")} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">Custom Software</button></li>
+              <li><a href="/services/managed-it-support" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Managed IT Support</a></li>
+              <li><a href="/services/cybersecurity" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Cybersecurity</a></li>
+              <li><a href="/services/cloud-backup" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Cloud &amp; Backup</a></li>
+              <li><a href="/services/networks-voip" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Networks &amp; VoIP</a></li>
+              <li><a href="/services/ai-automation" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">AI &amp; Automation</a></li>
+              <li><a href="/services/business-software" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Business Software</a></li>
             </ul>
           </div>
 
@@ -862,6 +901,8 @@ export default function App() {
                   <button onClick={() => scrollTo(s.id)} className="hover:text-v79-teal dark:hover:text-v79-teal-light transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v79-teal/50 rounded">{s.label}</button>
                 </li>
               ))}
+              <li><a href="/software/hub" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">V79 Hub</a></li>
+              <li><a href="/software/tiquet" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">V79 Tiquet</a></li>
               <li><a href="/free-ai-prompting-guide" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Free AI Prompt Guide</a></li>
               <li>Castries, Saint Lucia</li>
             </ul>
@@ -877,7 +918,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-white/50 font-mono">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-v79-teal-light animate-pulse" />
-            <span>Website operational · Service SLAs are defined by client agreement</span>
+            <span>Service scope and response arrangements are agreed in writing</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-end">
             <a href="/privacy" className="hover:text-v79-teal dark:hover:text-v79-teal-light transition">Privacy Policy</a>

@@ -3032,8 +3032,8 @@ async function startServer() {
       const normalizedPath = (req.path || "/").replace(/\/+$/, "") || "/";
       const staticPages: Record<string, { title: string; description: string }> = {
         "/": {
-          title: "Managed IT, Cloud & Business Software Saint Lucia | V79 Digital",
-          description: "V79 Digital helps Saint Lucia businesses with managed IT, cloud services, cybersecurity, business software, automation, and practical technology training.",
+          title: "Managed IT, Business Software & AI in the Caribbean | V79 Digital",
+          description: "V79 Digital helps Caribbean businesses with practical managed ICT, cybersecurity, business software, AI and digital transformation.",
         },
         "/about": {
           title: "About V79 Digital | Caribbean ICT Experience",
@@ -3082,8 +3082,8 @@ async function startServer() {
       // The copy mirrors the visible sections and is replaced by React on mount.
       const seoFallbacks: Record<string, { heading: string; summary: string; points: string[] }> = {
         "/": {
-          heading: "Managed IT Services & Cybersecurity Built for the Caribbean",
-          summary: "V79 Digital helps Saint Lucia organisations manage, secure, and improve the technology their businesses depend on.",
+          heading: "Technology that helps your business move forward",
+          summary: "Managed IT, cybersecurity, practical software and AI guidance for businesses with Saint Lucia roots and Caribbean ambitions.",
           points: ["Managed IT support", "Cybersecurity", "Cloud and backup", "Networks and VoIP", "Business software", "Technology training"],
         },
         "/about": {
@@ -3505,8 +3505,17 @@ ${articlesXml}</urlset>`;
     }
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
-    const allowed = ['/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
-    if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
+    const allowed = [
+      '/', '/services', '/software', '/about', '/contact', '/industries', '/resources',
+      '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion',
+      '/admin', '/faq',
+      '/services/managed-it-support', '/services/cybersecurity', '/services/cloud-backup',
+      '/services/networks-voip', '/services/ai-automation', '/services/business-software',
+      '/software/hub', '/software/tiquet', '/software/pos', '/software/ffpro',
+      '/software/marketing', '/software/academy'
+    ];
+    const checkedPath = req.path.replace(/\/+$/, '') || '/';
+    if (req.method === 'GET' && !allowed.includes(checkedPath) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });
   if (isDev) {
@@ -3584,6 +3593,26 @@ ${articlesXml}</urlset>`;
       }
       next();
     });
+
+    // Restore the approved modern site's FAQ, lessons and Resources routes.
+    // These sit before express.static: otherwise /resources redirects to a
+    // physical directory and the modern React resources page cannot open.
+    app.get(['/faq', '/faq/'], (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.sendFile(path.join(distPath, 'faq-v79.html'));
+    });
+    app.get(['/resources', '/resources/'], (req, res) => {
+      const htmlPath = path.join(distPath, 'index.html');
+      let html = fs.readFileSync(htmlPath, 'utf8');
+      html = injectDynamicMeta(html, req);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.send(html);
+    });
+    app.get('/guides/chatgpt-skills.html', (_req, res) =>
+      res.redirect(308, '/resources/chatgpt-skills-how-to.html'));
+    app.get('/guides/chatgpt-task-automation.html', (_req, res) =>
+      res.redirect(308, '/resources?article=chatgpt-task-automation'));
 
     // Dist hashed assets get 1-year immutable cache
     app.use("/assets", express.static(path.join(distPath, "assets"), {
