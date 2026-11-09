@@ -2978,7 +2978,7 @@ async function startServer() {
         category: metadata.category || "Technology",
         date: metadata.date || "",
         author: metadata.author || "Vision79 Digital Expert",
-        coverImage: metadata.coverImage || "https://v79sl.com/og-image.png",
+        coverImage: metadata.coverImage || "https://v79sl.com/og-v79-digital-caribbean-20261109.jpg",
         content
       };
     } catch {
@@ -2993,7 +2993,7 @@ async function startServer() {
 
       const applyMeta = (source: string, page: { title: string; description: string; url: string; image?: string; type?: string }) => {
         let result = source;
-        const image = page.image || `${canonicalBase}/og-image.png`;
+        const image = page.image || `${canonicalBase}/og-v79-digital-caribbean-20261109.jpg`;
         const type = page.type || "website";
 
         result = result.replace(/<title>.*?<\/title>/is, `<title>${escapeAttr(page.title)}</title>`);
@@ -3142,7 +3142,7 @@ async function startServer() {
       if (articleSlug) {
         const article = getArticleData(articleSlug);
         if (!article) return html;
-        let imageUrl = article.coverImage || `${canonicalBase}/og-image.png`;
+        let imageUrl = article.coverImage || `${canonicalBase}/og-v79-digital-caribbean-20261109.jpg`;
         if (!/^https?:\/\//i.test(imageUrl)) imageUrl = `${canonicalBase}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
         return applyMeta(html, {
           title: `${article.title} | V79 Digital`,
