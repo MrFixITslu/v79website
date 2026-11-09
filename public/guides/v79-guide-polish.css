@@ -1,0 +1,21 @@
+
+/* Shared Visual Consistency: Vision79 educational resources.  */
+.v79-back-row{width:min(1200px,calc(100% - 48px));margin:18px auto 6px;position:relative;z-index:4}
+.v79-all-resources{display:inline-flex;align-items:center;gap:.55rem;min-height:44px;padding:9px 16px;border:1px solid #b9d5d4;
+ border-radius:999px;background:#fff;color:#103b45!important;font:700 .88rem/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;text-decoration:none!important;
+ box-shadow:0 3px 12px rgba(9,46,54,.08);white-space:nowrap}
+.v79-all-resources:hover{background:#e5f5f1;border-color:#13968d;color:#06272e!important}
+.v79-all-resources:focus-visible{outline:3px solid #0ca4aa;outline-offset:3px}
+.v79-all-resources span{font-size:1.2rem;font-weight:700;line-height:1}
+.v79-guide-photo{width:min(1200px,calc(100% - 48px));margin:12px auto 28px;border:1px solid #dbe8e7;border-radius:22px;overflow:hidden;
+ box-shadow:0 12px 32px rgba(10,54,59,.10);background:#e8efee}
+.v79-guide-photo img{display:block;width:100%;height:clamp(205px,27vw,350px);object-fit:cover;object-position:center;aspect-ratio:auto}
+.v79-guide-photo figcaption{margin:0;padding:10px 16px;background:#f8fbfb;color:#47646b;font:500 .74rem/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:right}
+.v79-guide-photo figcaption span{color:#61777c}
+@media(max-width:600px){
+ .v79-back-row,.v79-guide-photo{width:calc(100% - 30px)}
+ .v79-back-row{margin:12px auto 6px}
+ .v79-guide-photo{margin:12px auto 22px;border-radius:16px}
+ .v79-guide-photo img{height:208px}
+ .v79-guide-photo figcaption{text-align:left}
+}

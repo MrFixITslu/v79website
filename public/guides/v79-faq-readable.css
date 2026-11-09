@@ -1,0 +1,22 @@
+*{box-sizing:border-box}html{scroll-behaviour:smooth}body{margin:0;background:#fff;color:#132833;font:17px/1.73 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}a{color:#0b747b}a:hover{text-decoration:underline}
+a:focus-visible{outline:3px solid #06a4a9;outline-offset:3px}.skip{position:absolute;left:-9999px;top:4px;z-index:200;background:white;padding:12px}.skip:focus{left:8px}
+.top{border-bottom:1px solid #e3eeee;background:#fff}.top-inner{width:min(1120px,calc(100% - 38px));margin:auto;min-height:78px;display:flex;justify-content:space-between;align-items:center;gap:18px}
+.brand{display:flex;align-items:center;gap:9px;text-decoration:none;font-size:1.05rem;font-weight:790;color:#092f3e;letter-spacing:-.025em}.brand img{max-width:34px}.brand b{color:#0a898e}
+.all-resources{display:inline-flex;align-items:center;border:1px solid #c6dddb;border-radius:50px;padding:8px 15px;text-decoration:none;font-size:.83rem;font-weight:750;line-height:1.2;min-height:44px;color:#0d4d51;white-space:nowrap}
+.all-resources:hover{background:#f0faf8;text-decoration:none}main{width:min(880px,calc(100% - 38px));margin:0 auto;padding:48px 0 76px}
+.eyebrow{font-size:.7rem;text-transform:uppercase;color:#138c8c;font-weight:850;letter-spacing:.17em;margin:0 0 16px}
+.intro h1{font-size:clamp(2.3rem,6vw,4.1rem);letter-spacing:-.052em;line-height:1.08;margin:0 0 22px;color:#0d2c3c}
+.intro .lead{font-size:1.15rem;max-width:750px;line-height:1.65;color:#3c535c;margin:0}.meta{font-size:.82rem;color:#698089;margin:24px 0 45px}
+.question-index{border:1px solid #e2eeee;border-radius:18px;background:#f7fbfa;padding:24px 27px;margin:0 0 32px}
+.question-index h2{font-size:1rem;line-height:1.3;letter-spacing:-.01em;margin:0 0 17px;color:#124452}
+.index-links{display:grid;grid-template-columns:1fr 1fr;gap:9px 26px}
+.index-links a{font-size:.82rem;line-height:1.42;color:#176f73;text-decoration:none;padding:3px 0}.index-links a:hover{text-decoration:underline}
+.faq-entry{scroll-margin-top:26px;padding:35px 0 41px;border-bottom:1px solid #e0e8e9}.faq-index{font:800 .73rem/1 system-ui,sans-serif;color:#158982;letter-spacing:.11em;margin:0 0 15px}
+.faq-entry h2{font-size:clamp(1.32rem,2.7vw,1.72rem);letter-spacing:-.025em;line-height:1.32;color:#102e3b;margin:0 0 15px}
+.faq-entry p{margin:0 0 13px;color:#263d46}.faq-entry .faq-help{background:#f5faf9;border-left:3px solid #52b4aa;border-radius:0 9px 9px 0;padding:13px 17px;font-size:.95rem;color:#435f63;margin-top:19px}
+.faq-help strong{color:#123f44}.last{padding:33px 38px;margin-top:54px;background:#102e3d;color:#eefbfc;border-radius:18px}.last h2{margin:0 0 9px;font-size:1.55rem;letter-spacing:-.02em}.last p{color:#cfebed;margin:0 0 23px}
+.cta{display:inline-block;background:#42d4c7;color:#072d34;border-radius:12px;padding:11px 21px;font-size:.85rem;font-weight:850;text-decoration:none}.cta:hover{background:#74e7db;text-decoration:none}
+.small-note{color:#72848a;font-size:.76rem;margin:28px 0}
+footer{padding:22px max(19px,calc((100% - 1120px)/2));border-top:1px solid #e5edee;font-size:.75rem;color:#6e848a;display:flex;align-items:center;gap:11px;flex-wrap:wrap}footer span{margin-right:auto}
+@media(max-width:650px){body{font-size:16px}.top-inner{min-height:66px}.brand{font-size:.88rem}.brand img{width:29px}.all-resources{font-size:.8rem;padding:8px 12px}main{padding-top:34px}.index-links{grid-template-columns:1fr;gap:11px}.question-index{padding:20px}.faq-entry{padding:27px 0}.last{padding:26px 22px}footer span{width:100%}}
+@media(prefers-reduced-motion:reduce){html{scroll-behaviour:auto}}
