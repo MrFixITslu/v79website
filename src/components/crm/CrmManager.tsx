@@ -198,6 +198,19 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   }, []);
 
   // Update lead stage
+  const handleRefreshLeadMatch = async (leadId: number) => {
+    const res = await fetch("/api/admin/crm/leads/" + leadId + "/reanalyse", {
+      method: "POST",
+      headers: getHeaders()
+    });
+    if (res.status === 401) {
+      onUnauthorized?.();
+      throw new Error("Sign in again to refresh this lead");
+    }
+    if (!res.ok) throw new Error("Match refresh failed (" + res.status + ")");
+    await Promise.all([fetchLeadDetails(leadId), fetchLeads(), fetchMetrics()]);
+  };
+
   const handleUpdateLeadStage = async (leadId: number, newStage: PipelineStage) => {
     try {
       const res = await fetch(`/api/admin/crm/leads/${leadId}/stage`, {
@@ -628,6 +641,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
           calls={selectedLeadCalls}
           tasks={tasks.filter((t) => t.leadId === selectedLead.id)}
           onClose={() => setSelectedLead(null)}
+          onRefreshMatch={handleRefreshLeadMatch}
           onUpdateLead={handleUpdateLead}
           onAddActivity={handleAddActivity}
           onAddCall={handleAddCall}

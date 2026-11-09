@@ -1,3 +1,4 @@
+import { V79_OFFERINGS, type V79Offering } from "../src/crm/offerings";
 import http from "http";
 import https from "https";
 
@@ -14,6 +15,8 @@ export interface BusinessInput {
   linkedinUrl?: string;
   description?: string;
   companySize?: string;
+  serviceRequested?: string;
+  biggestChallenge?: string;
 }
 
 export interface ScoreBreakdownItem {
@@ -43,113 +46,114 @@ export interface CRMAnalysisResult {
   timestamp: string;
 }
 
-// Configurable scoring weights as requested by prompt
-export const DEFAULT_SCORING_RULES = [
-  { id: "no_website", label: "No Professional Website", points: 25, condition: (b: BusinessInput) => !b.website || !b.website.trim() },
-  { id: "active_social_no_web", label: "Active Social Media but No Dedicated Domain", points: 15, condition: (b: BusinessInput) => (!b.website || !b.website.trim()) && Boolean(b.facebookUrl || b.instagramUrl) },
-  { id: "contact_available", label: "Direct Phone or WhatsApp Reachable", points: 15, condition: (b: BusinessInput) => Boolean(b.phone && b.phone.trim().length >= 7) },
-  { id: "email_available", label: "Public Business Email Listed", points: 10, condition: (b: BusinessInput) => Boolean(b.email && b.email.includes("@")) },
-  { id: "saint_lucia_location", label: "High-Commercial Saint Lucia District", points: 15, condition: (b: BusinessInput) => {
-    const loc = (b.location || "").toLowerCase();
-    return loc.includes("castries") || loc.includes("gros islet") || loc.includes("rodney bay") || loc.includes("vieux fort") || loc.includes("soufrière") || loc.includes("marigot");
-  }},
-  { id: "high_ict_fit", label: "Fits High-Value V79 Services (Hospitality, Legal, Medical, Retail, Services)", points: 20, condition: (b: BusinessInput) => {
-    const text = `${b.category || ""} ${b.industry || ""} ${b.description || ""}`.toLowerCase();
-    return /restaurant|hotel|resort|villa|bar|clinic|medical|law|legal|auto|retail|store|logistics|tour|charter|real estate|construction|consult/.test(text);
-  }}
-];
+/**
+ * Each match is based on a stated enquiry, a described need or a sector clue.
+ * Websites and social-media profile URLs are never used to rank a lead.
+ */
+function normalized(value?: string): string {
+  return " " + (value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + " ";
+}
+
+function hasSignal(text: string, needle: string): boolean {
+  const phrase = normalized(needle);
+  const idx = text.indexOf(phrase);
+  if (idx < 0) return false;
+  // Avoid obvious false-positive upsells such as "we do not need a POS system".
+  const before = text.slice(Math.max(0, idx - 55), idx).trim();
+  if (/(?:no|not|never|do not need|dont need|not interested in|without a need for)(?:\s+(?:a|an|any|new))?$/i.test(before)) return false;
+  return true;
+}
+
+type OfferingMatch = {
+  offering: V79Offering;
+  source: "requested" | "described" | "sector";
+  weight: number;
+};
+
+export function matchV79Offerings(b: BusinessInput): OfferingMatch[] {
+  const request = normalized(b.serviceRequested);
+  const described = normalized([b.biggestChallenge, b.description].filter(Boolean).join(" "));
+  const sector = normalized([b.category, b.industry].filter(Boolean).join(" "));
+  return V79_OFFERINGS.flatMap((offering): OfferingMatch[] => {
+    const phrases = [offering.label, ...offering.aliases];
+    if (phrases.some((phrase) => hasSignal(request, phrase))) {
+      return [{ offering, source: "requested", weight: 40 }];
+    }
+    if (offering.needSignals.some((phrase) => hasSignal(described, phrase)) ||
+        phrases.some((phrase) => hasSignal(described, phrase))) {
+      return [{ offering, source: "described", weight: 30 }];
+    }
+    if (offering.sectorSignals.some((phrase) => hasSignal(sector, phrase))) {
+      return [{ offering, source: "sector", weight: 10 }];
+    }
+    return [];
+  }).sort((a, b) => b.weight - a.weight);
+}
 
 export function calculateDeterministicAnalysis(b: BusinessInput): CRMAnalysisResult {
+  const matches = matchV79Offerings(b);
   const breakdown: ScoreBreakdownItem[] = [];
-  let totalScore = 0;
+  let points = 0;
 
-  for (const rule of DEFAULT_SCORING_RULES) {
-    if (rule.condition(b)) {
-      totalScore += rule.points;
-      breakdown.push({
-        factor: rule.label,
-        points: rule.points,
-        description: `Heuristic suggestion from supplied business details: matches ${rule.id.replace(/_/g, " ")} criteria.`
-      });
-    }
+  const score = (factor: string, value: number, description: string) => {
+    points += value;
+    breakdown.push({ factor, points: value, description });
+  };
+  if (matches.some((m) => m.source === "requested")) {
+    score("V79 offering explicitly requested", 40, "The supplied enquiry names a V79 ICT service or Hub app.");
+  }
+  if (matches.some((m) => m.source === "described")) {
+    score("Operational need described", 30, "A relevant need appears in the prospect's own description or challenge.");
+  }
+  if (matches.some((m) => m.source === "sector")) {
+    score("Possible sector fit", 10, "Industry-only indication; staff must validate this possible opportunity.");
+  }
+  if (b.phone?.trim().length && b.phone.replace(/\D/g, "").length >= 7) {
+    score("Contact telephone available", 10, "A telephone contact was supplied; not proof that the number was verified.");
+  }
+  if (b.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email)) {
+    score("Contact email available", 10, "An email address was supplied; not proof that the address was verified.");
   }
 
-  // Cap score at 100
-  const finalScore = Math.min(100, Math.max(10, totalScore));
-
-  let scoreCat: "Hot" | "High Potential" | "Medium" | "Low" = "Low";
-  if (finalScore >= 80) scoreCat = "Hot";
-  else if (finalScore >= 60) scoreCat = "High Potential";
-  else if (finalScore >= 40) scoreCat = "Medium";
-
-  // Opportunity detection & V79 service matching
-  const problems: string[] = [];
-  const recommendedServices: string[] = [];
-  const text = `${b.category || ""} ${b.industry || ""} ${b.description || ""}`.toLowerCase();
-
-  if (!b.website || !b.website.trim()) {
-    problems.push("No dedicated company website; relies entirely on third-party social media pages");
-    recommendedServices.push("Website Development & Domain Setup");
-    recommendedServices.push("Custom Digital Showcase / Mobile Ordering");
-  } else {
-    problems.push("Existing web presence may lack speed, mobile optimization, or active conversion funnels");
-    recommendedServices.push("Website Modernization & SEO");
-  }
-
-  if (b.facebookUrl || b.instagramUrl) {
-    problems.push("Customer messages across social channels lack unified CRM or ticketing inbox");
-    recommendedServices.push("CRM & Helpdesk Implementation");
-    recommendedServices.push("WhatsApp & Social Chatbot Automation");
-  }
-
-  if (/hotel|restaurant|resort|hospitality|bar|tour|rental/.test(text)) {
-    problems.push("High guest bandwidth demands and risk of reservation downtime during storms");
-    recommendedServices.push("Wi-Fi Optimization & Guest Hotspots");
-    recommendedServices.push("Automated Disaster Backup & Cloud Redundancy");
-  } else if (/medical|clinic|law|legal|accounting|financial/.test(text)) {
-    problems.push("Sensitive client records and compliance risks without managed firewalls");
-    recommendedServices.push("Cybersecurity & Firewall Hardening");
-    recommendedServices.push("Managed IT Support & Cloud Microsoft 365");
-  } else if (/retail|store|wholesale|distributor|supply/.test(text)) {
-    problems.push("Manual stock counts and disconnected point-of-sale systems");
-    recommendedServices.push("Inventory Management Integration");
-    recommendedServices.push("Business Process Automation");
-  } else {
-    problems.push("Manual operational processes and reliance on ad-hoc IT troubleshooting");
-    recommendedServices.push("Managed IT Support");
-    recommendedServices.push("Business Automation");
-  }
-
-  const category = b.category || b.industry || "General Small Business";
-  const summary = `${b.businessName} operates in ${b.location || "Saint Lucia"}. ${
-    !b.website ? "They currently lack a standalone company website, depending heavily on direct contact and social channels." : "They maintain an online presence that could be modernized with automated client capture."
-  }`;
-
-  const bestApproach = finalScore >= 80
-    ? "Direct executive phone consultation or WhatsApp introduction focusing on immediate customer acquisition and digital branding."
-    : "Educational outreach demonstrating modern Saint Lucia peer case studies and automated workflow savings.";
-
+  const finalScore = Math.min(100, points);
+  const scoreCategory: CRMAnalysisResult["scoreCategory"] =
+    finalScore >= 80 ? "Hot" : finalScore >= 60 ? "High Potential" : finalScore >= 40 ? "Medium" : "Low";
+  const unique = [...new Set(matches.map((m) => m.offering.label))].slice(0, 4);
+  const first = matches[0];
+  const category = b.category || b.industry || "Unspecified industry";
+  const problems = matches
+    .filter((m) => m.source === "described")
+    .slice(0, 3)
+    .map((m) => "Possible requirement to confirm: " + m.offering.benefit + ".");
+  const summary = unique.length
+    ? `Possible V79 matches for ${b.businessName}: ${unique.join(", ")}. These are suggestions based on supplied details, not confirmed needs.`
+    : `No specific V79 solution can be identified for ${b.businessName} from the details provided. Start with a discovery conversation.`;
+  const identifiedNeed = first?.source === "requested"
+    ? `The enquiry mentions ${first.offering.label}; confirm requirements and budget.`
+    : first?.source === "described"
+    ? `The supplied description suggests a possible fit for ${first.offering.label}; verify with the prospect.`
+    : first?.source === "sector"
+    ? `Possible sector fit for ${first.offering.label}, not a verified business problem.`
+    : "The business has not yet described a specific ICT or SaaS requirement.";
   const discoveryQuestions = [
-    `How do customers in ${b.location || "Saint Lucia"} typically find and contact ${b.businessName} today?`,
-    `What is your biggest operational or communication bottleneck when handling new inquiries or orders?`,
-    `Have you experienced internet dropouts or lost data during power fluctuations or severe weather?`
+    "What is your biggest day-to-day technology or workflow challenge?",
+    first ? `How is your team currently handling ${first.offering.benefit}?` : "Which ICT services or business apps would help your team most?",
+    "What outcome would make a new solution worthwhile, and when do you need it?"
   ];
+  const bestApproach = "Confirm the operational need and decision-maker before presenting a relevant V79 service or Hub app.";
 
   return {
-    summary,
-    category,
-    problems,
-    recommendedServices: Array.from(new Set(recommendedServices)),
-    leadScore: finalScore,
-    scoreCategory: scoreCat,
-    scoreBreakdown: breakdown,
+    summary, category, problems, recommendedServices: unique,
+    leadScore: finalScore, scoreCategory, scoreBreakdown: breakdown,
     bestApproach,
     callPrep: {
-      whatTheyDo: `${b.businessName} provides ${category.toLowerCase()} services to residents and visitors in ${b.location || "Saint Lucia"}.`,
-      identifiedNeed: problems[0] || "Digital infrastructure enhancement",
-      recommendedPitch: `Introduce V79 Digital's localized Saint Lucia IT solutions, specifically how ${recommendedServices[0] || "modern IT infrastructure"} drives revenue and prevents costly downtime.`,
+      whatTheyDo: `Listed as ${category} in ${b.location || "Saint Lucia"}; business activity has not been independently verified.`,
+      identifiedNeed,
+      recommendedPitch: first
+        ? `Ask about the current process, then explain how ${first.offering.label} may help with ${first.offering.benefit}. Do not assume they need it.`
+        : "Introduce V79's ICT services and Hub apps, then ask which operational challenge matters most.",
       discoveryQuestions,
-      suggestedNextAction: finalScore >= 70 ? "Book a 15-minute Discovery Consultation" : "Send V79 Digital Portfolio & Overview via Email"
+      suggestedNextAction: "Arrange a short discovery call to validate fit"
     },
     generatedBy: "heuristic_engine",
     timestamp: new Date().toISOString()
@@ -228,61 +232,36 @@ export async function analyzeBusinessWithAI(
 ): Promise<CRMAnalysisResult> {
   const fallback = calculateDeterministicAnalysis(business);
 
-  const systemPrompt = `You are the Lead Intelligence AI for V79 Digital, a premier Information and Communications Technology (ICT) consultancy in Saint Lucia (Caribbean).
-You analyze businesses discovered through public directories.
-Do not fabricate missing details. Strictly rely on provided facts.
-Return ONLY valid JSON with this exact schema:
-{
-  "summary": string,
-  "category": string,
-  "problems": string[],
-  "recommendedServices": string[],
-  "leadScore": number (0 to 100),
-  "scoreCategory": "Hot" | "High Potential" | "Medium" | "Low",
-  "bestApproach": string,
-  "callPrep": {
-    "whatTheyDo": string,
-    "identifiedNeed": string,
-    "recommendedPitch": string,
-    "discoveryQuestions": string[],
-    "suggestedNextAction": string
-  }
-}`;
-
-  const userPrompt = `Analyze this Saint Lucia business for digital and IT opportunities:
-Business Name: ${business.businessName}
-Category: ${business.category || "Unknown"}
-Industry: ${business.industry || "Unknown"}
-Location: ${business.location || "Saint Lucia"}
-Website: ${business.website || "None"}
-Phone: ${business.phone || "None"}
-Email: ${business.email || "None"}
-Facebook: ${business.facebookUrl || "None"}
-Instagram: ${business.instagramUrl || "None"}
-LinkedIn: ${business.linkedinUrl || "None"}
-Description: ${business.description || "None"}
-
-Evaluate whether they need: Website Development/Modernization, Business Automation, CRM, Wi-Fi Optimization, Cybersecurity, or Managed IT.`;
+  // Ollama may re-order evidence-backed matches, but must never invent a
+  // product, an operational problem or a new score.
+  const systemPrompt = `You support the V79 CRM. Use ONLY the approved V79 offering labels below.
+Never infer a need from whether a company has a website. Do not invent facts.
+Reply as JSON with recommendedServices (an array of approved labels).
+Approved: ${V79_OFFERINGS.map((o) => o.label).join(", ")}`;
+  const userPrompt = `Consider only these supplied details and existing evidence-backed matches:
+Business: ${business.businessName}
+Industry: ${business.industry || business.category || "Unknown"}
+Request: ${business.serviceRequested || "None"}
+Described challenge: ${business.biggestChallenge || business.description || "None"}
+Existing evidence-backed matches: ${fallback.recommendedServices.join(", ") || "None"}`;
 
   try {
     const rawOllamaResponse = await queryOllama(userPrompt, systemPrompt, ollamaBaseUrl, model);
     if (rawOllamaResponse) {
       const parsed = JSON.parse(rawOllamaResponse);
-      if (parsed.summary && typeof parsed.leadScore === "number") {
-        return {
-          summary: parsed.summary,
-          category: parsed.category || fallback.category,
-          problems: Array.isArray(parsed.problems) ? parsed.problems : fallback.problems,
-          recommendedServices: Array.isArray(parsed.recommendedServices) ? parsed.recommendedServices : fallback.recommendedServices,
-          leadScore: Math.min(100, Math.max(0, Math.round(parsed.leadScore))),
-          scoreCategory: parsed.scoreCategory || fallback.scoreCategory,
-          scoreBreakdown: fallback.scoreBreakdown,
-          bestApproach: parsed.bestApproach || fallback.bestApproach,
-          callPrep: parsed.callPrep || fallback.callPrep,
-          generatedBy: "ollama",
-          modelName: model,
-          timestamp: new Date().toISOString()
-        };
+      if (Array.isArray(parsed.recommendedServices)) {
+        const approved = parsed.recommendedServices.filter(
+          (label: unknown): label is string => typeof label === "string" && fallback.recommendedServices.includes(label)
+        );
+        const sorted = [...new Set([...approved, ...fallback.recommendedServices])];
+        if (sorted.join("|") !== fallback.recommendedServices.join("|")) {
+          return {
+            ...fallback,
+            recommendedServices: sorted,
+            generatedBy: "ollama",
+            modelName: model
+          };
+        }
       }
     }
   } catch (err) {

@@ -1,4 +1,5 @@
 import { readJSON, writeJSON, transaction } from "./persistence";
+import { offeringByLabel } from "../src/crm/offerings";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -137,7 +138,9 @@ export class CRMStorage {
     // AI/deterministic scoring for new lead
     const analysis = calculateDeterministicAnalysis({
       businessName: leadInput.company || leadInput.name || "Prospect",
-      category: leadInput.businessCategory || leadInput.serviceRequested,
+      category: leadInput.businessCategory,
+      serviceRequested: leadInput.serviceRequested,
+      biggestChallenge: leadInput.biggestChallenge,
       location: leadInput.location || "Saint Lucia",
       website: leadInput.website,
       phone: leadInput.phone,
@@ -207,6 +210,35 @@ export class CRMStorage {
       isDuplicate: Boolean(existingDuplicate),
       duplicateOf: existingDuplicate || undefined
     };
+  }
+
+  /** Re-score an existing lead on request; never change its pipeline, priority or history. */
+  reanalyseLead(id: number, author: string = "Admin"): CRMLead {
+    const lead = this.getLeadById(id);
+    if (!lead) throw Object.assign(new Error("Lead not found"), { status: 404 });
+    const analysis = calculateDeterministicAnalysis({
+      businessName: lead.company || lead.name || "Prospect",
+      category: lead.businessCategory,
+      location: lead.location,
+      serviceRequested: lead.serviceRequested,
+      biggestChallenge: lead.biggestChallenge,
+      description: lead.message,
+      phone: lead.phone,
+      email: lead.email
+    });
+    const updated = this.updateLead(id, {
+      leadScore: analysis.leadScore,
+      scoreCategory: analysis.scoreCategory,
+      aiAnalysis: analysis
+    }, author);
+    this.addActivity({
+      leadId: id,
+      type: "ai_analysis",
+      title: "V79 ICT & SaaS match refreshed",
+      description: "Re-scored from the supplied needs and approved V79 offering catalogue. Pipeline and priority were not changed.",
+      author
+    });
+    return updated;
   }
 
   updateLeadStage(id: number, stage: PipelineStage, author: string) {
@@ -642,7 +674,7 @@ export class CRMStorage {
       phone: p.phone || "",
       email: p.email || "",
       whatsapp: p.phone || "",
-      serviceRequested: p.aiAnalysis?.recommendedServices[0] || "ICT Modernization",
+      serviceRequested: p.aiAnalysis?.recommendedServices.find((name) => offeringByLabel(name)) || "General ICT Inquiry",
       message: `[Discovered Lead] ${p.description}`,
       location: p.location,
       businessCategory: p.category,

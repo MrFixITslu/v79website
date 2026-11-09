@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Sparkles, Sliders, CheckCircle2, XCircle, RefreshCw, Download, Database, Shield } from "lucide-react";
 import { CRMLead } from "../../crm/types";
+import { V79_OFFERINGS } from "../../crm/offerings";
 
 interface CrmSettingsProps {
   ollamaConnected: boolean;
@@ -62,7 +63,7 @@ export function CrmSettings({
           </h2>
         </div>
         <p className="text-xs text-app-text-sec">
-          Configure local AI inference engine, lead scoring parameters, and data protection settings.
+          Match leads to real V79 ICT services and Hub SaaS products using their stated needs, not their websites.
         </p>
       </div>
 
@@ -151,54 +152,41 @@ export function CrmSettings({
         </div>
       </div>
 
-      {/* Scoring Weights Information */}
+      {/* Evidence-led matching and catalogue */}
       <div className="glass p-6 rounded-3xl border border-app-border bg-app-aside-bg/30 space-y-4">
-        <h3 className="font-bold text-sm text-app-text">Deterministic Lead Scoring Logic (0–100 Scale)</h3>
+        <h3 className="font-bold text-sm text-app-text">Lead Opportunity Score (0–100)</h3>
         <p className="text-xs text-app-text-sec">
-          Every incoming inquiry and prospect is evaluated across four core criteria:
+          A higher score means the supplied information supports a stronger match. This does not confirm a sale or a customer problem.
+          Website ownership and social links have zero scoring weight.
         </p>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div className="p-3 rounded-xl border border-app-border bg-app-bg/80 space-y-1">
-            <div className="flex items-center justify-between font-semibold text-app-text">
-              <span>Contact Channel Completeness</span>
-              <span className="font-mono text-emerald-500 font-bold">+25 pts</span>
+          {[
+            ["Service or Hub app requested", "+40", "The enquiry explicitly names one of our offerings."],
+            ["Operational need described", "+30", "The prospect describes a matching problem or goal."],
+            ["Possible industry fit", "+10", "A sector clue only; staff must confirm the need."],
+            ["Contact details supplied", "+20", "Up to 10 each for phone and email; neither is assumed verified."]
+          ].map(([name, weight, description]) => (
+            <div key={name} className="p-3 rounded-xl border border-app-border bg-app-bg/80 space-y-1">
+              <div className="flex justify-between font-semibold text-app-text gap-2">
+                <span>{name}</span><span className="font-mono text-emerald-500 shrink-0">{weight} pts</span>
+              </div>
+              <p className="text-[11px] text-app-text-sec">{description}</p>
             </div>
-            <p className="text-[11px] text-app-text-sec">
-              Direct telephone, verified WhatsApp, valid corporate email address.
-            </p>
-          </div>
-
-          <div className="p-3 rounded-xl border border-app-border bg-app-bg/80 space-y-1">
-            <div className="flex items-center justify-between font-semibold text-app-text">
-              <span>High-Value Service Scope</span>
-              <span className="font-mono text-emerald-500 font-bold">+35 pts</span>
-            </div>
-            <p className="text-[11px] text-app-text-sec">
-              Network infrastructure, VoIP/PBX, cybersecurity, enterprise managed IT retainer.
-            </p>
-          </div>
-
-          <div className="p-3 rounded-xl border border-app-border bg-app-bg/80 space-y-1">
-            <div className="flex items-center justify-between font-semibold text-app-text">
-              <span>Saint Lucia Commercial Center</span>
-              <span className="font-mono text-emerald-500 font-bold">+20 pts</span>
-            </div>
-            <p className="text-[11px] text-app-text-sec">
-              Located in key commercial zones (Gros Islet, Rodney Bay, Castries, Vieux Fort).
-            </p>
-          </div>
-
-          <div className="p-3 rounded-xl border border-app-border bg-app-bg/80 space-y-1">
-            <div className="flex items-center justify-between font-semibold text-app-text">
-              <span>Website Opportunity / Problem Scope</span>
-              <span className="font-mono text-emerald-500 font-bold">+20 pts</span>
-            </div>
-            <p className="text-[11px] text-app-text-sec">
-              Absence of modern web presence or stated challenge/urgency in visitor inquiry.
-            </p>
-          </div>
+          ))}
         </div>
+        {(["ICT Service", "Hub App"] as const).map((kind) => (
+          <div key={kind} className="space-y-2">
+            <h4 className="text-xs font-bold text-app-text">{kind === "ICT Service" ? "V79 ICT Services" : "V79 Hub SaaS Products"}</h4>
+            <div className="flex flex-wrap gap-1.5">
+              {V79_OFFERINGS.filter((item) => item.kind === kind).map((item) => (
+                <span key={item.id} className="text-[11px] border border-app-border rounded-lg px-2.5 py-1 text-app-text-sec">{item.label}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+        <p className="text-xs text-app-text-sec">
+          Newly captured leads use these rules. Open any older lead and select “Refresh V79 Match” to update its stored score and recommendations without changing its status or notes.
+        </p>
       </div>
 
       {/* Data Export & Backup */}

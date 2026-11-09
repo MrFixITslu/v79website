@@ -2541,6 +2541,18 @@ async function startServer() {
     }
   });
 
+  app.post("/api/admin/crm/leads/:id/reanalyse", requireAdmin, (req, res) => {
+    try {
+      const id = Number(String(req.params.id));
+      if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "Invalid lead ID" });
+      const updated = transaction(() => crmStorage.reanalyseLead(id, "Admin"));
+      res.json(updated);
+    } catch (e) {
+      console.error("[CRM API] Error refreshing lead match:", e);
+      res.status((e as any)?.status || 500).json({ error: (e as any)?.message || "Failed to refresh match" });
+    }
+  });
+
   app.put("/api/admin/crm/leads/:id", requireAdmin, (req, res) => {
     try {
       const updated = transaction(() => crmStorage.updateLead(Number(String(req.params.id)), req.body, "Admin"));
