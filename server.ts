@@ -4,6 +4,7 @@ import { atomicWrite, encryptionKey, seal, unseal, readJSON, writeJSON, transact
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { createHubSsoFlows, hubBackchannelUrl } from "./server/hub-sso";
 
 import dotenv from "dotenv";
 import multer from "multer";
@@ -288,16 +289,28 @@ function getLatestAdminAuth(): AdminAuthRecord {
 // In-memory session store: token -> { expiry timestamp (ms), mustChangePassword }.
 // Tokens are cryptographically random and single-instance scoped, which is
 // appropriate for this app's single-container deployment model.
-const ADMIN_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const ADMIN_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // website password session: 2 hours
+const HUB_ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000; // MFA-backed Hub workday: absolute maximum
+const HUB_ADMIN_IDLE_MS = 60 * 60 * 1000; // one hour without authenticated admin activity
 interface AdminSession {
   expiry: number;
+  lastActivityAt: number;
   mustChangePassword: boolean;
+  hubHandle?: string;
+  hubValidatedAt?: number;
+  hubSubject?: string;
+  hubOrganizationId?: string;
 }
 const adminSessions = new Map<string, AdminSession>();
 
-function issueAdminSession(mustChangePassword: boolean): string {
+function issueAdminSession(mustChangePassword: boolean, hubHandle?: string): string {
   const token = crypto.randomBytes(32).toString("hex");
-  adminSessions.set(token, { expiry: Date.now() + ADMIN_SESSION_TTL_MS, mustChangePassword });
+  const now = Date.now();
+  adminSessions.set(token, {
+    expiry: now + (hubHandle ? HUB_ADMIN_SESSION_TTL_MS : ADMIN_SESSION_TTL_MS),
+    lastActivityAt: now,
+    mustChangePassword, ...(hubHandle ? { hubHandle, hubValidatedAt: now } : {})
+  });
   return token;
 }
 
@@ -305,7 +318,8 @@ function getAdminSession(token: string | undefined | null): AdminSession | null 
   if (!token) return null;
   const session = adminSessions.get(token);
   if (!session) return null;
-  if (Date.now() > session.expiry) {
+  if (Date.now() > session.expiry ||
+      (session.hubHandle && Date.now() - session.lastActivityAt > HUB_ADMIN_IDLE_MS)) {
     adminSessions.delete(token);
     return null;
   }
@@ -313,7 +327,11 @@ function getAdminSession(token: string | undefined | null): AdminSession | null 
 }
 
 function isValidAdminSession(token: string | undefined | null): boolean {
-  const session=getAdminSession(token); return !!session && !session.mustChangePassword;
+  const session = getAdminSession(token);
+  if (!session || session.mustChangePassword) return false;
+  if (websiteHubSsoEnforced() && !session.hubHandle) return false;
+  if (!session.hubHandle) return true;
+  return Boolean(session.hubValidatedAt && Date.now() - session.hubValidatedAt < 5000);
 }
 
 function invalidateAllAdminSessions() {
@@ -328,10 +346,45 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000).unref();
 
-function adminCookie(req: express.Request): string | null { return cookie(req, "v79_admin") || null; }
-function setAdminCookie(res: express.Response, token: string) { res.cookie("v79_admin", token, {...cookieOptions(), maxAge: ADMIN_SESSION_TTL_MS}); }
+const websiteHubSsoEnforced = () => process.env.WEBSITE_HUB_SSO_ENFORCED === "true";
+const websiteHubSsoReady = () => process.env.WEBSITE_HUB_SSO_ENABLED === "true" &&
+  String(process.env.V79_WEBSITE_SSO_SHARED_SECRET || "").length >= 32;
+const hubSsoFlows = createHubSsoFlows();
 
-function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+async function hubSsoBackchannel(pathname: "/api/website-sso/exchange" | "/api/website-sso/introspect" | "/api/website-sso/revoke", body: unknown) {
+  if (!websiteHubSsoReady()) throw Error("Hub SSO is not configured");
+  const base = hubBackchannelUrl(process.env.WEBSITE_HUB_SSO_INTERNAL_URL || "https://hub.v79sl.com");
+  const target = new URL(pathname, base);
+  const response = await fetch(target, {
+    method: "POST",
+    redirect: "error",
+    signal: AbortSignal.timeout(4000),
+    headers: { "content-type": "application/json", "x-v79-website-sso-key": String(process.env.V79_WEBSITE_SSO_SHARED_SECRET) },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw Error("Hub SSO rejected this request");
+  return await response.json() as Record<string, unknown>;
+}
+async function validateHubAdminSession(session: AdminSession): Promise<boolean> {
+  if (!session.hubHandle || !session.hubSubject || !session.hubOrganizationId) return false;
+  if (session.hubValidatedAt && Date.now() - session.hubValidatedAt < 5000) return true;
+  try {
+    const result = await hubSsoBackchannel("/api/website-sso/introspect", { handle: session.hubHandle });
+    if (result.active !== true || result.subject !== session.hubSubject ||
+        result.organizationId !== session.hubOrganizationId || !Number.isFinite(result.mfaVerifiedAt)) return false;
+    session.hubValidatedAt = Date.now();
+    return true;
+  } catch {
+    return false;
+  }
+}
+function adminCookie(req: express.Request): string | null { return cookie(req, "v79_admin") || null; }
+function setAdminCookie(res: express.Response, token: string) {
+  const maxAge = getAdminSession(token)?.hubHandle ? HUB_ADMIN_SESSION_TTL_MS : ADMIN_SESSION_TTL_MS;
+  res.cookie("v79_admin", token, { ...cookieOptions(), maxAge });
+}
+
+async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
   const token = adminCookie(req);
   const session = getAdminSession(token);
@@ -343,6 +396,13 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
       error: "You must set a new password before continuing.",
       code: "PASSWORD_CHANGE_REQUIRED"
     });
+  }
+  if (websiteHubSsoEnforced() || session.hubHandle) {
+    if (!session.hubHandle || !(await validateHubAdminSession(session))) {
+      // Fail closed without discarding browser state on a transient Hub network failure.
+      return res.status(401).json({ error: "Hub verification unavailable or expired. Reconnect via V79 Hub.", code: "HUB_SSO_REQUIRED" });
+    }
+    session.lastActivityAt = Date.now();
   }
   next();
 }
@@ -1151,16 +1211,77 @@ async function startServer() {
     }
   });
 
+  // Dedicated Hub owner SSO: code is ephemeral, PKCE-verified and browser-bound.
+  app.get("/api/admin/hub-sso/config", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ enabled: websiteHubSsoReady(), enforced: websiteHubSsoEnforced() });
+  });
+
+  app.get("/api/admin/hub-sso/start", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    if (!websiteHubSsoReady()) return res.status(503).type("text/plain").send("Hub sign-in is not configured.");
+    const flow = hubSsoFlows.begin();
+    res.cookie("v79_hub_sso_flow", flow.browser, {
+      httpOnly: true, secure: process.env.NODE_ENV === "production",
+      sameSite: "lax", path: "/api/admin/hub-sso/callback", maxAge: 120_000
+    });
+    const destination = new URL("https://hub.v79sl.com/api/website-sso/authorize");
+    destination.searchParams.set("state", flow.state);
+    destination.searchParams.set("code_challenge", flow.challenge);
+    destination.searchParams.set("redirect_uri", "https://v79sl.com/api/admin/hub-sso/callback");
+    return res.redirect(302, destination.toString());
+  });
+
+  app.get("/api/admin/hub-sso/callback", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    const browser = cookie(req, "v79_hub_sso_flow");
+    res.clearCookie("v79_hub_sso_flow", { path: "/api/admin/hub-sso/callback" });
+    if (!websiteHubSsoReady()) return res.status(503).send("Hub sign-in is not configured.");
+    const state = String(req.query.state || "");
+    const code = String(req.query.code || "");
+    const verifier = hubSsoFlows.consume(state, browser);
+    if (!verifier || !/^[A-Za-z0-9_-]{43}$/.test(code)) {
+      return res.status(401).type("text/plain").send("Sign-in expired. Return to the website and try again.");
+    }
+    try {
+      const accepted = await hubSsoBackchannel("/api/website-sso/exchange", {
+        code, code_verifier: verifier
+      });
+      if (accepted.issuer !== "V79 Hub" || accepted.audience !== "V79website-admin" ||
+          !/^[A-Za-z0-9_-]{43}$/.test(String(accepted.handle || "")) ||
+          typeof accepted.subject !== "string" || !accepted.subject ||
+          typeof accepted.organizationId !== "string" || !accepted.organizationId ||
+          !Number.isFinite(accepted.mfaVerifiedAt)) throw Error("Invalid Hub authorisation");
+      // Rotate existing website sessions when Hub SSO succeeds.
+      invalidateAllAdminSessions();
+      const rotated = issueAdminSession(false, String(accepted.handle));
+      const verified = getAdminSession(rotated)!;
+      verified.hubSubject = accepted.subject;
+      verified.hubOrganizationId = accepted.organizationId;
+      setAdminCookie(res, rotated);
+      return res.redirect(303, "/admin");
+    } catch {
+      return res.status(401).type("text/plain").send("Hub MFA sign-in could not be verified. Try again.");
+    }
+  });
+
   // GET administrator session verification
-  app.get("/api/admin/verify-session", (req, res) => {
+  app.get("/api/admin/verify-session", async (req, res) => {
     const authHeader = req.headers.authorization;
     const token = adminCookie(req);
     const session = getAdminSession(token);
     if (!session) {
       return res.status(401).json({ valid: false, error: "Session invalid or expired" });
     }
+    if ((websiteHubSsoEnforced() || session.hubHandle) && !(await validateHubAdminSession(session))) {
+      return res.status(401).json({ valid: false, error: "Hub SSO must be verified again." });
+    }
+    if (session.hubHandle) session.lastActivityAt = Date.now();
     return res.json({
       valid: true,
+      loginProvider: session.hubHandle ? "V79 Hub MFA" : "website",
       adminEmail: AUTHORIZED_ADMIN_EMAIL,
       mustChangePassword: session.mustChangePassword
     });
@@ -1168,6 +1289,9 @@ async function startServer() {
 
   // POST administrator login verification (password-only — no email required)
   app.post("/api/admin/login", (req, res) => {
+    if (websiteHubSsoEnforced()) {
+      return res.status(403).json({ error: "Use the V79 Hub MFA sign-in.", code: "HUB_SSO_REQUIRED" });
+    }
     try {
       const ip = req.ip || req.socket.remoteAddress || "unknown";
 
@@ -1207,11 +1331,16 @@ async function startServer() {
   });
 
   // POST administrator logout - invalidate the current session token
-  app.post("/api/admin/logout", (req, res) => {
-    const authHeader = req.headers.authorization;
+  app.post("/api/admin/logout", async (req, res) => {
     const token = adminCookie(req);
+    const session = getAdminSession(token);
     if (token) adminSessions.delete(token);
     res.clearCookie("v79_admin", {path: "/"});
+    if (session?.hubHandle) {
+      try { await hubSsoBackchannel("/api/website-sso/revoke", { handle: session.hubHandle }); }
+      catch { /* Local session is already revoked. Hub's handle also expires on its own. */ }
+    }
+    res.setHeader("Cache-Control", "no-store");
     res.json({ success: true });
   });
 
@@ -1220,6 +1349,9 @@ async function startServer() {
   // until they've set a new password) as well as with a normal full session,
   // so admins can rotate their password voluntarily at any time.
   app.post("/api/admin/change-password", (req, res) => {
+    if (websiteHubSsoEnforced()) {
+      return res.status(403).json({ error: "Website password sign-in is disabled. Use V79 Hub.", code: "HUB_SSO_REQUIRED" });
+    }
     try {
       const authHeader = req.headers.authorization;
       const token = adminCookie(req);
