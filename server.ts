@@ -2615,9 +2615,16 @@ async function startServer() {
       }
       const eventId = crypto.randomUUID();
       const hubEventId = crypto.randomUUID();
-      db.bindCrmLeadId(newLead.id, crmCaptureResult.lead.id);
+      // Duplicate CRM enquiries are kept as separate website receipts for
+      // audit, but must NOT create a second authoritative CRM→Website link.
+      // Otherwise approval lookup can find two records for one CRM lead.
+      if (!crmCaptureResult.isDuplicate) {
+        db.bindCrmLeadId(newLead.id, crmCaptureResult.lead.id);
+      }
       db.updateLeadTiquetSync(newLead.id, eventId,
-        reviewModeEnabled() ? "awaiting_approval" : "pending");
+        reviewModeEnabled() ?
+          (crmCaptureResult.isDuplicate ? "requires_manual_merge" : "awaiting_approval") :
+          "pending");
       db.updateLeadHubSync(newLead.id, hubEventId, "pending");
       if(requestId){const recent=readJSON<any[]>('lead-requests.json',[]).filter(r=>r.expires>Date.now());recent.push({id:requestId,hash:requestHash,leadId:newLead.id,expires:Date.now()+86400000});writeJSON('lead-requests.json',recent);}
       return {newLead, crmCaptureResult, eventId, hubEventId};
