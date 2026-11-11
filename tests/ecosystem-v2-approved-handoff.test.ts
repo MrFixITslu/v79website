@@ -76,7 +76,8 @@ test("transient failures never manufacture a customer",async()=>{
 test("source-code gate preserves legacy default and forbids hidden sends during review",async()=>{
  const {readFileSync}=await import("node:fs");
  const s=readFileSync(new URL("../server.ts",import.meta.url),"utf8");
- assert.match(s,/V79_ECOSYSTEM_V2_REVIEW_MODE/);
+ const helper=readFileSync(new URL("../server/approvedLeadHandoff.ts",import.meta.url),"utf8");
+ assert.match(helper,/V79_ECOSYSTEM_V2_REVIEW_MODE/);
  assert.match(s,/reviewModeEnabled\(\) \? "awaiting_approval" : "pending"/);
  assert.match(s,/if \(!reviewModeEnabled\(\)\) \{/);
  assert.match(s,/if\(reviewModeEnabled\(\)\)\s+return res\.status\(409\)/);
