@@ -2753,14 +2753,84 @@ async function startServer() {
     }
   });
 
-  app.post("/api/admin/crm/leads/:id/convert", requireAdmin, (req, res) => {
-    try {
-      const converted = crmStorage.convertLeadToClient(Number(String(req.params.id)), req.body, "Admin");
-      res.json(converted);
-    } catch (e) {
-      console.error("[CRM API] Error converting lead:", e);
-      res.status(500).json({ error: (e as any)?.message || "Failed to convert lead." });
+  // The legacy standalone CRM conversion is unchanged until the
+  // coordinated, reviewed V2 handoff is activated after staging.
+  const v2ConversionInFlight = new Set<number>();
+  app.post("/api/admin/crm/leads/:id/convert", requireAdmin, async (req, res) => {
+    const id=Number(String(req.params.id));
+    if (!reviewModeEnabled()) {
+      try {
+        const converted=crmStorage.convertLeadToClient(id,req.body,"Admin");
+        return res.json(converted);
+      }catch(e){
+        return res.status(500).json({error:(e as Error)?.message||"Failed to convert lead."});
+      }
     }
+    if(!Number.isSafeInteger(id)||id<1)
+      return res.status(400).json({error:"Invalid CRM lead reference"});
+    const details=req.body||{};
+    if(details.contractValue!==undefined &&
+        (typeof details.contractValue!=="number" ||
+         !Number.isFinite(details.contractValue) || details.contractValue<0 || details.contractValue>1e9))
+      return res.status(400).json({error:"Invalid proposed contract value"});
+    if(details.billingEmail!==undefined && (typeof details.billingEmail!=="string" ||
+         details.billingEmail.length>180 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(details.billingEmail)))
+      return res.status(400).json({error:"Invalid billing email"});
+    if(details.notes!==undefined && (typeof details.notes!=="string" || details.notes.length>2500))
+      return res.status(400).json({error:"Invalid conversion notes"});
+    if(v2ConversionInFlight.has(id))
+      return res.status(409).json({error:"Conversion already being reviewed"});
+    v2ConversionInFlight.add(id);
+    try {
+      const crmLead=crmStorage.getLeadById(id);
+      if(!crmLead || crmLead.isArchived || crmLead.duplicateOfLeadId)
+        return res.status(409).json({error:"Lead requires manual review before conversion"});
+      const linked=findExactlyLinkedWebsiteLead(db.getLeads(),id);
+      if(!linked)
+        return res.status(409).json({error:"Website lead mapping is missing; manual reconciliation required"});
+      if(crmLead.isConverted) {
+        if(linked.tiquetClientId &&
+           crmLead.convertedClientDetails?.clientId===linked.tiquetClientId)
+          return res.json(crmLead);
+        return res.status(409).json({error:"Existing CRM conversion requires identity reconciliation"});
+      }
+      if(!V79TIQUET_INTAKE_URL || !V79TIQUET_INTAKE_SECRET)
+        return res.status(503).json({error:"Tiquet handoff is not configured"});
+      // The owner explicitly approved this CRM lead. Persist that decision
+      // before attempting the external delivery; retries reuse eventId.
+      db.approveTiquetLead(Number(linked.id),id);
+      const refreshed=findExactlyLinkedWebsiteLead(db.getLeads(),id);
+      if(!refreshed || refreshed.tiquetApproval!=="approved")
+        return res.status(503).json({error:"Unable to verify approval state"});
+      let customerId=String(refreshed.tiquetClientId||"");
+      let jobId=String(refreshed.tiquetJobId||"");
+      if(!customerId || !jobId) {
+        const result=await deliverApprovedTiquetLead({
+          lead:refreshed,url:V79TIQUET_INTAKE_URL,
+          secret:V79TIQUET_INTAKE_SECRET,
+        });
+        if(result.status!=="confirmed")
+          return res.status(result.status==="rejected"?422:503).json({
+            error:result.status==="rejected"?
+              "Tiquet rejected the conversion; review the customer details" :
+              "Tiquet confirmation unavailable; conversion remains pending",
+          });
+        customerId=result.clientId;
+        jobId=result.jobId;
+        db.setApprovedTiquetLink(Number(linked.id),String(refreshed.tiquetEventId),
+          customerId,jobId);
+      }
+      const converted=crmStorage.convertLeadToClient(id,{
+        contractValue:details.contractValue,
+        billingEmail:details.billingEmail,
+        notes:details.notes,
+        verifiedTiquetClientId:customerId,
+      },"Admin");
+      return res.json(converted);
+    }catch(e){
+      console.error("[CRM V2] Approved conversion could not complete.");
+      return res.status(503).json({error:"Conversion outcome uncertain; review Tiquet and retry the same lead"});
+    }finally{v2ConversionInFlight.delete(id);}
   });
 
   app.post("/api/admin/crm/leads/:id/archive", requireAdmin, (req, res) => {
