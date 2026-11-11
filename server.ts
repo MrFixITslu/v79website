@@ -13,6 +13,7 @@ import compression from "compression";
 import { crmStorage } from "./server/crm_storage";
 import { pingOllama, analyzeBusinessWithAI } from "./server/crm_engine";
 import { deliverPlatformEvent, hubEventsConfigured, hubOrganizationRef } from "./server/platformEvents";
+import { reviewModeEnabled, findExactlyLinkedWebsiteLead, deliverApprovedTiquetLead } from "./server/approvedLeadHandoff";
 import { generateAiPromptGuidePdf } from "./server/aiPromptGuidePdf";
 
 // Configure environment variable definitions
@@ -745,6 +746,46 @@ class DocumentDatabase {
   // Tracks delivery of this lead to the V79Tiquet gateway, separate from
   // the visitor-facing status/adminNotes above. tiquetEventId is set once,
   // on creation, and reused on every retry attempt.
+  bindCrmLeadId(id: number, crmLeadId: number): void {
+    if (!Number.isSafeInteger(id) || !Number.isSafeInteger(crmLeadId) || id < 1 || crmLeadId < 1)
+      throw new Error("Invalid CRM lead reference.");
+    const list = this.readLeads();
+    const index = list.findIndex(l => l.id === id);
+    if (index < 0 || (list[index].crmLeadId && list[index].crmLeadId !== crmLeadId))
+      throw new Error("Website to CRM lead association is ambiguous.");
+    list[index].crmLeadId = crmLeadId;
+    this.writeLeads(list);
+  }
+
+  setApprovedTiquetLink(id: number, expectedEventId: string, clientId: string, jobId: string): void {
+    const list=this.readLeads();
+    const index=list.findIndex(l=>l.id===id);
+    if(index<0 || list[index].tiquetApproval!=="approved" ||
+        list[index].tiquetEventId!==expectedEventId)
+      throw new Error("Tiquet approval link mismatch");
+    if ((list[index].tiquetClientId && list[index].tiquetClientId!==clientId) ||
+        (list[index].tiquetJobId && list[index].tiquetJobId!==jobId))
+      throw new Error("Tiquet identity conflict");
+    list[index].tiquetClientId=clientId;
+    list[index].tiquetJobId=jobId;
+    list[index].tiquetSyncStatus="sent";
+    this.writeLeads(list);
+  }
+
+  approveTiquetLead(id: number, crmLeadId: number): boolean {
+    const list=this.readLeads();
+    const index=list.findIndex(l=>l.id===id && l.crmLeadId===crmLeadId);
+    if(index<0)throw new Error("CRM and website lead are not explicitly linked");
+    if(list[index].tiquetSyncStatus==="failed")
+      throw new Error("Previously rejected Tiquet handoff requires manual review");
+    if(list[index].tiquetApproval==="approved") return false;
+    list[index].tiquetApproval="approved";
+    if(list[index].tiquetSyncStatus!=="sent")
+      list[index].tiquetSyncStatus="awaiting_delivery";
+    this.writeLeads(list);
+    return true;
+  }
+
   updateLeadTiquetSync(id: number, tiquetEventId: string, tiquetSyncStatus: string): void {
     const list = this.readLeads();
     const index = list.findIndex(l => l.id === Number(id));
@@ -2279,6 +2320,9 @@ async function startServer() {
       return;
     }
     for (const lead of pending) {
+      // When V2 human review is enabled, an old pre-approval pending lead
+      // must not slip through the legacy retry queue and create a job.
+      if (reviewModeEnabled()) continue;
       try {
         const delivered = await sendLeadToTiquet(lead, lead.tiquetEventId);
         await db.updateLeadTiquetSync(lead.id, lead.tiquetEventId, delivered);
@@ -2556,9 +2600,31 @@ async function startServer() {
         location: location || "Saint Lucia"
       }, "Website Contact Form");
 
+      // A captured enquiry needs a visible human owner before it becomes
+      // a service job. Reuse the existing CRM Tasks list; don't invent
+      // a second workforce queue or schedule unauthorised customer emails.
+      if (reviewModeEnabled() && !crmCaptureResult.isDuplicate) {
+        crmStorage.addTask({
+          leadId: crmCaptureResult.lead.id,
+          title: "Contact prospect, confirm scope and approve service handoff",
+          dueAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+          priority: ["Urgent", "High"].includes(crmCaptureResult.lead.priority) ? "High" : "Medium",
+          status: "pending",
+          assignedTo: "Admin"
+        });
+      }
       const eventId = crypto.randomUUID();
       const hubEventId = crypto.randomUUID();
-      db.updateLeadTiquetSync(newLead.id, eventId, "pending");
+      // Duplicate CRM enquiries are kept as separate website receipts for
+      // audit, but must NOT create a second authoritative CRM→Website link.
+      // Otherwise approval lookup can find two records for one CRM lead.
+      if (!crmCaptureResult.isDuplicate) {
+        db.bindCrmLeadId(newLead.id, crmCaptureResult.lead.id);
+      }
+      db.updateLeadTiquetSync(newLead.id, eventId,
+        reviewModeEnabled() ?
+          (crmCaptureResult.isDuplicate ? "requires_manual_merge" : "awaiting_approval") :
+          "pending");
       db.updateLeadHubSync(newLead.id, hubEventId, "pending");
       if(requestId){const recent=readJSON<any[]>('lead-requests.json',[]).filter(r=>r.expires>Date.now());recent.push({id:requestId,hash:requestHash,leadId:newLead.id,expires:Date.now()+86400000});writeJSON('lead-requests.json',recent);}
       return {newLead, crmCaptureResult, eventId, hubEventId};
@@ -2571,13 +2637,13 @@ async function startServer() {
         duplicateOf: crmCaptureResult.duplicateOf?.id
       });
 
-      sendLeadToTiquet(leadData, eventId)
-        .then((delivered) => {
-          return db.updateLeadTiquetSync(newLead.id, eventId, delivered);
-        })
-        .catch((err) => {
-          console.error(`[V79Tiquet Gateway] Unexpected error delivering lead ${newLead.id}:`, err.message);
-        });
+      if (!reviewModeEnabled()) {
+        sendLeadToTiquet(leadData, eventId)
+          .then((delivered) => db.updateLeadTiquetSync(newLead.id, eventId, delivered))
+          .catch((err) => {
+            console.error(`[V79Tiquet Gateway] Unexpected error delivering lead ${newLead.id}:`, err.message);
+          });
+      }
 
       sendLeadEventToHub({ ...newLead, ...leadData }, hubEventId, eventId)
         .then((state) => db.updateLeadHubSync(newLead.id, hubEventId, state))
@@ -2591,6 +2657,11 @@ async function startServer() {
   app.post('/api/admin/leads/:id/retry', requireAdmin, async (req,res)=>{
     const lead = db.getLeads().find((l:any)=>l.id===Number(String(req.params.id)));
     if(!lead)return res.status(404).json({error:'Lead not found'});
+    // V2 approval mode uses the CRM Convert action, which verifies and
+    // stores the actual Tiquet job+client IDs. This legacy retry endpoint
+    // cannot bypass that confirmation or create an unaudited job.
+    if(reviewModeEnabled())
+      return res.status(409).json({error:"Use the approved CRM conversion workflow for Tiquet handoff"});
     if(lead.tiquetSyncStatus==='sent')return res.status(409).json({error:'Already delivered'});
     const eventId=lead.tiquetEventId || crypto.randomUUID();
     db.updateLeadTiquetSync(lead.id,eventId,'pending');
@@ -2707,14 +2778,92 @@ async function startServer() {
     }
   });
 
-  app.post("/api/admin/crm/leads/:id/convert", requireAdmin, (req, res) => {
-    try {
-      const converted = crmStorage.convertLeadToClient(Number(String(req.params.id)), req.body, "Admin");
-      res.json(converted);
-    } catch (e) {
-      console.error("[CRM API] Error converting lead:", e);
-      res.status(500).json({ error: (e as any)?.message || "Failed to convert lead." });
+  // The legacy standalone CRM conversion is unchanged until the
+  // coordinated, reviewed V2 handoff is activated after staging.
+  const v2ConversionInFlight = new Set<number>();
+  app.post("/api/admin/crm/leads/:id/convert", requireAdmin, async (req, res) => {
+    const id=Number(String(req.params.id));
+    if (!reviewModeEnabled()) {
+      try {
+        const converted=crmStorage.convertLeadToClient(id,req.body,"Admin");
+        return res.json(converted);
+      }catch(e){
+        return res.status(500).json({error:(e as Error)?.message||"Failed to convert lead."});
+      }
     }
+    if(!Number.isSafeInteger(id)||id<1)
+      return res.status(400).json({error:"Invalid CRM lead reference"});
+    const details=req.body||{};
+    if(details.contractValue!==undefined &&
+        (typeof details.contractValue!=="number" ||
+         !Number.isFinite(details.contractValue) || details.contractValue<0 || details.contractValue>1e9))
+      return res.status(400).json({error:"Invalid proposed contract value"});
+    if(details.billingEmail!==undefined && (typeof details.billingEmail!=="string" ||
+         details.billingEmail.length>180 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(details.billingEmail)))
+      return res.status(400).json({error:"Invalid billing email"});
+    if(details.notes!==undefined && (typeof details.notes!=="string" || details.notes.length>2500))
+      return res.status(400).json({error:"Invalid conversion notes"});
+    if(v2ConversionInFlight.has(id))
+      return res.status(409).json({error:"Conversion already being reviewed"});
+    v2ConversionInFlight.add(id);
+    try {
+      const crmLead=crmStorage.getLeadById(id);
+      if(!crmLead || crmLead.isArchived || crmLead.duplicateOfLeadId)
+        return res.status(409).json({error:"Lead requires manual review before conversion"});
+      const linked=findExactlyLinkedWebsiteLead(db.getLeads(),id);
+      if(!linked)
+        return res.status(409).json({error:"Website lead mapping is missing; manual reconciliation required"});
+      if(crmLead.isConverted) {
+        if(linked.tiquetClientId &&
+           crmLead.convertedClientDetails?.clientId===linked.tiquetClientId)
+          return res.json(crmLead);
+        return res.status(409).json({error:"Existing CRM conversion requires identity reconciliation"});
+      }
+      if(!V79TIQUET_INTAKE_URL || !V79TIQUET_INTAKE_SECRET)
+        return res.status(503).json({error:"Tiquet handoff is not configured"});
+      // The owner explicitly approved this CRM lead. Persist that decision
+      // before attempting the external delivery; retries reuse eventId.
+      transaction(() => {
+        if(db.approveTiquetLead(Number(linked.id),id))
+          crmStorage.addActivity({
+            leadId:id,type:"status_change",
+            title:"Tiquet handoff approved",
+            description:"Admin authorised service handoff; awaiting confirmed external IDs.",
+            author:"Admin",
+          });
+      });
+      const refreshed=findExactlyLinkedWebsiteLead(db.getLeads(),id);
+      if(!refreshed || refreshed.tiquetApproval!=="approved")
+        return res.status(503).json({error:"Unable to verify approval state"});
+      let customerId=String(refreshed.tiquetClientId||"");
+      let jobId=String(refreshed.tiquetJobId||"");
+      if(!customerId || !jobId) {
+        const result=await deliverApprovedTiquetLead({
+          lead:refreshed,url:V79TIQUET_INTAKE_URL,
+          secret:V79TIQUET_INTAKE_SECRET,
+        });
+        if(result.status!=="confirmed")
+          return res.status(result.status==="rejected"?422:503).json({
+            error:result.status==="rejected"?
+              "Tiquet rejected the conversion; review the customer details" :
+              "Tiquet confirmation unavailable; conversion remains pending",
+          });
+        customerId=result.clientId;
+        jobId=result.jobId;
+        db.setApprovedTiquetLink(Number(linked.id),String(refreshed.tiquetEventId),
+          customerId,jobId);
+      }
+      const converted=crmStorage.convertLeadToClient(id,{
+        contractValue:details.contractValue,
+        billingEmail:details.billingEmail,
+        notes:details.notes,
+        verifiedTiquetClientId:customerId,
+      },"Admin");
+      return res.json(converted);
+    }catch(e){
+      console.error("[CRM V2] Approved conversion could not complete.");
+      return res.status(503).json({error:"Conversion outcome uncertain; review Tiquet and retry the same lead"});
+    }finally{v2ConversionInFlight.delete(id);}
   });
 
   app.post("/api/admin/crm/leads/:id/archive", requireAdmin, (req, res) => {
