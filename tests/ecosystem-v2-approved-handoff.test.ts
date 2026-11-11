@@ -78,7 +78,8 @@ test("source-code gate preserves legacy default and forbids hidden sends during 
  const s=readFileSync(new URL("../server.ts",import.meta.url),"utf8");
  const helper=readFileSync(new URL("../server/approvedLeadHandoff.ts",import.meta.url),"utf8");
  assert.match(helper,/V79_ECOSYSTEM_V2_REVIEW_MODE/);
- assert.match(s,/reviewModeEnabled\(\) \? "awaiting_approval" : "pending"/);
+ assert.match(s,/crmCaptureResult\.isDuplicate \? "requires_manual_merge" : "awaiting_approval"/);
+ assert.match(s,/if \(!crmCaptureResult\.isDuplicate\) \{\s*db\.bindCrmLeadId/);
  assert.match(s,/if \(!reviewModeEnabled\(\)\) \{/);
  assert.match(s,/if\(reviewModeEnabled\(\)\)\s+return res\.status\(409\)/);
  assert.match(s,/db\.setApprovedTiquetLink\(/);
