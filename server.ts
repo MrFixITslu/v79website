@@ -772,16 +772,18 @@ class DocumentDatabase {
     this.writeLeads(list);
   }
 
-  approveTiquetLead(id: number, crmLeadId: number): void {
+  approveTiquetLead(id: number, crmLeadId: number): boolean {
     const list=this.readLeads();
     const index=list.findIndex(l=>l.id===id && l.crmLeadId===crmLeadId);
     if(index<0)throw new Error("CRM and website lead are not explicitly linked");
     if(list[index].tiquetSyncStatus==="failed")
       throw new Error("Previously rejected Tiquet handoff requires manual review");
+    if(list[index].tiquetApproval==="approved") return false;
     list[index].tiquetApproval="approved";
     if(list[index].tiquetSyncStatus!=="sent")
       list[index].tiquetSyncStatus="awaiting_delivery";
     this.writeLeads(list);
+    return true;
   }
 
   updateLeadTiquetSync(id: number, tiquetEventId: string, tiquetSyncStatus: string): void {
@@ -2801,7 +2803,15 @@ async function startServer() {
         return res.status(503).json({error:"Tiquet handoff is not configured"});
       // The owner explicitly approved this CRM lead. Persist that decision
       // before attempting the external delivery; retries reuse eventId.
-      db.approveTiquetLead(Number(linked.id),id);
+      transaction(() => {
+        if(db.approveTiquetLead(Number(linked.id),id))
+          crmStorage.addActivity({
+            leadId:id,type:"status_change",
+            title:"Tiquet handoff approved",
+            description:"Admin authorised service handoff; awaiting confirmed external IDs.",
+            author:"Admin",
+          });
+      });
       const refreshed=findExactlyLinkedWebsiteLead(db.getLeads(),id);
       if(!refreshed || refreshed.tiquetApproval!=="approved")
         return res.status(503).json({error:"Unable to verify approval state"});
