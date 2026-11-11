@@ -2799,7 +2799,7 @@ async function startServer() {
          !Number.isFinite(details.contractValue) || details.contractValue<0 || details.contractValue>1e9))
       return res.status(400).json({error:"Invalid proposed contract value"});
     if(details.billingEmail!==undefined && (typeof details.billingEmail!=="string" ||
-         details.billingEmail.length>180 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(details.billingEmail)))
+         details.billingEmail.length>180 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(details.billingEmail)))
       return res.status(400).json({error:"Invalid billing email"});
     if(details.notes!==undefined && (typeof details.notes!=="string" || details.notes.length>2500))
       return res.status(400).json({error:"Invalid conversion notes"});
