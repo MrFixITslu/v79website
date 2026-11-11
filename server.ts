@@ -2635,8 +2635,11 @@ async function startServer() {
   app.post('/api/admin/leads/:id/retry', requireAdmin, async (req,res)=>{
     const lead = db.getLeads().find((l:any)=>l.id===Number(String(req.params.id)));
     if(!lead)return res.status(404).json({error:'Lead not found'});
-    if(reviewModeEnabled() && lead.tiquetApproval!=="approved")
-      return res.status(409).json({error:"Review and approve the linked CRM lead before delivery"});
+    // V2 approval mode uses the CRM Convert action, which verifies and
+    // stores the actual Tiquet job+client IDs. This legacy retry endpoint
+    // cannot bypass that confirmation or create an unaudited job.
+    if(reviewModeEnabled())
+      return res.status(409).json({error:"Use the approved CRM conversion workflow for Tiquet handoff"});
     if(lead.tiquetSyncStatus==='sent')return res.status(409).json({error:'Already delivered'});
     const eventId=lead.tiquetEventId || crypto.randomUUID();
     db.updateLeadTiquetSync(lead.id,eventId,'pending');
