@@ -13,6 +13,7 @@ import compression from "compression";
 import { crmStorage } from "./server/crm_storage";
 import { pingOllama, analyzeBusinessWithAI } from "./server/crm_engine";
 import { deliverPlatformEvent, hubEventsConfigured, hubOrganizationRef } from "./server/platformEvents";
+import { reviewModeEnabled, findExactlyLinkedWebsiteLead, deliverApprovedTiquetLead } from "./server/approvedLeadHandoff";
 import { generateAiPromptGuidePdf } from "./server/aiPromptGuidePdf";
 
 // Configure environment variable definitions
@@ -745,6 +746,44 @@ class DocumentDatabase {
   // Tracks delivery of this lead to the V79Tiquet gateway, separate from
   // the visitor-facing status/adminNotes above. tiquetEventId is set once,
   // on creation, and reused on every retry attempt.
+  bindCrmLeadId(id: number, crmLeadId: number): void {
+    if (!Number.isSafeInteger(id) || !Number.isSafeInteger(crmLeadId) || id < 1 || crmLeadId < 1)
+      throw new Error("Invalid CRM lead reference.");
+    const list = this.readLeads();
+    const index = list.findIndex(l => l.id === id);
+    if (index < 0 || (list[index].crmLeadId && list[index].crmLeadId !== crmLeadId))
+      throw new Error("Website to CRM lead association is ambiguous.");
+    list[index].crmLeadId = crmLeadId;
+    this.writeLeads(list);
+  }
+
+  setApprovedTiquetLink(id: number, expectedEventId: string, clientId: string, jobId: string): void {
+    const list=this.readLeads();
+    const index=list.findIndex(l=>l.id===id);
+    if(index<0 || list[index].tiquetApproval!=="approved" ||
+        list[index].tiquetEventId!==expectedEventId)
+      throw new Error("Tiquet approval link mismatch");
+    if ((list[index].tiquetClientId && list[index].tiquetClientId!==clientId) ||
+        (list[index].tiquetJobId && list[index].tiquetJobId!==jobId))
+      throw new Error("Tiquet identity conflict");
+    list[index].tiquetClientId=clientId;
+    list[index].tiquetJobId=jobId;
+    list[index].tiquetSyncStatus="sent";
+    this.writeLeads(list);
+  }
+
+  approveTiquetLead(id: number, crmLeadId: number): void {
+    const list=this.readLeads();
+    const index=list.findIndex(l=>l.id===id && l.crmLeadId===crmLeadId);
+    if(index<0)throw new Error("CRM and website lead are not explicitly linked");
+    if(list[index].tiquetSyncStatus==="failed")
+      throw new Error("Previously rejected Tiquet handoff requires manual review");
+    list[index].tiquetApproval="approved";
+    if(list[index].tiquetSyncStatus!=="sent")
+      list[index].tiquetSyncStatus="awaiting_delivery";
+    this.writeLeads(list);
+  }
+
   updateLeadTiquetSync(id: number, tiquetEventId: string, tiquetSyncStatus: string): void {
     const list = this.readLeads();
     const index = list.findIndex(l => l.id === Number(id));
@@ -2279,6 +2318,9 @@ async function startServer() {
       return;
     }
     for (const lead of pending) {
+      // When V2 human review is enabled, an old pre-approval pending lead
+      // must not slip through the legacy retry queue and create a job.
+      if (reviewModeEnabled()) continue;
       try {
         const delivered = await sendLeadToTiquet(lead, lead.tiquetEventId);
         await db.updateLeadTiquetSync(lead.id, lead.tiquetEventId, delivered);
@@ -2558,7 +2600,9 @@ async function startServer() {
 
       const eventId = crypto.randomUUID();
       const hubEventId = crypto.randomUUID();
-      db.updateLeadTiquetSync(newLead.id, eventId, "pending");
+      db.bindCrmLeadId(newLead.id, crmCaptureResult.lead.id);
+      db.updateLeadTiquetSync(newLead.id, eventId,
+        reviewModeEnabled() ? "awaiting_approval" : "pending");
       db.updateLeadHubSync(newLead.id, hubEventId, "pending");
       if(requestId){const recent=readJSON<any[]>('lead-requests.json',[]).filter(r=>r.expires>Date.now());recent.push({id:requestId,hash:requestHash,leadId:newLead.id,expires:Date.now()+86400000});writeJSON('lead-requests.json',recent);}
       return {newLead, crmCaptureResult, eventId, hubEventId};
@@ -2571,13 +2615,13 @@ async function startServer() {
         duplicateOf: crmCaptureResult.duplicateOf?.id
       });
 
-      sendLeadToTiquet(leadData, eventId)
-        .then((delivered) => {
-          return db.updateLeadTiquetSync(newLead.id, eventId, delivered);
-        })
-        .catch((err) => {
-          console.error(`[V79Tiquet Gateway] Unexpected error delivering lead ${newLead.id}:`, err.message);
-        });
+      if (!reviewModeEnabled()) {
+        sendLeadToTiquet(leadData, eventId)
+          .then((delivered) => db.updateLeadTiquetSync(newLead.id, eventId, delivered))
+          .catch((err) => {
+            console.error(`[V79Tiquet Gateway] Unexpected error delivering lead ${newLead.id}:`, err.message);
+          });
+      }
 
       sendLeadEventToHub({ ...newLead, ...leadData }, hubEventId, eventId)
         .then((state) => db.updateLeadHubSync(newLead.id, hubEventId, state))
@@ -2591,6 +2635,8 @@ async function startServer() {
   app.post('/api/admin/leads/:id/retry', requireAdmin, async (req,res)=>{
     const lead = db.getLeads().find((l:any)=>l.id===Number(String(req.params.id)));
     if(!lead)return res.status(404).json({error:'Lead not found'});
+    if(reviewModeEnabled() && lead.tiquetApproval!=="approved")
+      return res.status(409).json({error:"Review and approve the linked CRM lead before delivery"});
     if(lead.tiquetSyncStatus==='sent')return res.status(409).json({error:'Already delivered'});
     const eventId=lead.tiquetEventId || crypto.randomUUID();
     db.updateLeadTiquetSync(lead.id,eventId,'pending');
