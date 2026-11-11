@@ -2600,6 +2600,19 @@ async function startServer() {
         location: location || "Saint Lucia"
       }, "Website Contact Form");
 
+      // A captured enquiry needs a visible human owner before it becomes
+      // a service job. Reuse the existing CRM Tasks list; don't invent
+      // a second workforce queue or schedule unauthorised customer emails.
+      if (reviewModeEnabled() && !crmCaptureResult.isDuplicate) {
+        crmStorage.addTask({
+          leadId: crmCaptureResult.lead.id,
+          title: "Contact prospect, confirm scope and approve service handoff",
+          dueAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+          priority: ["Urgent", "High"].includes(crmCaptureResult.lead.priority) ? "High" : "Medium",
+          status: "pending",
+          assignedTo: "Admin"
+        });
+      }
       const eventId = crypto.randomUUID();
       const hubEventId = crypto.randomUUID();
       db.bindCrmLeadId(newLead.id, crmCaptureResult.lead.id);
