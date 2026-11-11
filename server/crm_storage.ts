@@ -288,11 +288,22 @@ export class CRMStorage {
     return updated;
   }
 
-  convertLeadToClient(id: number, details: { contractValue?: number; billingEmail?: string; notes?: string }, author: string = "Admin"): CRMLead {
+  convertLeadToClient(id: number, details: { contractValue?: number; billingEmail?: string; notes?: string; verifiedTiquetClientId?: string }, author: string = "Admin"): CRMLead {
     const lead = this.getLeadById(id);
     if (!lead) throw new Error(`Lead #${id} not found`);
-
-    const clientId = `V79-CLI-${Date.now().toString().slice(-6)}`;
+    // Conversion is an irreversible business decision: repeat requests
+    // may read existing conversion, but cannot silently replace its ID.
+    if (lead.isConverted) {
+      if (details.verifiedTiquetClientId &&
+          lead.convertedClientDetails?.clientId !== details.verifiedTiquetClientId)
+        throw new Error("Existing customer conversion conflicts with Tiquet identity.");
+      return lead;
+    }
+    if (details.verifiedTiquetClientId !== undefined &&
+        !/^[A-Za-z0-9._:@-]{4,180}$/.test(details.verifiedTiquetClientId))
+      throw new Error("Verified Tiquet customer identity is invalid.");
+    const clientId = details.verifiedTiquetClientId ||
+      `V79-CLI-${Date.now().toString().slice(-6)}`;
     const converted = this.updateLead(id, {
       isConverted: true,
       convertedAt: new Date().toISOString(),
