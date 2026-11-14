@@ -232,36 +232,61 @@ export async function analyzeBusinessWithAI(
 ): Promise<CRMAnalysisResult> {
   const fallback = calculateDeterministicAnalysis(business);
 
-  // Ollama may re-order evidence-backed matches, but must never invent a
-  // product, an operational problem or a new score.
-  const systemPrompt = `You support the V79 CRM. Use ONLY the approved V79 offering labels below.
-Never infer a need from whether a company has a website. Do not invent facts.
-Reply as JSON with recommendedServices (an array of approved labels).
-Approved: ${V79_OFFERINGS.map((o) => o.label).join(", ")}`;
-  const userPrompt = `Consider only these supplied details and existing evidence-backed matches:
-Business: ${business.businessName}
-Industry: ${business.industry || business.category || "Unknown"}
-Request: ${business.serviceRequested || "None"}
-Described challenge: ${business.biggestChallenge || business.description || "None"}
-Existing evidence-backed matches: ${fallback.recommendedServices.join(", ") || "None"}`;
+  const systemPrompt = `You are the Lead Intelligence AI for V79 Digital, a premier Information and Communications Technology (ICT) consultancy in Saint Lucia (Caribbean).
+You analyze businesses discovered through public directories.
+Do not fabricate missing details. Strictly rely on provided facts.
+Return ONLY valid JSON with this exact schema:
+{
+  "summary": string,
+  "category": string,
+  "problems": string[],
+  "recommendedServices": string[],
+  "leadScore": number (0 to 100),
+  "scoreCategory": "Hot" | "High Potential" | "Medium" | "Low",
+  "bestApproach": string,
+  "callPrep": {
+    "whatTheyDo": string,
+    "identifiedNeed": string,
+    "recommendedPitch": string,
+    "discoveryQuestions": string[],
+    "suggestedNextAction": string
+  }
+}`;
+
+  const userPrompt = `Analyze this Saint Lucia business for digital and IT opportunities:
+Business Name: ${business.businessName}
+Category: ${business.category || "Unknown"}
+Industry: ${business.industry || "Unknown"}
+Location: ${business.location || "Saint Lucia"}
+Website: ${business.website || "None"}
+Phone: ${business.phone || "None"}
+Email: ${business.email || "None"}
+Facebook: ${business.facebookUrl || "None"}
+Instagram: ${business.instagramUrl || "None"}
+LinkedIn: ${business.linkedinUrl || "None"}
+Description: ${business.description || "None"}
+
+Evaluate whether they need: Website Development/Modernization, Business Automation, CRM, Wi-Fi Optimization, Cybersecurity, or Managed IT.`;
 
   try {
     const rawOllamaResponse = await queryOllama(userPrompt, systemPrompt, ollamaBaseUrl, model);
     if (rawOllamaResponse) {
       const parsed = JSON.parse(rawOllamaResponse);
-      if (Array.isArray(parsed.recommendedServices)) {
-        const approved = parsed.recommendedServices.filter(
-          (label: unknown): label is string => typeof label === "string" && fallback.recommendedServices.includes(label)
-        );
-        const sorted = [...new Set([...approved, ...fallback.recommendedServices])];
-        if (sorted.join("|") !== fallback.recommendedServices.join("|")) {
-          return {
-            ...fallback,
-            recommendedServices: sorted,
-            generatedBy: "ollama",
-            modelName: model
-          };
-        }
+      if (parsed.summary && typeof parsed.leadScore === "number") {
+        return {
+          summary: parsed.summary,
+          category: parsed.category || fallback.category,
+          problems: Array.isArray(parsed.problems) ? parsed.problems : fallback.problems,
+          recommendedServices: Array.isArray(parsed.recommendedServices) ? parsed.recommendedServices : fallback.recommendedServices,
+          leadScore: Math.min(100, Math.max(0, Math.round(parsed.leadScore))),
+          scoreCategory: parsed.scoreCategory || fallback.scoreCategory,
+          scoreBreakdown: fallback.scoreBreakdown,
+          bestApproach: parsed.bestApproach || fallback.bestApproach,
+          callPrep: parsed.callPrep || fallback.callPrep,
+          generatedBy: "ollama",
+          modelName: model,
+          timestamp: new Date().toISOString()
+        };
       }
     }
   } catch (err) {

@@ -74,13 +74,13 @@
 
 @layer base {
   :root {
-    --bg-app: #faf8f4; /* warm off-white — easier on eyes in bright Caribbean office light */
-    --bg-header: rgba(250, 248, 244, 0.85);
-    --bg-aside: rgba(244, 236, 220, 0.4); /* sand-light tint */
+    --bg-app: #f7fafb; /* warm off-white — easier on eyes in bright Caribbean office light */
+    --bg-header: rgba(255, 255, 255, 0.92);
+    --bg-aside: rgba(228, 244, 245, 0.35); /* sand-light tint */
     --text-primary: #0b1f33; /* deep navy — authority */
     --text-secondary: #3d5064; /* muted navy-gray */
     --text-muted: #7c8a97; /* soft slate */
-    --border-color: #e3ddd0; /* warm stone-tinted border */
+    --border-color: #dce8eb; /* warm stone-tinted border */
     --glass-bg: rgba(255, 255, 255, 0.72);
     --glass-border: rgba(227, 221, 208, 0.85);
     --card-gradient-start: #f4ecdc; /* sand-light */

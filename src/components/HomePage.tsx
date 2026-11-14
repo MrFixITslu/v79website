@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   Shield, Cloud, Monitor, Network, Cpu, BarChart3, ArrowRight, Phone, Mail,
   MapPin, Star, ShieldCheck,
@@ -100,6 +100,7 @@ interface HomePageProps {
 
 export default function HomePage({ onNavigate }: HomePageProps) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const reduceMotion = useReducedMotion();
 
   return (
     <div className="space-y-20 pb-16">
@@ -157,7 +158,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           </svg>
         </div>
 
-        <div className="relative z-10 max-w-5xl mx-auto px-6 lg:px-8 text-center space-y-8">
+        <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-10 px-6 lg:grid-cols-[1.06fr_.94fr] lg:gap-14 lg:px-8">
+          <div className="min-w-0 space-y-7 text-center lg:text-left">
           {/* Headline & Description */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -165,14 +167,12 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="space-y-4"
           >
-            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold font-display tracking-tight leading-tight text-app-text dark:text-white">
-              Managed IT Services &amp; Cybersecurity<br />
-              <span className="bg-gradient-to-r from-v79-teal via-v79-teal-light to-v79-teal bg-clip-text text-transparent">
-                Built for the Caribbean.
-              </span>
+            <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-v79-teal-dark dark:text-v79-teal-light">From Vision to Value · Saint Lucia to the Caribbean</p>
+            <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-app-text dark:text-white sm:text-5xl lg:text-[clamp(3rem,4.1vw,4.7rem)]">
+              Stop chasing tech problems. <span className="text-v79-teal-dark dark:text-v79-teal-light">Start growing your business.</span>
             </h1>
-            <p className="max-w-3xl mx-auto text-lg sm:text-xl text-app-text-sec font-light leading-relaxed">
-              Protect your business with proactive monitoring, managed backups, cybersecurity support, and clearly defined response targets for businesses across Saint Lucia.
+            <p className="max-w-2xl text-base leading-relaxed text-app-text-sec sm:text-lg">
+              Reliable ICT support, cybersecurity, cloud and practical automation for Caribbean businesses — so your team can focus on customers and growth.
             </p>
           </motion.div>
 
@@ -181,7 +181,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3.5"
+            className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5"
           >
             <Button
               onClick={() => onNavigate("contact")}
@@ -206,7 +206,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.35 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-6 text-xs text-app-text-sec font-mono"
+            className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-6 text-xs text-app-text-sec font-mono"
           >
             <a href="tel:+17587260035" className="flex items-center gap-1.5 hover:text-v79-teal transition">
               <Phone className="w-3.5 h-3.5" /> +1 758 726 0035
@@ -220,6 +220,18 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               <MapPin className="w-3.5 h-3.5" /> Castries, Saint Lucia
             </span>
           </motion.div>
+          </div>
+          <figure className="group relative overflow-hidden rounded-[2rem] border border-app-border bg-[#e7f1f2] shadow-[0_24px_60px_rgba(12,44,60,0.12)]">
+            <img src="/v93/v79-hero-business-scene.webp"
+              alt="Caribbean business professionals using digital tools"
+              className="h-[360px] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none sm:h-[440px] lg:h-[520px]"
+              width="1200" height="800" fetchPriority="high" decoding="async" />
+            <figcaption className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/70 bg-white/90 p-4 shadow-lg backdrop-blur-md sm:inset-x-6 sm:bottom-6 sm:p-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-v79-teal-dark">From Vision to Value</p>
+              <p className="mt-1 font-display text-base font-bold text-v79-navy sm:text-lg">The right technology. More time for your business.</p>
+              <p className="mt-1 text-xs text-slate-600">Managed ICT · Cloud · Cybersecurity · Software</p>
+            </figcaption>
+          </figure>
         </div>
       </section>
 
@@ -246,16 +258,27 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             return (
               <motion.div
                 key={s.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.07 }}
-                whileHover={{ y: -4 }}
+                initial={reduceMotion ? false : {
+                  opacity: 0,
+                  x: i % 3 === 0 ? -50 : i % 3 === 2 ? 50 : 0,
+                  y: 45, rotate: (i % 3 - 1) * 3, scale: 0.94,
+                }}
+                whileInView={reduceMotion ? undefined : { opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={{ type: "spring", stiffness: 165, damping: 25, delay: i * 0.065 }}
+                whileHover={reduceMotion ? undefined : { y: -10, rotate: i % 2 ? 0.4 : -0.4, scale: 1.025 }}
                 className={`relative glass rounded-2xl p-6 space-y-4 border transition-all duration-300 group cursor-pointer ${
                   s.highlight
                     ? "border-v79-coral/35 shadow-lg shadow-v79-coral/10"
                     : "border-app-border hover:border-v79-teal/30 hover:shadow-lg hover:shadow-v79-teal/5"
                 }`}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault(); onNavigate("services");
+                  }
+                }}
                 onClick={() => onNavigate("services")}
               >
                 {s.highlight && (

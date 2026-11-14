@@ -1,3 +1,4 @@
+import {PAGES as designPages, META as designMeta, renderDesignPage} from "./server/website-design";
 import { cookie, cookieOptions, mountLearners, publicCourse, learner } from "./server/learners";
 import express from "express";
 import { atomicWrite, encryptionKey, seal, unseal, readJSON, writeJSON, transaction, storageReady } from "./server/persistence";
@@ -2227,7 +2228,9 @@ async function startServer() {
    * nothing more to do), false if it should be left 'pending' for the
    * periodic sweep to retry later.
    */
-  function sendLeadToTiquet(lead:any,eventId:string): Promise<"sent" | "pending" | "failed" | "disabled"> {
+  function sendLeadToTiquet(lead:any,eventId:string,approvedConversion=false): Promise<"sent" | "pending" | "failed" | "disabled"> {
+    // A website enquiry is NOT a job. Only an approved CRM conversion may send.
+    if (!approvedConversion) return Promise.resolve("disabled");
     const running=deliveries.get(eventId);if(running)return running;
     const pending=deliverLeadToTiquet(lead,eventId).finally(()=>deliveries.delete(eventId));deliveries.set(eventId,pending);return pending;
   }
@@ -2236,7 +2239,7 @@ async function startServer() {
 
     const payload = {
       eventId,
-      source: "website2026",
+      source: "website-crm-approved",
       name: lead.name,
       company: lead.company,
       email: lead.email,
@@ -2258,6 +2261,54 @@ async function startServer() {
     console.warn(`[V79Tiquet Gateway] Lead ${eventId} still pending delivery after inline retries — periodic sweep will keep trying.`);
     return "pending";
   }
+
+  // CRM-to-Tiquet conversion outbox. Public website leads never enter this outbox.
+  type CRMTiquetDelivery = {
+    leadId: number;
+    convertedAt: string;
+    eventId: string;
+    status: "pending" | "sent" | "failed" | "disabled";
+    updatedAt: string;
+  };
+  const CRM_TIQ_OUTBOX = "crm-tiquet-conversion-outbox.json";
+  const conversionEntries = (): CRMTiquetDelivery[] => readJSON<CRMTiquetDelivery[]>(CRM_TIQ_OUTBOX, []);
+  const conversionEventId = () => "v79-crm-" + crypto.randomUUID();
+  const getConversionDelivery = (leadId: number) => conversionEntries().find(row => row.leadId === leadId);
+  function upsertConversionDelivery(leadId: number, eventId: string, status: CRMTiquetDelivery["status"]) {
+    transaction(() => {
+      const sourceLead = crmStorage.getLeadById(leadId);
+      if (!sourceLead?.isConverted || !sourceLead.convertedAt) throw Error("Approved conversion record missing");
+      const current = conversionEntries();
+      const index = current.findIndex(row => row.leadId === leadId);
+      if (index >= 0 && current[index].convertedAt !== sourceLead.convertedAt) throw Error("CRM lead ID reused; manual reconciliation required");
+      const entry: CRMTiquetDelivery = { leadId, convertedAt: sourceLead.convertedAt, eventId, status, updatedAt: new Date().toISOString() };
+      if (index < 0) current.push(entry);
+      else current[index] = entry;
+      writeJSON(CRM_TIQ_OUTBOX, current);
+    });
+  }
+  async function deliverConvertedCRMLead(leadId: number): Promise<CRMTiquetDelivery["status"]> {
+    const lead = crmStorage.getLeadById(leadId);
+    if (!lead?.isConverted) throw Error("Tiquet job requires an approved CRM conversion");
+    const entry = getConversionDelivery(leadId);
+    if (!entry) throw Error("Missing conversion outbox record");
+    if (entry.convertedAt !== lead.convertedAt) throw Error("CRM lead ID reused; manual reconciliation required");
+    if (entry.status === "sent") return "sent";
+    const state = await sendLeadToTiquet(lead, entry.eventId, true);
+    upsertConversionDelivery(leadId, entry.eventId, state);
+    return state;
+  }
+  // Retry transient failures after restart/outage, never retry permanent 4xx.
+  // One outbox eventId gives idempotency even if a process crashed after sending.
+  setInterval(async () => {
+    let pending: CRMTiquetDelivery[];
+    try { pending = conversionEntries().filter(row => row.status === "pending"); }
+    catch (err: any) { console.error("[CRM Tiquet] Outbox read failed:", err.message); return; }
+    for (const row of pending) {
+      try { await deliverConvertedCRMLead(row.leadId); }
+      catch (err: any) { console.error("[CRM Tiquet] Retry failed:", err.message); }
+    }
+  }, 5 * 60 * 1000);
 
   // Periodic sweep: catches any lead whose Tiquet delivery didn't succeed
   // via the inline retries above (e.g. Tiquet was down for longer than
@@ -2588,13 +2639,8 @@ async function startServer() {
     }
   });
 
-  app.post('/api/admin/leads/:id/retry', requireAdmin, async (req,res)=>{
-    const lead = db.getLeads().find((l:any)=>l.id===Number(String(req.params.id)));
-    if(!lead)return res.status(404).json({error:'Lead not found'});
-    if(lead.tiquetSyncStatus==='sent')return res.status(409).json({error:'Already delivered'});
-    const eventId=lead.tiquetEventId || crypto.randomUUID();
-    db.updateLeadTiquetSync(lead.id,eventId,'pending');
-    const state=await sendLeadToTiquet(lead,eventId);db.updateLeadTiquetSync(lead.id,eventId,state);res.json({status:state});
+  app.post('/api/admin/leads/:id/retry', requireAdmin, async (_req,res)=>{
+    return res.status(409).json({error:'Public enquiries remain in CRM. Convert the CRM lead to a client before opening a Tiquet job.'});
   });
   app.get("/api/admin/leads", requireAdmin, async (req, res) => {
     try {
@@ -2621,6 +2667,17 @@ async function startServer() {
   // =========================================================================
   // --- V79 DIGITAL CRM & PROSPECTING API ENDPOINTS ---
   // =========================================================================
+
+  // Read stored conversion receipts without one browser request per client.
+  app.get("/api/admin/website/delivery-status", requireAdmin, (_req,res)=>{
+    try {
+      const rows=crmStorage.getLeads({includeArchived:true}).filter((lead:any)=>lead.isConverted).map((lead:any)=>{
+        const receipt=getConversionDelivery(lead.id);
+        return {leadId:lead.id, company:lead.company, status:receipt?.status??"awaiting_conversion", eventId:receipt?.eventId??null};
+      });
+      res.json(rows);
+    } catch {res.status(500).json({error:"Could not load client job delivery records."});}
+  });
 
   app.get("/api/admin/crm/metrics", requireAdmin, (req, res) => {
     try {
@@ -2673,18 +2730,6 @@ async function startServer() {
     }
   });
 
-  app.post("/api/admin/crm/leads/:id/reanalyse", requireAdmin, (req, res) => {
-    try {
-      const id = Number(String(req.params.id));
-      if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "Invalid lead ID" });
-      const updated = transaction(() => crmStorage.reanalyseLead(id, "Admin"));
-      res.json(updated);
-    } catch (e) {
-      console.error("[CRM API] Error refreshing lead match:", e);
-      res.status((e as any)?.status || 500).json({ error: (e as any)?.message || "Failed to refresh match" });
-    }
-  });
-
   app.put("/api/admin/crm/leads/:id", requireAdmin, (req, res) => {
     try {
       const updated = transaction(() => crmStorage.updateLead(Number(String(req.params.id)), req.body, "Admin"));
@@ -2708,12 +2753,69 @@ async function startServer() {
   });
 
   app.post("/api/admin/crm/leads/:id/convert", requireAdmin, (req, res) => {
+    const leadId = Number(String(req.params.id));
+    if (!Number.isSafeInteger(leadId) || leadId < 1) return res.status(400).json({error:"Invalid CRM lead ID"});
+    // Existing conversions/website-delivered jobs predate this workflow.
+    // They must be manually linked, never silently recreated.
+    const original = crmStorage.getLeadById(leadId);
+    if (!original) return res.status(404).json({error:"CRM lead not found"});
+    const existingOutbox = getConversionDelivery(leadId);
+    if (!existingOutbox && original.isConverted)
+      return res.status(409).json({error:"Historical converted lead: reconcile existing Tiquet job before resubmitting"});
+    const historicDelivered = !existingOutbox && db.getLeads().some((row:any) =>
+      row.tiquetSyncStatus === "sent" &&
+      typeof row.email === "string" && typeof original.email === "string" &&
+      row.email.trim().toLowerCase() === original.email.trim().toLowerCase()
+    );
+    if (historicDelivered)
+      return res.status(409).json({error:"A Tiquet job may already exist for this enquiry. Reconcile before conversion."});
     try {
-      const converted = crmStorage.convertLeadToClient(Number(String(req.params.id)), req.body, "Admin");
-      res.json(converted);
+      const converted = transaction(() => {
+        const existing = crmStorage.getLeadById(leadId);
+        if (!existing) return null;
+        const record = existing.isConverted ? existing : crmStorage.convertLeadToClient(leadId, req.body || {}, "Admin");
+        // Persistent record before any external effects.
+        const prior = getConversionDelivery(leadId);
+        if (!prior) upsertConversionDelivery(leadId, conversionEventId(), "pending");
+        else if (prior.convertedAt !== record.convertedAt) throw Error("Lead ID reused; manual reconciliation required");
+        return record;
+      });
+      if (!converted) return res.status(404).json({error:"CRM lead not found"});
+      const delivery = getConversionDelivery(leadId);
+      res.json({...converted, tiquetJobSync: delivery?.status ?? "pending"});
+      if (delivery && delivery.status === "pending") {
+        void deliverConvertedCRMLead(leadId).catch((err:any) => console.error("[CRM Tiquet] Conversion delivery failed:", err.message));
+      }
     } catch (e) {
-      console.error("[CRM API] Error converting lead:", e);
-      res.status(500).json({ error: (e as any)?.message || "Failed to convert lead." });
+      console.error("[CRM API] Conversion failed:", e);
+      res.status(500).json({error:"Failed to convert CRM lead"});
+    }
+  });
+
+  app.get("/api/admin/crm/leads/:id/tiquet-sync", requireAdmin, (req,res)=>{
+    const leadId=Number(String(req.params.id));
+    if (!Number.isSafeInteger(leadId) || leadId < 1) return res.status(400).json({error:"Invalid lead ID"});
+    const lead=crmStorage.getLeadById(leadId);
+    if (!lead) return res.status(404).json({error:"CRM lead not found"});
+    const row=getConversionDelivery(leadId);
+    res.json({status: row?.status ?? "awaiting_conversion", eventId: row?.eventId ?? null});
+  });
+
+  app.post("/api/admin/crm/leads/:id/tiquet/retry", requireAdmin, async (req,res)=>{
+    const leadId=Number(String(req.params.id));
+    if (!Number.isSafeInteger(leadId) || leadId < 1) return res.status(400).json({error:"Invalid lead ID"});
+    const lead=crmStorage.getLeadById(leadId);
+    if (!lead) return res.status(404).json({error:"CRM lead not found"});
+    if (!lead.isConverted) return res.status(409).json({error:"Approve CRM conversion before creating a Tiquet job"});
+    const row=getConversionDelivery(leadId);
+    if (!row) return res.status(409).json({error:"Conversion record missing; use convert first"});
+    if (row.status === "sent") return res.status(409).json({error:"Tiquet job already delivered"});
+    try {
+      const status=await deliverConvertedCRMLead(leadId);
+      res.json({status, eventId:row.eventId});
+    } catch (e) {
+      console.error("[CRM Tiquet] Manual retry failed:", e);
+      res.status(500).json({error:"Could not retry Tiquet job delivery"});
     }
   });
 
@@ -2978,7 +3080,7 @@ async function startServer() {
         category: metadata.category || "Technology",
         date: metadata.date || "",
         author: metadata.author || "Vision79 Digital Expert",
-        coverImage: metadata.coverImage || "https://v79sl.com/og-v79-digital-caribbean-20261109.jpg",
+        coverImage: metadata.coverImage || "https://v79sl.com/og-image.png",
         content
       };
     } catch {
@@ -2993,7 +3095,7 @@ async function startServer() {
 
       const applyMeta = (source: string, page: { title: string; description: string; url: string; image?: string; type?: string }) => {
         let result = source;
-        const image = page.image || `${canonicalBase}/og-v79-digital-caribbean-20261109.jpg`;
+        const image = page.image || `${canonicalBase}/og-image.png`;
         const type = page.type || "website";
 
         result = result.replace(/<title>.*?<\/title>/is, `<title>${escapeAttr(page.title)}</title>`);
@@ -3030,10 +3132,14 @@ async function startServer() {
       };
 
       const normalizedPath = (req.path || "/").replace(/\/+$/, "") || "/";
+      if (designMeta[normalizedPath] && typeof req.query.article !== "string") {
+        const [title,description]=designMeta[normalizedPath];
+        return applyMeta(html, {title,description,url:canonicalBase+(normalizedPath==='/'?'/':normalizedPath)});
+      }
       const staticPages: Record<string, { title: string; description: string }> = {
         "/": {
-          title: "Managed IT, Business Software & AI in the Caribbean | V79 Digital",
-          description: "V79 Digital helps Caribbean businesses with practical managed ICT, cybersecurity, business software, AI and digital transformation.",
+          title: "Managed IT, Cloud & Business Software Saint Lucia | V79 Digital",
+          description: "V79 Digital helps Saint Lucia businesses with managed IT, cloud services, cybersecurity, business software, automation, and practical technology training.",
         },
         "/about": {
           title: "About V79 Digital | Caribbean ICT Experience",
@@ -3082,8 +3188,8 @@ async function startServer() {
       // The copy mirrors the visible sections and is replaced by React on mount.
       const seoFallbacks: Record<string, { heading: string; summary: string; points: string[] }> = {
         "/": {
-          heading: "Technology that helps your business move forward",
-          summary: "Managed IT, cybersecurity, practical software and AI guidance for businesses with Saint Lucia roots and Caribbean ambitions.",
+          heading: "Managed IT Services & Cybersecurity Built for the Caribbean",
+          summary: "V79 Digital helps Saint Lucia organisations manage, secure, and improve the technology their businesses depend on.",
           points: ["Managed IT support", "Cybersecurity", "Cloud and backup", "Networks and VoIP", "Business software", "Technology training"],
         },
         "/about": {
@@ -3142,7 +3248,7 @@ async function startServer() {
       if (articleSlug) {
         const article = getArticleData(articleSlug);
         if (!article) return html;
-        let imageUrl = article.coverImage || `${canonicalBase}/og-v79-digital-caribbean-20261109.jpg`;
+        let imageUrl = article.coverImage || `${canonicalBase}/og-image.png`;
         if (!/^https?:\/\//i.test(imageUrl)) imageUrl = `${canonicalBase}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
         return applyMeta(html, {
           title: `${article.title} | V79 Digital`,
@@ -3419,6 +3525,7 @@ ${fields.content || ""}`;
       console.error("Error generating sitemap articles:", err);
     }
 
+    const designUrls = Object.keys(designPages).filter(p=>p!=='/404' && !['/','/services','/about','/contact','/industries','/resources','/solutions'].includes(p)).map(p=>`  <url><loc>${domain}${p}</loc><changefreq>monthly</changefreq></url>\n`).join('');
     const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -3487,7 +3594,7 @@ ${fields.content || ""}`;
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
-${articlesXml}</urlset>`;
+${designUrls}${articlesXml}</urlset>`;
     
     res.send(sitemap);
   });
@@ -3497,25 +3604,17 @@ ${articlesXml}</urlset>`;
   app.get('/privacy.html', (_req,res)=>res.redirect(308, '/privacy'));
   app.get('/terms.html', (_req,res)=>res.redirect(308, '/terms'));
   app.get('/blog', (_req,res)=>res.redirect(301, '/resources'));
-  app.get('/courses', (_req,res)=>res.redirect(301, 'https://v79academy.v79sl.com/academy'));
+  app.get('/courses', (_req,res)=>res.redirect(301, '/apps/academy'));
   app.get('/marketplace', (_req,res)=>res.redirect(301, '/solutions'));
   app.use((req,res,next)=>{
     if (/^\/(?:adimin|adimn)(?:\/|$)/i.test(req.path)) {
       return res.redirect(301, req.path.replace(/^\/(?:adimin|adimn)/i, '/admin'));
     }
+    if (req.method === 'GET' && req.path.length > 1 && req.path.endsWith('/')) return res.redirect(308, req.path.slice(0,-1) + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''));
     const courseMatch=req.path.match(/^\/course\/(\d+)$/);
     if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
-    const allowed = [
-      '/', '/services', '/software', '/about', '/contact', '/industries', '/resources',
-      '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion',
-      '/admin', '/faq',
-      '/services/managed-it-support', '/services/cybersecurity', '/services/cloud-backup',
-      '/services/networks-voip', '/services/ai-automation', '/services/business-software',
-      '/software/hub', '/software/tiquet', '/software/pos', '/software/ffpro',
-      '/software/marketing', '/software/academy'
-    ];
-    const checkedPath = req.path.replace(/\/+$/, '') || '/';
-    if (req.method === 'GET' && !allowed.includes(checkedPath) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
+    const allowed = [...Object.keys(designPages), '/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
+    if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
     next();
   });
   if (isDev) {
@@ -3532,7 +3631,7 @@ ${articlesXml}</urlset>`;
           const htmlPath = path.resolve(process.cwd(), "index.html");
           if (fs.existsSync(htmlPath)) {
             let html = fs.readFileSync(htmlPath, "utf-8");
-            html = injectDynamicMeta(html, req);
+            html = renderDesignPage(injectDynamicMeta(html, req), req.path, req.query.article);
             const transformedHtml = await viteInstance.transformIndexHtml(url, html);
             return res.status(200).set({
               "Content-Type": "text/html; charset=utf-8",
@@ -3561,7 +3660,7 @@ ${articlesXml}</urlset>`;
         const htmlPath = path.resolve(process.cwd(), "index.html");
         if (fs.existsSync(htmlPath)) {
           let html = fs.readFileSync(htmlPath, "utf-8");
-          html = injectDynamicMeta(html, req);
+          html = renderDesignPage(injectDynamicMeta(html, req), req.path, req.query.article);
           const transformedHtml = viteInstance 
             ? await viteInstance.transformIndexHtml(url, html)
             : html;
@@ -3585,35 +3684,6 @@ ${articlesXml}</urlset>`;
     console.log("[Production] Serving static distribution assets.");
     const distPath = path.resolve(process.env.CLIENT_DIST || path.join(process.cwd(), "dist/client"));
     
-    // Approved lessons must open directly even from older shared article URLs.
-    app.get("/", (req, res, next) => {
-      if (req.query.article === "chatgpt-skills-how-to") {
-        res.setHeader("Cache-Control", "no-store");
-        return res.redirect(302, "/resources/chatgpt-skills-how-to.html");
-      }
-      next();
-    });
-
-    // Restore the approved modern site's FAQ, lessons and Resources routes.
-    // These sit before express.static: otherwise /resources redirects to a
-    // physical directory and the modern React resources page cannot open.
-    app.get(['/faq', '/faq/'], (req, res) => {
-      res.setHeader('Cache-Control', 'no-store');
-      return res.sendFile(path.join(distPath, 'faq-v79.html'));
-    });
-    app.get(['/resources', '/resources/'], (req, res) => {
-      const htmlPath = path.join(distPath, 'index.html');
-      let html = fs.readFileSync(htmlPath, 'utf8');
-      html = injectDynamicMeta(html, req);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-store');
-      return res.send(html);
-    });
-    app.get('/guides/chatgpt-skills.html', (_req, res) =>
-      res.redirect(308, '/resources/chatgpt-skills-how-to.html'));
-    app.get('/guides/chatgpt-task-automation.html', (_req, res) =>
-      res.redirect(308, '/resources?article=chatgpt-task-automation'));
-
     // Dist hashed assets get 1-year immutable cache
     app.use("/assets", express.static(path.join(distPath, "assets"), {
       maxAge: "365d",
@@ -3623,6 +3693,7 @@ ${articlesXml}</urlset>`;
     // Other static files (favicon, icons, etc.) get 1-day cache, with HTML ALWAYS revalidating
     app.use(express.static(distPath, {
       index: false,
+      redirect: false, // Preserve canonical marketing routes when older assets share a directory name.
       maxAge: "1d",
       setHeaders: (res, filePath) => {
         if (filePath.endsWith(".html")) {
@@ -3649,7 +3720,7 @@ ${articlesXml}</urlset>`;
       const htmlPath = path.join(distPath, "index.html");
       if (fs.existsSync(htmlPath)) {
         let html = fs.readFileSync(htmlPath, "utf-8");
-        html = injectDynamicMeta(html, req);
+        html = renderDesignPage(injectDynamicMeta(html, req), req.path, req.query.article);
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.send(html);
       }
