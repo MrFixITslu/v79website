@@ -26,3 +26,14 @@ Risk review: Scoring now depends on supplied/explicit business requirements, not
 4. Do not merge/push to remote or delete prior worktrees without a separate review.
 
 Evidence: /home/firelion/v79-website-reconciliation-20261114
+
+## Final staged verification and merge-specific route fix
+A staging-only redirect loop was discovered: retaining GitHub-only public/resources HTML guides caused root Express static middleware to issue 301 from /resources to /resources/, while V9.3 canonicalisation issues 308 from /resources/ to /resources. The live production site did not have the collision. In this integration branch only, root express.static uses redirect:false, so the V9.3 resources route is served correctly while named legacy guide assets remain accessible. Added explicit regression assertions for /resources, /resources/ and a legacy HTML guide.
+
+Final staging evidence:
+- npm run lint: PASS
+- npm run build: PASS
+- npm test: 36/36 PASS
+- Isolated HTTP service with synthetic data: all 27 distinct accepted public/admin paths PASS, mapped from 33 browser URL variants; 3 static assets PASS, unauthorised admin endpoint returned HTTP 401.
+- These HTTP tests do not replace the historical 165-browser-check matrix at five viewport widths or real-account acceptance for a future release. They are additional staging smoke tests.
+- No production, GitHub push or deployment changes made.

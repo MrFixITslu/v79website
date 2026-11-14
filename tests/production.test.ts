@@ -69,6 +69,14 @@ await test('production regression suite',{timeout:30000},async t=>{
   for (const route of ['/services/cybersecurity','/apps/tiquet','/faq']) assert.equal((await anon.call(route)).status,200,route);
   assert.equal((await anon.call('/services/not-a-real-service')).status,404);
   assert.ok(services.text.includes('href="/contact"'));
+  const directResources=await anon.call('/resources');
+  assert.equal(directResources.status,200,'V9.3 resources route must beat old static resources folder');
+  assert.ok(directResources.text.includes('<h1'));
+  const trailingResources=await fetch(base+'/resources/',{redirect:'manual'});
+  assert.equal(trailingResources.status,308);
+  assert.equal(trailingResources.headers.get('location'),'/resources');
+  const preservedGuide=await anon.call('/resources/chatgpt-skills-how-to.html');
+  assert.equal(preservedGuide.status,200,'Previously published guide asset remains available');
   const blog=await fetch(base+'/blog',{redirect:'manual'});
   assert.equal(blog.status,301);
   assert.equal(blog.headers.get('location'),'/resources');

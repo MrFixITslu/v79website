@@ -3693,6 +3693,7 @@ ${designUrls}${articlesXml}</urlset>`;
     // Other static files (favicon, icons, etc.) get 1-day cache, with HTML ALWAYS revalidating
     app.use(express.static(distPath, {
       index: false,
+      redirect: false, // Preserve canonical marketing routes when older assets share a directory name.
       maxAge: "1d",
       setHeaders: (res, filePath) => {
         if (filePath.endsWith(".html")) {
