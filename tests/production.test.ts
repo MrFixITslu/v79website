@@ -12,13 +12,35 @@ const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'website-test-'));fs.mkdirSync(pa
 const course={id:71,name:'Test course',category:'courses',price:0,pricingType:'free',curriculum:JSON.stringify([{title:'Chapter',lectures:[{id:'lesson1',title:'Lesson',videoUrl:'https://example.test/lesson.mp4'}]}]),exam:JSON.stringify([{question:'Test question',options:['A','B'],correctAnswer:1}])};
 fs.writeFileSync(path.join(tmp,'data/vision79_saas.json'),JSON.stringify([course,{...course,id:72,price:10,pricingType:'premium'}]));
 fs.writeFileSync(path.join(tmp,'data/vision79_crm_prospects.json'),JSON.stringify([{id:'test-prospect',businessName:'Test prospect',description:'Test only',location:'Castries',category:'IT',leadScore:60,workflowStatus:'discovered'}]));
-const gateway=createServer((req,res)=>{req.resume();res.writeHead(401,{'Content-Type':'application/json'});res.end('{"error":"test rejection"}');});
+let gatewayHits=0;
+const acceptedEvents=new Set<string>();
+const gateway=createServer((req,res)=>{
+  gatewayHits++;
+  const chunks:Buffer[]=[];
+  req.on('data',chunk=>chunks.push(chunk));
+  req.on('end',()=>{
+    let payload:any={};
+    try{payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{}
+    if(payload.email!=='qa-success@example.test'){
+      res.writeHead(401,{'Content-Type':'application/json'});
+      res.end('{"error":"test rejection"}');return;
+    }
+    if(req.headers['x-intake-secret']!=='test'||payload.source!=='website-crm-approved'||!payload.eventId){
+      res.writeHead(400,{'Content-Type':'application/json'});
+      res.end('{"error":"invalid conversion payload"}');return;
+    }
+    const repeated=acceptedEvents.has(payload.eventId);
+    acceptedEvents.add(payload.eventId);
+    res.writeHead(repeated?200:201,{'Content-Type':'application/json'});
+    res.end(JSON.stringify({success:true,jobId:'mock-job-1',action:repeated?'already_processed':'created'}));
+  });
+});
 await new Promise<void>(r=>gateway.listen(0,'127.0.0.1',r));
 const gatewayPort=(gateway.address() as any).port;
 const port=33000+Math.floor(Math.random()*5000),base=`http://127.0.0.1:${port}`;
 const env={...process.env,NODE_ENV:'production',PORT:String(port),CLIENT_DIST:path.join(repo,'dist/client'),CANONICAL_DOMAIN:base,CAPTCHA_MODE:'disabled',ADMIN_PASSWORD:'Initial-test-password-123!',ADMIN_RESET_TOKEN:'',ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),V79TIQUET_INTAKE_URL:`http://127.0.0.1:${gatewayPort}/intake`,V79TIQUET_INTAKE_SECRET:'test',GEMINI_API_KEY:''};
 let logs='';let child:ReturnType<typeof spawn>;
-async function start(){child=spawn(process.execPath,[path.join(repo,'dist/server/server.cjs')],{cwd:tmp,env,stdio:['ignore','pipe','pipe']});child.stdout!.on('data',d=>logs+=d);child.stderr!.on('data',d=>logs+=d);for(let i=0;i<100;i++){try{if((await fetch(base+'/api/ready')).ok)return;}catch{}if(child.exitCode!==null)throw Error(logs);await new Promise(r=>setTimeout(r,50));}throw Error('Startup timeout: '+logs);}
+async function start(){child=spawn(process.execPath,[path.join(repo,'dist/server/server.cjs')],{cwd:tmp,env,stdio:['ignore','pipe','pipe']});child.stdout!.on('data',d=>logs+=d);child.stderr!.on('data',d=>logs+=d);for(let i=0;i<300;i++){try{if((await fetch(base+'/api/ready')).ok)return;}catch{}if(child.exitCode!==null)throw Error(logs);await new Promise(r=>setTimeout(r,50));}throw Error('Startup timeout: '+logs);}
 async function stop(){if(child.exitCode!==null || child.signalCode!==null)return;child.kill();await new Promise(r=>child.once('exit',r));}
 class Client {cookie='';async call(url:string,method='GET',body?:unknown,extra:Record<string,string>={}){const r=await fetch(base+url,{method,headers:{Origin:base,...(body===undefined?{}:{'Content-Type':'application/json'}),...(this.cookie?{Cookie:this.cookie}:{}),...extra},body:body===undefined?undefined:JSON.stringify(body)});const c=r.headers.get('set-cookie');if(c)this.cookie=c.split(';')[0];const text=await r.text();let data:any;try{data=JSON.parse(text)}catch{}return {status:r.status,data,text,headers:r.headers};}}
 const anon=new Client(),admin=new Client(),student=new Client();
@@ -27,6 +49,7 @@ await test('production regression suite',{timeout:30000},async t=>{
  await t.test('private artifacts, security headers and routes',async()=>{
   for(const url of ['/server.cjs','/server.cjs.map','/server/server.cjs','/unknown-page','/api/unknown'])assert.equal((await anon.call(url)).status,404,url);
   assert.equal((await anon.call('/api/admin/leads')).status,401);
+  assert.equal((await anon.call('/api/admin/website/delivery-status')).status,401);
   const adminPage=await anon.call('/admin');
   assert.equal(adminPage.status,200);
   assert.equal(adminPage.headers.get('x-robots-tag'),'noindex, nofollow, noarchive');
@@ -41,8 +64,10 @@ await test('production regression suite',{timeout:30000},async t=>{
   const services=await anon.call('/services');
   assert.equal(services.status,200);
   assert.ok(services.text.includes(`<link rel="canonical" href="${base}/services" />`));
-  assert.ok(services.text.includes('IT, Cloud, Cybersecurity &amp; Automation Services | V79 Digital'));
-  assert.ok(services.text.includes('Managed technology services are V79 Digital'));
+  assert.ok(services.text.includes('Managed IT, Cybersecurity &amp; AI Services | V79 Digital'));
+  assert.ok(services.text.includes('exploded-section'));
+  for (const route of ['/services/cybersecurity','/apps/tiquet','/faq']) assert.equal((await anon.call(route)).status,200,route);
+  assert.equal((await anon.call('/services/not-a-real-service')).status,404);
   assert.ok(services.text.includes('href="/contact"'));
   const blog=await fetch(base+'/blog',{redirect:'manual'});
   assert.equal(blog.status,301);
@@ -72,19 +97,102 @@ await test('production regression suite',{timeout:30000},async t=>{
   assert.ok(sitemap.text.includes(`${base}/data-deletion`));
   assert.equal(sitemap.text.includes(`${base}/privacy.html`),false);
  });
- await t.test('server SEO fallback does not flash into JavaScript app root',async()=>{
+ await t.test('approved pages are rendered once on the server and hydrate without a second layout',async()=>{
   for (const route of ['/', '/services', '/about']) {
     const response=await anon.call(route);
     assert.equal(response.status,200,route);
-    assert.ok(response.text.includes('<div id="root"></div><noscript><main'),route);
-    assert.equal(response.text.includes('<div id="root"><main'),false,route);
-    assert.ok(response.text.includes('V79 Digital · Saint Lucia'),route);
-    assert.ok(response.text.includes('</noscript>'),route);
+    assert.ok(response.text.includes('<div id="pageRoot">'),route);
+    assert.equal(response.text.includes('<!--V79_PAGE-->'),false,route);
+    assert.equal(response.text.includes('<div id="root">'),false,route);
+    assert.equal(response.text.includes('Not deployed'),false,route);
+    assert.ok(response.text.includes('<h1'),route);
   }
  });
- await t.test('admin cookies, forced password change and CSRF',async()=>{let r=await admin.call('/api/admin/login','POST',{password:env.ADMIN_PASSWORD});assert.equal(r.status,200);assert.match(r.headers.get('set-cookie')!,/HttpOnly/);assert.match(r.headers.get('set-cookie')!,/Secure/);assert.equal(r.data.token,'cookie-session');assert.equal((await admin.call('/api/admin/leads')).status,403);r=await admin.call('/api/admin/change-password','POST',{currentPassword:env.ADMIN_PASSWORD,newPassword:'Changed-test-password-456!'});assert.equal(r.status,200);assert.equal((await admin.call('/api/admin/leads')).status,200);assert.equal((await admin.call('/api/admin/logout','POST',{}, {Origin:'https://attacker.test'})).status,403);});
- await t.test('malformed contacts cannot crash; delivery rejection remains failed',async()=>{assert.equal((await anon.call('/api/leads','POST',{name:{},company:'T',email:'x@y.test',phone:'0'})).status,400);assert.equal((await anon.call('/api/health')).status,200);const r=await anon.call('/api/leads','POST',{name:'Test Contact',company:'Test Co',email:'contact@example.test',phone:'000000000'});assert.equal(r.status,201);let deliveryStatus='pending';for(let attempt=0;attempt<40;attempt++){const snapshot=await admin.call('/api/admin/leads');deliveryStatus=snapshot.data[0]?.tiquetSyncStatus;if(deliveryStatus==='failed')break;await new Promise(r=>setTimeout(r,100));}assert.equal(deliveryStatus,'failed');});
- await t.test('CRM stage and approval are durable and idempotent',async()=>{const leads=await admin.call('/api/admin/crm/leads');const list=Array.isArray(leads.data)?leads.data:leads.data.leads;assert.ok(list?.length);assert.equal((await admin.call(`/api/admin/crm/leads/${list[0].id}/stage`,'PUT',{stage:'Researching'})).status,200);assert.equal((await anon.call(`/api/admin/crm/leads/${list[0].id}/reanalyse`,'POST',{})).status,401);const scored=await admin.call(`/api/admin/crm/leads/${list[0].id}/reanalyse`,'POST',{});assert.equal(scored.status,200);assert.equal(scored.data.stage,'Researching');assert.ok(scored.data.aiAnalysis);const first=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(first.status,200);const second=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(second.status,200);assert.equal(first.data.id,second.data.id);});
+ await t.test('admin cookies, forced password change and CSRF',async()=>{let r=await admin.call('/api/admin/login','POST',{password:env.ADMIN_PASSWORD});assert.equal(r.status,200);assert.match(r.headers.get('set-cookie')!,/HttpOnly/);assert.match(r.headers.get('set-cookie')!,/Secure/);assert.equal(r.data.token,'cookie-session');assert.equal((await admin.call('/api/admin/leads')).status,403);r=await admin.call('/api/admin/change-password','POST',{currentPassword:env.ADMIN_PASSWORD,newPassword:'Changed-test-password-456!'});assert.equal(r.status,200);assert.equal((await admin.call('/api/admin/leads')).status,200);assert.equal((await admin.call('/api/admin/website/delivery-status')).status,200);assert.equal((await admin.call('/api/admin/logout','POST',{}, {Origin:'https://attacker.test'})).status,403);});
+  await t.test('malformed contacts cannot crash; public enquiries stay in CRM',async()=>{
+    const before=gatewayHits;
+    assert.equal((await anon.call('/api/leads','POST',{name:{},company:'T',email:'x@y.test',phone:'0'})).status,400);
+    assert.equal((await anon.call('/api/health')).status,200);
+    const response=await anon.call('/api/leads','POST',{name:'Test Contact',company:'Test Co',email:'contact@example.test',phone:'000000000'});
+    assert.equal(response.status,201);
+    let status='pending';
+    for(let attempt=0;attempt<30;attempt++){
+      const snapshot=await admin.call('/api/admin/leads');
+      status=snapshot.data.find((row:any)=>row.id===response.data.id)?.tiquetSyncStatus ?? 'pending';
+      if(status==='disabled')break;
+      await new Promise(r=>setTimeout(r,100));
+    }
+    assert.equal(status,'disabled','Unconverted contact must never be queued to Tiquet');
+    assert.equal(gatewayHits,before,'Public enquiry must not reach Tiquet intake');
+    const result=await admin.call('/api/admin/crm/leads');
+    assert.equal(result.status,200);
+    const leads=Array.isArray(result.data)?result.data:result.data.leads;
+    assert.ok(leads.some((lead:any)=>lead.email==='contact@example.test'),'Public enquiry is captured in CRM');
+  });
+  await t.test('Tiquet job requires explicit CRM conversion and stable retry ID',async()=>{
+    assert.equal(gatewayHits,0,'Public contact must not create a Tiquet job');
+    const created=await admin.call('/api/admin/crm/leads','POST',{
+      name:'Conversion Test',company:'QA Conversion',email:'qa-conversion@example.test',phone:'7580000000'
+    });
+    assert.equal(created.status,201);
+    const id=created.data.lead?.id ?? created.data.id;
+    assert.ok(Number.isSafeInteger(id) && id > 0);
+    let sync=await admin.call(`/api/admin/crm/leads/${id}/tiquet-sync`);
+    assert.equal(sync.data.status,'awaiting_conversion');
+    assert.equal((await admin.call(`/api/admin/crm/leads/${id}/tiquet/retry`,'POST',{})).status,409);
+    assert.equal(gatewayHits,0);
+    const first=await admin.call(`/api/admin/crm/leads/${id}/convert`,'POST',{contractValue:100});
+    assert.equal(first.status,200);
+    const clientId=first.data.convertedClientDetails?.clientId;
+    assert.ok(clientId);
+    let status='pending'; let eventId='';
+    for(let attempt=0;attempt<50;attempt++){
+      sync=await admin.call(`/api/admin/crm/leads/${id}/tiquet-sync`);
+      status=sync.data.status;eventId=sync.data.eventId;
+      if(status==='failed')break;
+      await new Promise(r=>setTimeout(r,100));
+    }
+    assert.equal(status,'failed','Mock Tiquet receiver permanently rejected HTTP 401');
+    assert.ok(gatewayHits>0,'Approved conversion must send to Tiquet');
+    assert.match(eventId,/^v79-crm-[0-9a-f-]{36}$/);
+    const second=await admin.call(`/api/admin/crm/leads/${id}/convert`,'POST',{contractValue:500});
+    assert.equal(second.status,200);
+    assert.equal(second.data.convertedClientDetails?.clientId,clientId);
+    const again=await admin.call(`/api/admin/crm/leads/${id}/tiquet/retry`,'POST',{});
+    assert.equal(again.status,200);
+    assert.equal(again.data.status,'failed');
+    assert.equal(again.data.eventId,eventId,'Retry must reuse same Tiquet eventId');
+  });
+  await t.test('approved CRM conversion sends once and preserves job idempotency',async()=>{
+    const created=await admin.call('/api/admin/crm/leads','POST',{
+      name:'Success Test',company:'QA Success',email:'qa-success@example.test',phone:'7589999999'
+    });
+    assert.equal(created.status,201);
+    const id=created.data.lead?.id ?? created.data.id;
+    assert.ok(Number.isSafeInteger(id));
+    const previous=acceptedEvents.size;
+    const response=await admin.call(`/api/admin/crm/leads/${id}/convert`,'POST',{contractValue:200});
+    assert.equal(response.status,200);
+    const clientId=response.data.convertedClientDetails?.clientId;
+    assert.ok(clientId);
+    let sync:any=null;
+    for(let attempt=0;attempt<50;attempt++){
+      sync=await admin.call(`/api/admin/crm/leads/${id}/tiquet-sync`);
+      if(sync.data.status==='sent')break;
+      await new Promise(r=>setTimeout(r,100));
+    }
+    assert.equal(sync.data.status,'sent');
+    assert.equal(acceptedEvents.size,previous+1);
+    const eventId=sync.data.eventId;
+    const callsBefore=gatewayHits;
+    const repeat=await admin.call(`/api/admin/crm/leads/${id}/convert`,'POST',{contractValue:500});
+    assert.equal(repeat.status,200);
+    assert.equal(repeat.data.convertedClientDetails?.clientId,clientId);
+    assert.equal(gatewayHits,callsBefore,'Delivered conversion must not send another job');
+    assert.equal((await admin.call(`/api/admin/crm/leads/${id}/tiquet/retry`,'POST',{})).status,409);
+    assert.equal((await admin.call(`/api/admin/crm/leads/${id}/tiquet-sync`)).data.eventId,eventId);
+  });
+ await t.test('CRM stage and approval are durable and idempotent',async()=>{const leads=await admin.call('/api/admin/crm/leads');const list=Array.isArray(leads.data)?leads.data:leads.data.leads;assert.ok(list?.length);assert.equal((await admin.call(`/api/admin/crm/leads/${list[0].id}/stage`,'PUT',{stage:'Researching'})).status,200);const first=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(first.status,200);const second=await admin.call('/api/admin/crm/prospects/test-prospect/approve','POST',{});assert.equal(second.status,200);assert.equal(first.data.id,second.data.id);});
  await t.test('storage failure rolls back lead capture and fails readiness',async()=>{
  const sql=new DatabaseSync(path.join(tmp,'data/website.db'));
  const before=(await admin.call('/api/admin/leads')).data.length;

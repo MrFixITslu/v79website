@@ -198,19 +198,6 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   }, []);
 
   // Update lead stage
-  const handleRefreshLeadMatch = async (leadId: number) => {
-    const res = await fetch("/api/admin/crm/leads/" + leadId + "/reanalyse", {
-      method: "POST",
-      headers: getHeaders()
-    });
-    if (res.status === 401) {
-      onUnauthorized?.();
-      throw new Error("Sign in again to refresh this lead");
-    }
-    if (!res.ok) throw new Error("Match refresh failed (" + res.status + ")");
-    await Promise.all([fetchLeadDetails(leadId), fetchLeads(), fetchMetrics()]);
-  };
-
   const handleUpdateLeadStage = async (leadId: number, newStage: PipelineStage) => {
     try {
       const res = await fetch(`/api/admin/crm/leads/${leadId}/stage`, {
@@ -359,26 +346,15 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     }
   };
 
-  // Convert lead to client
-  const handleConvertLead = async (
-    leadId: number,
-    details: { contractValue: number; billingEmail: string; notes: string }
-  ) => {
-    try {
-      const res = await fetch(`/api/admin/crm/leads/${leadId}/convert`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify(details)
-      });
-      if (res.ok) {
-        const converted = await res.json();
-        setLeads((prev) => prev.map((l) => (l.id === leadId ? converted : l)));
-        setSelectedLead(converted);
-        fetchMetrics();
-      }
-    } catch (e) {
-      console.error("Failed to convert lead:", e);
-    }
+  // Conversion errors must remain visible in the confirmation form.
+  const handleConvertLead = async (leadId:number, details:{contractValue:number;billingEmail:string;notes:string}) => {
+    const res=await fetch(`/api/admin/crm/leads/${leadId}/convert`, {method:"POST",headers:getHeaders(),body:JSON.stringify(details)});
+    const data=await res.json();
+    if(res.status===401)onUnauthorized?.();
+    if(!res.ok)throw Error(data.error||"Could not convert this lead. Please try again.");
+    setLeads(prev=>prev.map(lead=>lead.id===leadId?data:lead));
+    setSelectedLead(data);
+    void fetchMetrics();
   };
 
   // Archive lead
@@ -641,7 +617,6 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
           calls={selectedLeadCalls}
           tasks={tasks.filter((t) => t.leadId === selectedLead.id)}
           onClose={() => setSelectedLead(null)}
-          onRefreshMatch={handleRefreshLeadMatch}
           onUpdateLead={handleUpdateLead}
           onAddActivity={handleAddActivity}
           onAddCall={handleAddCall}

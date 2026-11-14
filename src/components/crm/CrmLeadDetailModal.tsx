@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { X, Phone, Mail, MessageSquare, Globe, MapPin, Calendar, CheckSquare, Plus, Clock, Sparkles, CheckCircle2, UserCheck, AlertCircle, Send, FileText } from "lucide-react";
-import { offeringByLabel } from "../../crm/offerings";
 import { CRMLead, CRMActivity, CRMCallRecord, CRMTask, PipelineStage, PIPELINE_STAGES, CallOutcome } from "../../crm/types";
 
 interface CrmLeadDetailModalProps {
@@ -9,13 +8,12 @@ interface CrmLeadDetailModalProps {
   calls: CRMCallRecord[];
   tasks: CRMTask[];
   onClose: () => void;
-  onRefreshMatch: (leadId: number) => Promise<void>;
   onUpdateLead: (leadId: number, updates: Partial<CRMLead>) => void;
   onAddActivity: (leadId: number, type: string, title: string, description: string) => void;
   onAddCall: (leadId: number, outcome: CallOutcome, durationSecs: number, notes: string, nextFollowUpAt?: string) => void;
   onAddTask: (leadId: number, title: string, dueAt: string, priority: "Low" | "Medium" | "High") => void;
   onToggleTaskStatus: (taskId: string, currentStatus: string) => void;
-  onConvertLead: (leadId: number, details: { contractValue: number; billingEmail: string; notes: string }) => void;
+  onConvertLead: (leadId: number, details: { contractValue: number; billingEmail: string; notes: string }) => Promise<void>;
   onArchiveLead: (leadId: number) => void;
   onMergeLead: (primaryId: number, duplicateId: number) => void;
   allLeads: CRMLead[];
@@ -27,7 +25,6 @@ export function CrmLeadDetailModal({
   calls,
   tasks,
   onClose,
-  onRefreshMatch,
   onUpdateLead,
   onAddActivity,
   onAddCall,
@@ -39,8 +36,6 @@ export function CrmLeadDetailModal({
   allLeads
 }: CrmLeadDetailModalProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "timeline" | "calls" | "tasks" | "ai" | "convert">("overview");
-  const [refreshingMatch, setRefreshingMatch] = useState(false);
-  const [matchError, setMatchError] = useState("");
 
   // Note form state
   const [noteText, setNoteText] = useState("");
@@ -116,14 +111,14 @@ export function CrmLeadDetailModal({
     }
   };
 
-  const handleConvert = (e: React.FormEvent) => {
-    e.preventDefault();
-    onConvertLead(lead.id, {
-      contractValue: Number(contractValue),
-      billingEmail,
-      notes: conversionNotes
-    });
-    setActiveTab("overview");
+  const [conversionError,setConversionError]=useState("");
+  const [converting,setConverting]=useState(false);
+  const handleConvert = async (e:React.FormEvent) => {
+    e.preventDefault();if(converting)return;
+    setConverting(true);setConversionError("");
+    try {await onConvertLead(lead.id,{contractValue:Number(contractValue),billingEmail,notes:conversionNotes});setActiveTab("overview");}
+    catch(error){setConversionError((error as Error).message||"Conversion failed. Please try again.");}
+    finally{setConverting(false);}
   };
 
   return (
@@ -761,62 +756,29 @@ export function CrmLeadDetailModal({
                 </div>
               )}
 
-              {/* Canonical ICT & SaaS matching, with legacy-score refresh. */}
-              <div className="glass p-4 rounded-2xl border border-app-border space-y-3">
-                <div className="flex flex-wrap justify-between gap-2 items-center">
-                  <div>
-                    <h4 className="text-xs font-bold text-app-text">Potential V79 ICT & SaaS Matches</h4>
-                    <p className="text-[11px] text-app-text-sec">Based on supplied needs. Confirm the fit before recommending or quoting.</p>
-                  </div>
-                  <button type="button" disabled={refreshingMatch}
-                    onClick={async () => {
-                      setRefreshingMatch(true);
-                      setMatchError("");
-                      try { await onRefreshMatch(lead.id); }
-                      catch (e) { setMatchError(e instanceof Error ? e.message : "Could not refresh match"); }
-                      finally { setRefreshingMatch(false); }
-                    }}
-                    className="rounded-lg px-3 py-2 text-xs font-semibold text-sky-500 border border-sky-500/30 hover:bg-sky-500/10 disabled:opacity-50">
-                    {refreshingMatch ? "Refreshing..." : "Refresh V79 Match"}
-                  </button>
-                </div>
-                {matchError && <p role="alert" className="text-xs text-red-500">{matchError}</p>}
-                {(["ICT Service", "Hub App"] as const).map((kind) => {
-                  const list = (lead.aiAnalysis?.recommendedServices || []).filter(
-                    (label) => offeringByLabel(label)?.kind === kind
-                  );
-                  return list.length ? (
-                    <div key={kind} className="space-y-1.5">
-                      <span className="text-[10px] text-app-text-muted uppercase font-semibold">
-                        {kind === "Hub App" ? "Hub SaaS Products" : "ICT Services"}
+              {/* Recommended Services Match */}
+              {lead.aiAnalysis?.recommendedServices && (
+                <div className="glass p-4 rounded-2xl border border-app-border space-y-2">
+                  <h4 className="text-xs font-bold font-mono text-app-text-muted uppercase">Recommended V79 Digital Solutions</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {lead.aiAnalysis.recommendedServices.map((svc, idx) => (
+                      <span key={idx} className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-500 text-xs font-semibold border border-sky-500/20">
+                        {svc}
                       </span>
-                      <div className="flex flex-wrap gap-2">
-                        {list.map((label) => (
-                          <span key={label} className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-500 text-xs font-semibold border border-sky-500/20">
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null;
-                })}
-                {!(lead.aiAnalysis?.recommendedServices || []).some((label) => offeringByLabel(label)) && (
-                  <p className="text-xs text-app-text-sec">No confirmed service or app match yet. Ask about operational needs, then refresh.</p>
-                )}
-                {(lead.aiAnalysis?.recommendedServices || []).some((label) => !offeringByLabel(label)) && (
-                  <p className="text-[11px] text-amber-500">This lead has recommendations from an older catalogue. Refresh to apply the current matching rules.</p>
-                )}
-              </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* TAB 6: CONVERT CLIENT */}
           {activeTab === "convert" && (
-            <form onSubmit={handleConvert} className="glass p-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-4 text-xs">
+            <form aria-busy={converting} onSubmit={handleConvert} className="glass p-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-4 text-xs">
               <div>
                 <h3 className="text-sm font-bold text-app-text font-display">Convert {lead.company} to Active Customer</h3>
                 <p className="text-xs text-app-text-sec">
-                  This will graduate this lead into a client account, record contract value in won revenue, and initialize client onboarding.
+                  Confirm the prospect has agreed to become a client. This saves the conversion and queues the job details for Tiquet. Delivery status is shown under Workflow Health.
                 </p>
               </div>
 
@@ -854,7 +816,7 @@ export function CrmLeadDetailModal({
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {conversionError && <p role="alert" className="text-red-600 dark:text-red-300">{conversionError}</p>}<div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setActiveTab("overview")}
@@ -863,11 +825,11 @@ export function CrmLeadDetailModal({
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={converting}
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Confirm Customer Conversion</span>
+                  <span>{converting ? "Saving conversion…" : "Confirm Customer Conversion"}</span>
                 </button>
               </div>
             </form>
