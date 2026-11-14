@@ -37,3 +37,6 @@ Final staging evidence:
 - Isolated HTTP service with synthetic data: all 27 distinct accepted public/admin paths PASS, mapped from 33 browser URL variants; 3 static assets PASS, unauthorised admin endpoint returned HTTP 401.
 - These HTTP tests do not replace the historical 165-browser-check matrix at five viewport widths or real-account acceptance for a future release. They are additional staging smoke tests.
 - No production, GitHub push or deployment changes made.
+
+## GitHub CI security gate — patched, retested
+Initial draft PR CI passed install/lint/build/tests but failed npm audit on three pre-existing dependency advisories. Fixed only the vulnerable dependency constraints and lockfile: body-parser 2.4.0, multer 2.5.0, qs 6.17.1 (without forced major upgrades). On the isolated integration worktree, clean npm ci, npm audit --omit=dev --audit-level=moderate, lint, build, the full 36/36 regression suite, and the synthetic 27-route HTTP acceptance all passed after these updates. Evidence: v93-dependency-gates.log; no production dependencies were changed.
