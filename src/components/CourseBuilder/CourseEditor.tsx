@@ -21,6 +21,7 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
   const [lastSavedTime, setLastSavedTime] = useState<string>(new Date().toLocaleTimeString());
   const [publishState, setPublishState] = useState<'idle' | 'publishing' | 'success' | 'error'>('idle');
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handlePublish = async () => {
     setPublishState('publishing');
@@ -32,6 +33,7 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
         throw new Error(data.error || 'Failed to publish course to the website.');
       }
       setFormData(data.course);
+      lastSavedJsonRef.current = JSON.stringify(data.course);
       onUpdateCourse(data.course);
       setPublishState('success');
     } catch (err: any) {
@@ -42,6 +44,17 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
 
   const lastSavedJsonRef = useRef<string>(JSON.stringify(course));
   const isInitialMount = useRef(true);
+
+  useEffect(() => {
+    isInitialMount.current = true;
+    setFormData({ ...course });
+    lastSavedJsonRef.current = JSON.stringify(course);
+    setSyncStatus('synced');
+    setSaveError(null);
+    setPublishState('idle');
+    setPublishError(null);
+    setSelectedLessonForQuiz(null);
+  }, [course.id]);
 
   // Detect form data changes and set sync status to pending
   useEffect(() => {
@@ -56,25 +69,30 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
   }, [formData]);
 
   // Execute sync to server
-  const triggerSync = async () => {
+  const triggerSync = async (overrideData?: Course) => {
+    const payload = overrideData ?? formData;
     setSyncStatus('saving');
+    setSaveError(null);
     try {
       const res = await cbFetch(`/api/courses/${course.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         const updated = await res.json();
+        setFormData(updated);
         onUpdateCourse(updated);
-        lastSavedJsonRef.current = JSON.stringify(formData);
+        lastSavedJsonRef.current = JSON.stringify(updated);
         setSyncStatus('synced');
         setLastSavedTime(new Date().toLocaleTimeString());
       } else {
+        const err = await res.json().catch(() => ({}));
+        setSaveError(err.error || `Save failed (HTTP ${res.status})`);
         setSyncStatus('error');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Auto-save sync error:', e);
+      setSaveError(e?.message || 'Network error while saving course.');
       setSyncStatus('error');
     }
   };
@@ -205,6 +223,13 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2" role="alert">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{saveError}</span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
@@ -428,7 +453,7 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
                       onClick={() => {
                         const updated = { ...formData, status: st };
                         setFormData(updated);
-                        onUpdateCourse(updated);
+                        void triggerSync(updated);
                       }}
                       className={`p-4 rounded-xl border text-left transition-all ${
                         formData.status === st

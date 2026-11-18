@@ -47,65 +47,63 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   // Status & Loading states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [ollamaStatus, setOllamaStatus] = useState<{ connected: boolean; model?: string }>({
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [ollamaStatus, setOllamaStatus] = useState<{ connected: boolean; model?: string; url?: string }>({
     connected: false
   });
 
-  const getHeaders = useCallback(() => {
-    let token = adminToken;
-    if (!token) {
-      try {
-        token = sessionStorage.getItem("admin-token");
-      } catch (e) {
-        token = null;
+  const getHeaders = useCallback(() => ({
+    "Content-Type": "application/json",
+    ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {})
+  }), [adminToken]);
+
+  const apiFetch = useCallback(async (url: string, options: RequestInit = {}) => {
+    const res = await fetch(url, {
+      ...options,
+      credentials: "same-origin",
+      headers: {
+        ...getHeaders(),
+        ...(options.headers || {})
       }
+    });
+    if (res.status === 401) {
+      onUnauthorized?.();
     }
-    return {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    };
-  }, [adminToken]);
+    return res;
+  }, [getHeaders, onUnauthorized]);
 
   // Fetch metrics & pipeline stats
   const fetchMetrics = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/crm/metrics", { headers: getHeaders() });
-      if (res.status === 401) {
-        onUnauthorized?.();
-        return;
-      }
+      const res = await apiFetch("/api/admin/crm/metrics");
       if (res.ok) {
         const data = await res.json();
         setMetrics(data);
       }
-    } catch (e) {
-      console.error("Failed to load CRM metrics:", e);
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to load CRM metrics.");
     }
-  }, [getHeaders, onUnauthorized]);
+  }, [apiFetch]);
 
   // Fetch leads
   const fetchLeads = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/crm/leads", { headers: getHeaders() });
-      if (res.status === 401) {
-        onUnauthorized?.();
-        return;
-      }
+      const res = await apiFetch("/api/admin/crm/leads");
       if (res.ok) {
         const data = await res.json();
         setLeads(data);
       }
-    } catch (e) {
-      console.error("Failed to load CRM leads:", e);
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to load CRM leads.");
     }
-  }, [getHeaders, onUnauthorized]);
+  }, [apiFetch]);
 
   // Fetch prospects & history
   const fetchProspects = useCallback(async () => {
     try {
       const [pRes, hRes] = await Promise.all([
-        fetch("/api/admin/crm/prospects", { headers: getHeaders() }),
-        fetch("/api/admin/crm/prospects/history", { headers: getHeaders() })
+        apiFetch("/api/admin/crm/prospects"),
+        apiFetch("/api/admin/crm/prospects/history")
       ]);
       if (pRes.ok) {
         const pData = await pRes.json();
@@ -115,44 +113,44 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
         const hData = await hRes.json();
         setSearchHistory(hData);
       }
-    } catch (e) {
-      console.error("Failed to load prospects:", e);
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to load prospects.");
     }
-  }, [getHeaders]);
+  }, [apiFetch]);
 
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/crm/tasks", { headers: getHeaders() });
+      const res = await apiFetch("/api/admin/crm/tasks");
       if (res.ok) {
         const data = await res.json();
         setTasks(data);
       }
-    } catch (e) {
-      console.error("Failed to load CRM tasks:", e);
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to load CRM tasks.");
     }
-  }, [getHeaders]);
+  }, [apiFetch]);
 
   // Check Ollama AI status
   const checkOllamaStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/crm/ai/status", { headers: getHeaders() });
+      const res = await apiFetch("/api/admin/crm/ai/status");
       if (res.ok) {
         const data = await res.json();
         setOllamaStatus(data);
       }
-    } catch (e) {
+    } catch {
       setOllamaStatus({ connected: false });
     }
-  }, [getHeaders]);
+  }, [apiFetch]);
 
   // Fetch details for selected lead (activities, calls, updated record)
   const fetchLeadDetails = useCallback(async (leadId: number) => {
     try {
       const [actRes, callRes, leadRes] = await Promise.all([
-        fetch(`/api/admin/crm/leads/${leadId}/activities`, { headers: getHeaders() }),
-        fetch(`/api/admin/crm/leads/${leadId}/calls`, { headers: getHeaders() }),
-        fetch(`/api/admin/crm/leads/${leadId}`, { headers: getHeaders() })
+        apiFetch(`/api/admin/crm/leads/${leadId}/activities`),
+        apiFetch(`/api/admin/crm/leads/${leadId}/calls`),
+        apiFetch(`/api/admin/crm/leads/${leadId}`)
       ]);
       if (actRes.ok) {
         const actData = await actRes.json();
@@ -168,14 +166,15 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
         setSelectedLead(actualLead);
         setLeads((prev) => prev.map((l) => (l.id === leadId ? actualLead : l)));
       }
-    } catch (e) {
-      console.error("Failed to load lead details:", e);
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to load lead details.");
     }
-  }, [getHeaders]);
+  }, [apiFetch]);
 
   // Refresh all CRM data
   const handleRefreshAll = useCallback(async () => {
     setIsRefreshing(true);
+    setErrorBanner(null);
     try {
       await Promise.all([
         fetchMetrics(),
@@ -200,81 +199,82 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   // Update lead stage
   const handleUpdateLeadStage = async (leadId: number, newStage: PipelineStage) => {
     try {
-      const res = await fetch(`/api/admin/crm/leads/${leadId}/stage`, {
+      const res = await apiFetch(`/api/admin/crm/leads/${leadId}/stage`, {
         method: "PUT",
-        headers: getHeaders(),
         body: JSON.stringify({ stage: newStage })
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setLeads((prev) => prev.map((l) => (l.id === leadId ? updated : l)));
-        if (selectedLead?.id === leadId) {
-          setSelectedLead(updated);
-        }
-        fetchMetrics();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(data.error || "Failed to update lead stage.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to update stage:", e);
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? data : l)));
+      if (selectedLead?.id === leadId) {
+        setSelectedLead(data);
+      }
+      fetchMetrics();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to update lead stage.");
     }
   };
 
   // Update lead fields
   const handleUpdateLead = async (leadId: number, updates: Partial<CRMLead>) => {
     try {
-      const res = await fetch(`/api/admin/crm/leads/${leadId}`, {
+      const res = await apiFetch(`/api/admin/crm/leads/${leadId}`, {
         method: "PUT",
-        headers: getHeaders(),
         body: JSON.stringify(updates)
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setLeads((prev) => prev.map((l) => (l.id === leadId ? updated : l)));
-        if (selectedLead?.id === leadId) {
-          setSelectedLead(updated);
-        }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(data.error || "Failed to update lead.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to update lead:", e);
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? data : l)));
+      if (selectedLead?.id === leadId) {
+        setSelectedLead(data);
+      }
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to update lead.");
     }
   };
 
   // Create new lead manually
   const handleCreateLead = async (leadData: any) => {
-    try {
-      const res = await fetch("/api/admin/crm/leads", {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify(leadData)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const created: CRMLead = data.lead || data;
-        setLeads((prev) => [created, ...prev.filter((l) => l.id !== created.id)]);
-        fetchMetrics();
-        setSelectedLead(created);
-        if (created?.id) {
-          fetchLeadDetails(created.id);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to create lead:", e);
+    const res = await apiFetch("/api/admin/crm/leads", {
+      method: "POST",
+      body: JSON.stringify(leadData)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data.error || "Failed to create lead.";
+      setErrorBanner(msg);
+      throw new Error(msg);
+    }
+    const created: CRMLead = data.lead || data;
+    setLeads((prev) => [created, ...prev.filter((l) => l.id !== created.id)]);
+    fetchMetrics();
+    setSelectedLead(created);
+    if (created?.id) {
+      fetchLeadDetails(created.id);
     }
   };
 
   // Add activity note
   const handleAddActivity = async (leadId: number, type: string, title: string, description: string) => {
     try {
-      const res = await fetch(`/api/admin/crm/leads/${leadId}/activities`, {
+      const res = await apiFetch(`/api/admin/crm/leads/${leadId}/activities`, {
         method: "POST",
-        headers: getHeaders(),
         body: JSON.stringify({ type, title, description })
       });
-      if (res.ok) {
-        const act = await res.json();
-        setSelectedLeadActivities((prev) => [act, ...prev]);
+      const act = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(act.error || "Failed to add activity.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to add activity:", e);
+      setSelectedLeadActivities((prev) => [act, ...prev]);
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to add activity.");
     }
   };
 
@@ -287,20 +287,21 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     nextFollowUpAt?: string
   ) => {
     try {
-      const res = await fetch(`/api/admin/crm/leads/${leadId}/calls`, {
+      const res = await apiFetch(`/api/admin/crm/leads/${leadId}/calls`, {
         method: "POST",
-        headers: getHeaders(),
         body: JSON.stringify({ outcome, durationSecs, notes, nextFollowUpAt })
       });
-      if (res.ok) {
-        const call = await res.json();
-        setSelectedLeadCalls((prev) => [call, ...prev]);
-        await fetchLeadDetails(leadId);
-        await fetchMetrics();
-        await fetchTasks();
+      const call = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(call.error || "Failed to log call.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to log call:", e);
+      setSelectedLeadCalls((prev) => [call, ...prev]);
+      await fetchLeadDetails(leadId);
+      await fetchMetrics();
+      await fetchTasks();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to log call.");
     }
   };
 
@@ -312,18 +313,19 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
     priority: "Low" | "Medium" | "High"
   ) => {
     try {
-      const res = await fetch("/api/admin/crm/tasks", {
+      const res = await apiFetch("/api/admin/crm/tasks", {
         method: "POST",
-        headers: getHeaders(),
         body: JSON.stringify({ leadId, title, dueAt, priority })
       });
-      if (res.ok) {
-        const task = await res.json();
-        setTasks((prev) => [task, ...prev]);
-        fetchMetrics();
+      const task = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(task.error || "Failed to add task.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to add task:", e);
+      setTasks((prev) => [task, ...prev]);
+      fetchMetrics();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to add task.");
     }
   };
 
@@ -331,28 +333,31 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   const handleToggleTaskStatus = async (taskId: string, currentStatus: string) => {
     const nextStatus = currentStatus === "completed" ? "pending" : "completed";
     try {
-      const res = await fetch(`/api/admin/crm/tasks/${taskId}`, {
+      const res = await apiFetch(`/api/admin/crm/tasks/${taskId}`, {
         method: "PUT",
-        headers: getHeaders(),
         body: JSON.stringify({ status: nextStatus })
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
-        fetchMetrics();
+      const updated = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(updated.error || "Failed to update task.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to toggle task status:", e);
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+      fetchMetrics();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to toggle task status.");
     }
   };
 
   // Conversion errors must remain visible in the confirmation form.
-  const handleConvertLead = async (leadId:number, details:{contractValue:number;billingEmail:string;notes:string}) => {
-    const res=await fetch(`/api/admin/crm/leads/${leadId}/convert`, {method:"POST",headers:getHeaders(),body:JSON.stringify(details)});
-    const data=await res.json();
-    if(res.status===401)onUnauthorized?.();
-    if(!res.ok)throw Error(data.error||"Could not convert this lead. Please try again.");
-    setLeads(prev=>prev.map(lead=>lead.id===leadId?data:lead));
+  const handleConvertLead = async (leadId: number, details: { contractValue: number; billingEmail: string; notes: string }) => {
+    const res = await apiFetch(`/api/admin/crm/leads/${leadId}/convert`, {
+      method: "POST",
+      body: JSON.stringify(details)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not convert this lead. Please try again.");
+    setLeads((prev) => prev.map((lead) => (lead.id === leadId ? data : lead)));
     setSelectedLead(data);
     void fetchMetrics();
   };
@@ -360,58 +365,62 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   // Archive lead
   const handleArchiveLead = async (leadId: number) => {
     try {
-      const res = await fetch(`/api/admin/crm/leads/${leadId}/archive`, {
-        method: "POST",
-        headers: getHeaders()
+      const res = await apiFetch(`/api/admin/crm/leads/${leadId}/archive`, {
+        method: "POST"
       });
-      if (res.ok) {
-        setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, isArchived: true } : l)));
-        setSelectedLead(null);
-        fetchMetrics();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(data.error || "Failed to archive lead.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to archive lead:", e);
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, isArchived: true } : l)));
+      setSelectedLead(null);
+      fetchMetrics();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to archive lead.");
     }
   };
 
   // Merge leads
   const handleMergeLead = async (primaryId: number, duplicateId: number) => {
     try {
-      const res = await fetch("/api/admin/crm/leads/merge", {
+      const res = await apiFetch("/api/admin/crm/leads/merge", {
         method: "POST",
-        headers: getHeaders(),
         body: JSON.stringify({ primaryLeadId: primaryId, duplicateLeadId: duplicateId })
       });
-      if (res.ok) {
-        const merged = await res.json();
-        setLeads((prev) =>
-          prev.map((l) => (l.id === primaryId ? merged : l.id === duplicateId ? { ...l, isArchived: true } : l))
-        );
-        setSelectedLead(merged);
-        fetchLeadDetails(primaryId);
-        fetchMetrics();
+      const merged = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(merged.error || "Failed to merge leads.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to merge leads:", e);
+      setLeads((prev) =>
+        prev.map((l) => (l.id === primaryId ? merged : l.id === duplicateId ? { ...l, isArchived: true } : l))
+      );
+      setSelectedLead(merged);
+      fetchLeadDetails(primaryId);
+      fetchMetrics();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Failed to merge leads.");
     }
   };
 
   // Run public business search
   const handleRunSearch = async (params: { location?: string; category?: string; query?: string; limit?: number }) => {
     setIsSearching(true);
+    setErrorBanner(null);
     try {
-      const res = await fetch("/api/admin/crm/prospects/search", {
+      const res = await apiFetch("/api/admin/crm/prospects/search", {
         method: "POST",
-        headers: getHeaders(),
         body: JSON.stringify(params)
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProspects(data.prospects);
-        fetchProspects();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(data.error || "Prospect directory search failed.");
+        return;
       }
-    } catch (e) {
-      console.error("Search failed:", e);
+      await fetchProspects();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Prospect directory search failed.");
     } finally {
       setIsSearching(false);
     }
@@ -420,91 +429,98 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
   // Analyze prospect with AI
   const handleAnalyzeProspect = async (prospectId: string) => {
     try {
-      const res = await fetch(`/api/admin/crm/prospects/${prospectId}/analyze`, {
-        method: "POST",
-        headers: getHeaders()
+      const res = await apiFetch(`/api/admin/crm/prospects/${prospectId}/analyze`, {
+        method: "POST"
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setProspects((prev) => prev.map((p) => (p.id === prospectId ? updated : p)));
+      const updated = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(updated.error || "Prospect analysis failed.");
+        return;
       }
-    } catch (e) {
-      console.error("Analysis failed:", e);
+      setProspects((prev) => prev.map((p) => (p.id === prospectId ? updated : p)));
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Analysis failed.");
     }
   };
 
   // Approve prospect into CRM
   const handleApproveProspect = async (prospectId: string) => {
     try {
-      const res = await fetch(`/api/admin/crm/prospects/${prospectId}/approve`, {
-        method: "POST",
-        headers: getHeaders()
+      const res = await apiFetch(`/api/admin/crm/prospects/${prospectId}/approve`, {
+        method: "POST"
       });
-      if (res.ok) {
-        const data = await res.json();
-        const createdLead: CRMLead = data.lead || data;
-        setProspects((prev) => prev.map((p) => (p.id === prospectId ? { ...p, workflowStatus: "approved" } : p)));
-        if (createdLead) {
-          setLeads((prev) => [createdLead, ...prev.filter((l) => l.id !== createdLead.id)]);
-        }
-        fetchMetrics();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(data.error || "Prospect approval failed.");
+        return;
       }
-    } catch (e) {
-      console.error("Approval failed:", e);
+      const createdLead: CRMLead = data.lead || data;
+      setProspects((prev) => prev.map((p) => (p.id === prospectId ? { ...p, workflowStatus: "approved" } : p)));
+      if (createdLead) {
+        setLeads((prev) => [createdLead, ...prev.filter((l) => l.id !== createdLead.id)]);
+      }
+      fetchMetrics();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Approval failed.");
     }
   };
 
   // Bulk approve prospects
   const handleBulkApprove = async (ids: string[]) => {
     try {
-      const res = await fetch("/api/admin/crm/prospects/bulk-approve", {
+      const res = await apiFetch("/api/admin/crm/prospects/bulk-approve", {
         method: "POST",
-        headers: getHeaders(),
         body: JSON.stringify({ prospectIds: ids })
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProspects((prev) =>
-          prev.map((p) => (ids.includes(p.id) ? { ...p, workflowStatus: "approved" } : p))
-        );
-        fetchLeads();
-        fetchMetrics();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(data.error || "Bulk approval failed.");
+        return;
       }
-    } catch (e) {
-      console.error("Bulk approval failed:", e);
+      setProspects((prev) =>
+        prev.map((p) => (ids.includes(p.id) ? { ...p, workflowStatus: "approved" } : p))
+      );
+      fetchLeads();
+      fetchMetrics();
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Bulk approval failed.");
     }
   };
 
   // Reject prospect
   const handleRejectProspect = async (prospectId: string) => {
     try {
-      const res = await fetch(`/api/admin/crm/prospects/${prospectId}/reject`, {
-        method: "POST",
-        headers: getHeaders()
+      const res = await apiFetch(`/api/admin/crm/prospects/${prospectId}/reject`, {
+        method: "POST"
       });
-      if (res.ok) {
-        setProspects((prev) => prev.map((p) => (p.id === prospectId ? { ...p, workflowStatus: "rejected" } : p)));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(data.error || "Rejection failed.");
+        return;
       }
-    } catch (e) {
-      console.error("Rejection failed:", e);
+      setProspects((prev) => prev.map((p) => (p.id === prospectId ? { ...p, workflowStatus: "rejected" } : p)));
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Rejection failed.");
     }
   };
 
   // Bulk reject prospects
   const handleBulkReject = async (ids: string[]) => {
     try {
-      const res = await fetch("/api/admin/crm/prospects/bulk-reject", {
+      const res = await apiFetch("/api/admin/crm/prospects/bulk-reject", {
         method: "POST",
-        headers: getHeaders(),
         body: JSON.stringify({ prospectIds: ids })
       });
-      if (res.ok) {
-        setProspects((prev) =>
-          prev.map((p) => (ids.includes(p.id) ? { ...p, workflowStatus: "rejected" } : p))
-        );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorBanner(data.error || "Bulk rejection failed.");
+        return;
       }
-    } catch (e) {
-      console.error("Bulk rejection failed:", e);
+      setProspects((prev) =>
+        prev.map((p) => (ids.includes(p.id) ? { ...p, workflowStatus: "rejected" } : p))
+      );
+    } catch (e: any) {
+      setErrorBanner(e?.message || "Bulk rejection failed.");
     }
   };
 
@@ -520,6 +536,22 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
 
   return (
     <div className="space-y-6">
+      {errorBanner && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs"
+        >
+          <span>{errorBanner}</span>
+          <button
+            type="button"
+            onClick={() => setErrorBanner(null)}
+            className="px-2 py-0.5 rounded bg-red-500/15 hover:bg-red-500/25 font-semibold cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Header and Mode Selector */}
       <CrmHeader
         activeTab={activeTab}
@@ -603,6 +635,7 @@ export function CrmManager({ adminToken, onUnauthorized }: CrmManagerProps) {
         <CrmSettings
           ollamaConnected={ollamaStatus.connected}
           ollamaModel={ollamaStatus.model}
+          ollamaUrl={ollamaStatus.url}
           onTestOllama={checkOllamaStatus}
           leadsCount={leads.length}
           leads={leads}

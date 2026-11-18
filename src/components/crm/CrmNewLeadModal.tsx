@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { X, UserPlus, Building, Mail, Phone, MapPin, DollarSign, Briefcase } from "lucide-react";
+import { X, UserPlus } from "lucide-react";
 import { SAINT_LUCIA_LOCATIONS } from "../../crm/types";
+import { V79_SERVICE_CATALOG } from "../../crm/offerings";
 
 interface CrmNewLeadModalProps {
   isOpen: boolean;
@@ -15,12 +16,13 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [location, setLocation] = useState("Castries");
-  const [serviceRequested, setServiceRequested] = useState("Managed IT Support");
+  const [serviceRequested, setServiceRequested] = useState(V79_SERVICE_CATALOG[0] || "Managed IT Support");
   const [estimatedValue, setEstimatedValue] = useState(5000);
   const [priority, setPriority] = useState<"Low" | "Medium" | "High" | "Urgent">("Medium");
   const [leadSource, setLeadSource] = useState("Direct Phone Call");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -29,6 +31,7 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
     if (!company.trim() || !name.trim()) return;
 
     setSubmitting(true);
+    setError(null);
     try {
       await onCreateLead({
         name: name.trim(),
@@ -44,6 +47,8 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
         message: message.trim() || undefined
       });
       onClose();
+    } catch (err: any) {
+      setError(err?.message || "Could not create CRM lead. Please verify your inputs and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -66,6 +71,11 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
+          {error && (
+            <div role="alert" className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs">
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] font-mono uppercase text-app-text-muted block mb-1">Company Name *</label>
@@ -150,13 +160,9 @@ export function CrmNewLeadModal({ isOpen, onClose, onCreateLead }: CrmNewLeadMod
                 onChange={(e) => setServiceRequested(e.target.value)}
                 className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs focus:outline-none"
               >
-                <option value="Managed IT Support">Managed IT Support</option>
-                <option value="Network Infrastructure & Wi-Fi">Network Infrastructure & Wi-Fi</option>
-                <option value="VoIP Phone Systems">VoIP Phone Systems</option>
-                <option value="Cybersecurity & Backup">Cybersecurity & Backup</option>
-                <option value="Web & SaaS Development">Web & SaaS Development</option>
-                <option value="Cloud Migration">Cloud Migration</option>
-                <option value="Hardware Procurement">Hardware Procurement</option>
+                {V79_SERVICE_CATALOG.map((service) => (
+                  <option key={service} value={service}>{service}</option>
+                ))}
               </select>
             </div>
 

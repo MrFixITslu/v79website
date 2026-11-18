@@ -9,7 +9,7 @@ import { createHubSsoFlows, hubBackchannelUrl } from "./server/hub-sso";
 
 import dotenv from "dotenv";
 import multer from "multer";
-import rateLimit from "express-rate-limit";
+import { createRateLimiter, resolveTrustProxy } from "./server/rateLimit";
 import compression from "compression";
 import { crmStorage } from "./server/crm_storage";
 import { pingOllama, analyzeBusinessWithAI } from "./server/crm_engine";
@@ -79,7 +79,8 @@ function isCourseComplete(app: any): boolean {
       typeof lec.title === "string" && lec.title.trim().length > 0 &&
       // A lecture must actually carry playable/reviewable material, not just a title stub.
       ((typeof lec.videoUrl === "string" && lec.videoUrl.trim().length > 0) ||
-       (typeof lec.audioUrl === "string" && lec.audioUrl.trim().length > 0))
+       (typeof lec.audioUrl === "string" && lec.audioUrl.trim().length > 0) ||
+       (typeof lec.readingMaterial === "string" && lec.readingMaterial.trim().length > 0))
     )
   );
   if (!hasRealLecture) return false;
@@ -553,7 +554,7 @@ class DocumentDatabase {
     const list = this.read();
     const index = list.findIndex(a => a.id === Number(id));
     if (index === -1) {
-      throw new Error(`SaaS app ${id} not found`);
+      return null;
     }
     list[index].launchCount += 1;
     this.write(list);
@@ -644,7 +645,7 @@ class DocumentDatabase {
     const list = this.readFeedback();
     const index = list.findIndex(f => f.id === Number(id));
     if (index === -1) {
-      throw new Error(`Feedback with ID ${id} not found`);
+      throw Object.assign(new Error(`Feedback with ID ${id} not found`), { status: 404 });
     }
     list[index].onboarded = 1;
     list[index].onboardedComment = comment || "";
@@ -726,21 +727,23 @@ class DocumentDatabase {
   }
 
   updateLead(id: number, lead: any): any {
-    const list = this.readLeads();
-    const index = list.findIndex(l => l.id === Number(id));
-    if (index === -1) {
-      throw new Error(`Lead with ID ${id} not found`);
-    }
-    list[index].status = lead.status || "New";
-    list[index].adminNotes = lead.adminNotes || "";
-    this.writeLeads(list);
-    return {
-      ...list[index],
-      name: decryptPII(list[index].name),
-      company: decryptPII(list[index].company),
-      email: decryptPII(list[index].email),
-      phone: decryptPII(list[index].phone)
-    };
+    return transaction(() => {
+      const list = this.readLeads();
+      const index = list.findIndex(l => l.id === Number(id));
+      if (index === -1) {
+        throw Object.assign(new Error(`Lead with ID ${id} not found`), { status: 404 });
+      }
+      if (lead.status !== undefined) list[index].status = lead.status;
+      if (lead.adminNotes !== undefined) list[index].adminNotes = lead.adminNotes;
+      this.writeLeads(list);
+      return {
+        ...list[index],
+        name: decryptPII(list[index].name),
+        company: decryptPII(list[index].company),
+        email: decryptPII(list[index].email),
+        phone: decryptPII(list[index].phone)
+      };
+    });
   }
 
   // Tracks delivery of this lead to the V79Tiquet gateway, separate from
@@ -758,7 +761,7 @@ class DocumentDatabase {
   getPendingTiquetLeads(): any[] {
     const list = this.readLeads();
     return list
-      .filter(l => ["pending", "disabled"].includes(l.tiquetSyncStatus))
+      .filter(l => l.tiquetSyncStatus === "pending")
       .map(l => ({
         ...l,
         name: decryptPII(l.name),
@@ -779,7 +782,7 @@ class DocumentDatabase {
 
   getPendingHubLeadEvents(): any[] {
     return this.readLeads()
-      .filter(l => ["pending", "disabled"].includes(l.hubEventStatus) && l.hubEventId)
+      .filter(l => l.hubEventStatus === "pending" && l.hubEventId)
       .map(l => ({
         ...l,
         name: decryptPII(l.name),
@@ -922,9 +925,10 @@ async function startServer() {
 
   const app = express();
   const PORT = Number(cleanEnvValue(process.env.PORT)) || 3000;
-  // Trust the first proxy hop (e.g. Nginx Proxy Manager) so req.ip reflects
-  // the real client address for rate limiting and logging.
-  app.set("trust proxy", process.env.TRUSTED_PROXIES ? process.env.TRUSTED_PROXIES.split(",").map(x => x.trim()) : false);
+  // Trust configured reverse proxies (e.g. Nginx Proxy Manager via TRUSTED_PROXIES)
+  // or safe private/loopback proxy subnets on Cloud Run so req.ip is accurate without
+  // permitting arbitrary client IP spoofing or ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+  app.set("trust proxy", resolveTrustProxy());
   app.disable("x-powered-by");
 
   // Auto-detect production mode if NODE_ENV is set to "production", or we are running the compiled dist bundle, or server.ts is absent
@@ -952,6 +956,14 @@ async function startServer() {
   // Enable gzip / deflate compression for all eligible textual and JSON payloads
   app.use(compression({ threshold: 1024 }));
 
+  const canonicalUrl = (() => {
+    try { return process.env.CANONICAL_DOMAIN ? new URL(process.env.CANONICAL_DOMAIN) : null; } catch { return null; }
+  })();
+  const isSameSiteHost = (hostA?: string | null, hostB?: string | null) => {
+    if (!hostA || !hostB) return false;
+    return hostA.toLowerCase().replace(/^www\./, "") === hostB.toLowerCase().replace(/^www\./, "");
+  };
+
   app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "SAMEORIGIN");
@@ -968,7 +980,7 @@ async function startServer() {
   });
 
   app.use((req, res, next) => {
-    if (isProduction) res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self' https://www.google.com/recaptcha/; frame-src 'self' blob: https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'");
+    if (isProduction) res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self' https://www.google.com/recaptcha/ https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com; frame-src 'self' blob: https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'");
     if (req.path.startsWith('/api/')) {
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('X-Robots-Tag', 'noindex, nofollow');
@@ -983,7 +995,7 @@ async function startServer() {
     }
     next();
   });
-  app.use('/api', rateLimit({windowMs:60000,max:300,standardHeaders:true,legacyHeaders:false}));
+  app.use('/api', createRateLimiter({windowMs:60000,max:300}));
   app.use(express.json({ limit: "1mb" }));
 
   app.use((req, res, next) => { if (!['GET','HEAD','OPTIONS'].includes(req.method) && req.is('application/json') && (!req.body || Array.isArray(req.body) || typeof req.body !== 'object')) return res.status(400).json({error:'Expected a JSON object'}); next(); });
@@ -1037,8 +1049,8 @@ async function startServer() {
     const formLeads = db.getLeads();
     const leadSync = {
       totalFormLeads: formLeads.length,
-      tiquetPending: formLeads.filter((lead: any) => lead.tiquetSyncStatus && lead.tiquetSyncStatus !== "sent").length,
-      hubPending: formLeads.filter((lead: any) => lead.hubEventStatus && lead.hubEventStatus !== "sent").length,
+      tiquetPending: formLeads.filter((lead: any) => lead.tiquetSyncStatus === "pending").length,
+      hubPending: formLeads.filter((lead: any) => lead.hubEventStatus === "pending").length,
     };
     return {
       ...crm,
@@ -1317,12 +1329,12 @@ async function startServer() {
         });
       }
 
+      recordFailedAttempt(ip);
       if (isRateLimited(ip)) {
         console.warn(`[Authentication] Rate limit exceeded for ${ip}`);
         return res.status(429).json({ error: "Too many login attempts. Please try again later." });
       }
 
-      recordFailedAttempt(ip);
       console.warn(`[Authentication] Rejecting unauthorized login attempt from ${ip}.`);
       return res.status(401).json({ error: "Incorrect administrator password." });
     } catch (err: any) {
@@ -1618,29 +1630,33 @@ async function startServer() {
   });
 
   app.post("/api/courses", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const newCourse = {
-      id: `course-${Date.now()}`,
-      title: req.body.title || "Untitled Course",
-      shortDescription: req.body.shortDescription || "",
-      fullDescription: req.body.fullDescription || "",
-      category: req.body.category || "General",
-      difficultyLevel: req.body.difficultyLevel || "Beginner",
-      instructor: req.body.instructor || "V79 Academy Instructor",
-      courseVersion: req.body.courseVersion || "1.0.0",
-      thumbnail: req.body.thumbnail || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80",
-      estimatedDuration: req.body.estimatedDuration || "2.0 hours",
-      prerequisites: req.body.prerequisites || [],
-      learningObjectives: req.body.learning_objectives || req.body.learningObjectives || [],
-      status: req.body.status || "Draft",
-      pricingType: req.body.pricingType || "free",
-      price: typeof req.body.price === "number" ? req.body.price : 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    cbDb.courses.push(newCourse);
-    cbSave(cbDb);
-    res.status(201).json(newCourse);
+    const created = transaction(() => {
+      cbDb = cbLoad();
+      const body = req.body || {};
+      const newCourse = {
+        id: `course-${Date.now()}`,
+        title: typeof body.title === "string" && body.title.trim() ? body.title.trim() : "Untitled Course",
+        shortDescription: typeof body.shortDescription === "string" ? body.shortDescription : "",
+        fullDescription: typeof body.fullDescription === "string" ? body.fullDescription : "",
+        category: typeof body.category === "string" ? body.category : "General",
+        difficultyLevel: typeof body.difficultyLevel === "string" ? body.difficultyLevel : "Beginner",
+        instructor: typeof body.instructor === "string" && body.instructor.trim() ? body.instructor : "V79 Academy Instructor",
+        courseVersion: typeof body.courseVersion === "string" ? body.courseVersion : "1.0.0",
+        thumbnail: typeof body.thumbnail === "string" && body.thumbnail.trim() ? body.thumbnail : "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80",
+        estimatedDuration: typeof body.estimatedDuration === "string" ? body.estimatedDuration : "2.0 hours",
+        prerequisites: Array.isArray(body.prerequisites) ? body.prerequisites : [],
+        learningObjectives: Array.isArray(body.learning_objectives || body.learningObjectives) ? (body.learning_objectives || body.learningObjectives) : [],
+        status: typeof body.status === "string" ? body.status : "Draft",
+        pricingType: body.pricingType === "premium" ? "premium" : "free",
+        price: typeof body.price === "number" ? body.price : Number(body.price) || 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      cbDb.courses.push(newCourse);
+      cbSave(cbDb);
+      return newCourse;
+    });
+    res.status(201).json(created);
   });
 
   app.get("/api/courses/:id", requireAdmin, (req, res) => {
@@ -1651,22 +1667,51 @@ async function startServer() {
   });
 
   app.put("/api/courses/:id", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const index = cbDb.courses.findIndex((c: any) => c.id === String(req.params.id));
-    if (index === -1) return res.status(404).json({ error: "Course not found" });
-    cbDb.courses[index] = { ...cbDb.courses[index], ...req.body, updatedAt: new Date().toISOString() };
-    cbSave(cbDb);
-    res.json(cbDb.courses[index]);
+    const updated = transaction(() => {
+      cbDb = cbLoad();
+      const index = cbDb.courses.findIndex((c: any) => c.id === String(req.params.id));
+      if (index === -1) return null;
+      const body = req.body || {};
+      const existing = cbDb.courses[index];
+      cbDb.courses[index] = {
+        ...existing,
+        ...(typeof body.title === "string" ? { title: body.title } : {}),
+        ...(typeof body.shortDescription === "string" ? { shortDescription: body.shortDescription } : {}),
+        ...(typeof body.fullDescription === "string" ? { fullDescription: body.fullDescription } : {}),
+        ...(typeof body.category === "string" ? { category: body.category } : {}),
+        ...(typeof body.difficultyLevel === "string" ? { difficultyLevel: body.difficultyLevel } : {}),
+        ...(typeof body.instructor === "string" ? { instructor: body.instructor } : {}),
+        ...(typeof body.courseVersion === "string" ? { courseVersion: body.courseVersion } : {}),
+        ...(typeof body.thumbnail === "string" ? { thumbnail: body.thumbnail } : {}),
+        ...(typeof body.estimatedDuration === "string" ? { estimatedDuration: body.estimatedDuration } : {}),
+        ...(Array.isArray(body.prerequisites) ? { prerequisites: body.prerequisites } : {}),
+        ...(Array.isArray(body.learningObjectives || body.learning_objectives) ? { learningObjectives: body.learningObjectives || body.learning_objectives } : {}),
+        ...(typeof body.status === "string" ? { status: body.status } : {}),
+        ...(body.pricingType === "free" || body.pricingType === "premium" ? { pricingType: body.pricingType } : {}),
+        ...(body.price !== undefined && Number.isFinite(Number(body.price)) ? { price: Number(body.price) } : {}),
+        updatedAt: new Date().toISOString()
+      };
+      cbSave(cbDb);
+      return cbDb.courses[index];
+    });
+    if (!updated) return res.status(404).json({ error: "Course not found" });
+    res.json(updated);
   });
 
   app.delete("/api/courses/:id", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const courseId = String(req.params.id);
-    cbDb.courses = cbDb.courses.filter((c: any) => c.id !== courseId);
-    cbDb.modules = cbDb.modules.filter((m: any) => m.courseId !== courseId);
-    cbDb.lessons = cbDb.lessons.filter((l: any) => l.courseId !== courseId);
-    cbDb.assets = cbDb.assets.filter((a: any) => a.courseId !== courseId);
-    cbSave(cbDb);
+    transaction(() => {
+      cbDb = cbLoad();
+      const courseId = String(req.params.id);
+      const deletedLessonIds = new Set(
+        cbDb.lessons.filter((l: any) => l.courseId === courseId).map((l: any) => String(l.id))
+      );
+      cbDb.courses = cbDb.courses.filter((c: any) => c.id !== courseId);
+      cbDb.modules = cbDb.modules.filter((m: any) => m.courseId !== courseId);
+      cbDb.lessons = cbDb.lessons.filter((l: any) => l.courseId !== courseId);
+      cbDb.quizzes = cbDb.quizzes.filter((q: any) => !deletedLessonIds.has(String(q.lessonId)));
+      cbDb.assets = cbDb.assets.filter((a: any) => a.courseId !== courseId);
+      cbSave(cbDb);
+    });
     res.json({ success: true });
   });
 
@@ -1679,36 +1724,55 @@ async function startServer() {
   });
 
   app.post("/api/courses/:courseId/modules", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const courseId = req.params.courseId;
-    const courseModules = cbDb.modules.filter((m: any) => m.courseId === courseId);
-    const newModule = {
-      id: `mod-${Date.now()}`,
-      courseId,
-      title: req.body.title || "New Module",
-      description: req.body.description || "",
-      orderNumber: req.body.orderNumber ?? (courseModules.length + 1)
-    };
-    cbDb.modules.push(newModule);
-    cbSave(cbDb);
+    const newModule = transaction(() => {
+      cbDb = cbLoad();
+      const courseId = String(req.params.courseId);
+      const courseModules = cbDb.modules.filter((m: any) => m.courseId === courseId);
+      const mod = {
+        id: `mod-${Date.now()}`,
+        courseId,
+        title: req.body.title || "New Module",
+        description: req.body.description || "",
+        orderNumber: req.body.orderNumber ?? (courseModules.length + 1)
+      };
+      cbDb.modules.push(mod);
+      cbSave(cbDb);
+      return mod;
+    });
     res.status(201).json(newModule);
   });
 
   app.put("/api/modules/:id", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const index = cbDb.modules.findIndex((m: any) => m.id === String(req.params.id));
-    if (index === -1) return res.status(404).json({ error: "Module not found" });
-    cbDb.modules[index] = { ...cbDb.modules[index], ...req.body };
-    cbSave(cbDb);
-    res.json(cbDb.modules[index]);
+    const updated = transaction(() => {
+      cbDb = cbLoad();
+      const index = cbDb.modules.findIndex((m: any) => m.id === String(req.params.id));
+      if (index === -1) return null;
+      const body = req.body || {};
+      cbDb.modules[index] = {
+        ...cbDb.modules[index],
+        ...(typeof body.title === "string" ? { title: body.title } : {}),
+        ...(typeof body.description === "string" ? { description: body.description } : {}),
+        ...(Number.isFinite(Number(body.orderNumber)) ? { orderNumber: Number(body.orderNumber) } : {})
+      };
+      cbSave(cbDb);
+      return cbDb.modules[index];
+    });
+    if (!updated) return res.status(404).json({ error: "Module not found" });
+    res.json(updated);
   });
 
   app.delete("/api/modules/:id", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const modId = String(req.params.id);
-    cbDb.modules = cbDb.modules.filter((m: any) => m.id !== modId);
-    cbDb.lessons = cbDb.lessons.filter((l: any) => l.moduleId !== modId);
-    cbSave(cbDb);
+    transaction(() => {
+      cbDb = cbLoad();
+      const modId = String(req.params.id);
+      const deletedLessonIds = new Set(
+        cbDb.lessons.filter((l: any) => l.moduleId === modId).map((l: any) => String(l.id))
+      );
+      cbDb.modules = cbDb.modules.filter((m: any) => m.id !== modId);
+      cbDb.lessons = cbDb.lessons.filter((l: any) => l.moduleId !== modId);
+      cbDb.quizzes = cbDb.quizzes.filter((q: any) => !deletedLessonIds.has(String(q.lessonId)));
+      cbSave(cbDb);
+    });
     res.json({ success: true });
   });
 
@@ -1721,29 +1785,33 @@ async function startServer() {
   });
 
   app.post("/api/modules/:moduleId/lessons", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const moduleId = req.params.moduleId;
-    const mod = cbDb.modules.find((m: any) => m.id === moduleId);
-    if (!mod) return res.status(404).json({ error: "Module not found" });
-    const modLessons = cbDb.lessons.filter((l: any) => l.moduleId === moduleId);
-    const newLesson = {
-      id: `les-${Date.now()}`,
-      moduleId,
-      courseId: mod.courseId,
-      title: req.body.title || "New Lesson",
-      description: req.body.description || "",
-      learningObjectives: req.body.learning_objectives || req.body.learningObjectives || [],
-      estimatedTime: req.body.estimatedTime || "20 mins",
-      lessonContent: req.body.lessonContent || "# Lesson Content\n\nAdd content here...",
-      videoUrl: req.body.videoUrl || "",
-      audioUrl: req.body.audioUrl || "",
-      imageUrls: req.body.imageUrls || [],
-      downloads: req.body.downloads || [],
-      exercisePrompt: req.body.exercisePrompt || "",
-      orderNumber: req.body.orderNumber ?? (modLessons.length + 1)
-    };
-    cbDb.lessons.push(newLesson);
-    cbSave(cbDb);
+    const newLesson = transaction(() => {
+      cbDb = cbLoad();
+      const moduleId = String(req.params.moduleId);
+      const mod = cbDb.modules.find((m: any) => m.id === moduleId);
+      if (!mod) return null;
+      const modLessons = cbDb.lessons.filter((l: any) => l.moduleId === moduleId);
+      const lesson = {
+        id: `les-${Date.now()}`,
+        moduleId,
+        courseId: mod.courseId,
+        title: req.body.title || "New Lesson",
+        description: req.body.description || "",
+        learningObjectives: req.body.learning_objectives || req.body.learningObjectives || [],
+        estimatedTime: req.body.estimatedTime || "20 mins",
+        lessonContent: req.body.lessonContent || "# Lesson Content\n\nAdd content here...",
+        videoUrl: req.body.videoUrl || "",
+        audioUrl: req.body.audioUrl || "",
+        imageUrls: req.body.imageUrls || [],
+        downloads: req.body.downloads || [],
+        exercisePrompt: req.body.exercisePrompt || "",
+        orderNumber: req.body.orderNumber ?? (modLessons.length + 1)
+      };
+      cbDb.lessons.push(lesson);
+      cbSave(cbDb);
+      return lesson;
+    });
+    if (!newLesson) return res.status(404).json({ error: "Module not found" });
     res.status(201).json(newLesson);
   });
 
@@ -1755,20 +1823,40 @@ async function startServer() {
   });
 
   app.put("/api/lessons/:id", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const index = cbDb.lessons.findIndex((l: any) => l.id === String(req.params.id));
-    if (index === -1) return res.status(404).json({ error: "Lesson not found" });
-    cbDb.lessons[index] = { ...cbDb.lessons[index], ...req.body };
-    cbSave(cbDb);
-    res.json(cbDb.lessons[index]);
+    const updated = transaction(() => {
+      cbDb = cbLoad();
+      const index = cbDb.lessons.findIndex((l: any) => l.id === String(req.params.id));
+      if (index === -1) return null;
+      const body = req.body || {};
+      cbDb.lessons[index] = {
+        ...cbDb.lessons[index],
+        ...(typeof body.title === "string" ? { title: body.title } : {}),
+        ...(typeof body.description === "string" ? { description: body.description } : {}),
+        ...(Array.isArray(body.learningObjectives || body.learning_objectives) ? { learningObjectives: body.learningObjectives || body.learning_objectives } : {}),
+        ...(typeof body.estimatedTime === "string" ? { estimatedTime: body.estimatedTime } : {}),
+        ...(typeof body.lessonContent === "string" ? { lessonContent: body.lessonContent } : {}),
+        ...(typeof body.videoUrl === "string" ? { videoUrl: body.videoUrl } : {}),
+        ...(typeof body.audioUrl === "string" ? { audioUrl: body.audioUrl } : {}),
+        ...(Array.isArray(body.imageUrls) ? { imageUrls: body.imageUrls } : {}),
+        ...(Array.isArray(body.downloads) ? { downloads: body.downloads } : {}),
+        ...(typeof body.exercisePrompt === "string" ? { exercisePrompt: body.exercisePrompt } : {}),
+        ...(Number.isFinite(Number(body.orderNumber)) ? { orderNumber: Number(body.orderNumber) } : {})
+      };
+      cbSave(cbDb);
+      return cbDb.lessons[index];
+    });
+    if (!updated) return res.status(404).json({ error: "Lesson not found" });
+    res.json(updated);
   });
 
   app.delete("/api/lessons/:id", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const lesId = String(req.params.id);
-    cbDb.lessons = cbDb.lessons.filter((l: any) => l.id !== lesId);
-    cbDb.quizzes = cbDb.quizzes.filter((q: any) => q.lessonId !== lesId);
-    cbSave(cbDb);
+    transaction(() => {
+      cbDb = cbLoad();
+      const lesId = String(req.params.id);
+      cbDb.lessons = cbDb.lessons.filter((l: any) => l.id !== lesId);
+      cbDb.quizzes = cbDb.quizzes.filter((q: any) => q.lessonId !== lesId);
+      cbSave(cbDb);
+    });
     res.json({ success: true });
   });
 
@@ -1780,25 +1868,28 @@ async function startServer() {
   });
 
   app.post("/api/lessons/:lessonId/quiz", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const lessonId = req.params.lessonId;
-    let quiz = cbDb.quizzes.find((q: any) => q.lessonId === lessonId);
-    if (quiz) {
-      quiz.title = req.body.title || quiz.title;
-      quiz.passingScore = req.body.passingScore ?? quiz.passingScore;
-      quiz.questions = req.body.questions || quiz.questions;
-    } else {
-      quiz = {
-        id: `quiz-${Date.now()}`,
-        lessonId,
-        title: req.body.title || "Lesson Assessment",
-        passingScore: req.body.passingScore || 80,
-        questions: req.body.questions || []
-      };
-      cbDb.quizzes.push(quiz);
-    }
-    cbSave(cbDb);
-    res.json(quiz);
+    const savedQuiz = transaction(() => {
+      cbDb = cbLoad();
+      const lessonId = String(req.params.lessonId);
+      let quiz = cbDb.quizzes.find((q: any) => q.lessonId === lessonId);
+      if (quiz) {
+        quiz.title = req.body.title || quiz.title;
+        quiz.passingScore = req.body.passingScore ?? quiz.passingScore;
+        quiz.questions = req.body.questions || quiz.questions;
+      } else {
+        quiz = {
+          id: `quiz-${Date.now()}`,
+          lessonId,
+          title: req.body.title || "Lesson Assessment",
+          passingScore: req.body.passingScore || 80,
+          questions: req.body.questions || []
+        };
+        cbDb.quizzes.push(quiz);
+      }
+      cbSave(cbDb);
+      return quiz;
+    });
+    res.json(savedQuiz);
   });
 
   // Assets
@@ -1809,28 +1900,33 @@ async function startServer() {
   });
 
   app.post("/api/courses/:courseId/assets", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    const courseId = req.params.courseId;
-    const newAsset = {
-      id: `ast-${Date.now()}`,
-      courseId,
-      moduleId: req.body.moduleId || null,
-      lessonId: req.body.lessonId || null,
-      name: req.body.name || "Asset File",
-      fileType: req.body.fileType || "pdf",
-      url: req.body.url || "",
-      fileSize: req.body.fileSize || "",
-      uploadedAt: new Date().toISOString()
-    };
-    cbDb.assets.push(newAsset);
-    cbSave(cbDb);
+    const newAsset = transaction(() => {
+      cbDb = cbLoad();
+      const courseId = String(req.params.courseId);
+      const asset = {
+        id: `ast-${Date.now()}`,
+        courseId,
+        moduleId: req.body.moduleId || null,
+        lessonId: req.body.lessonId || null,
+        name: req.body.name || "Asset File",
+        fileType: req.body.fileType || "pdf",
+        url: req.body.url || "",
+        fileSize: req.body.fileSize || "",
+        uploadedAt: new Date().toISOString()
+      };
+      cbDb.assets.push(asset);
+      cbSave(cbDb);
+      return asset;
+    });
     res.status(201).json(newAsset);
   });
 
   app.delete("/api/assets/:id", requireAdmin, (req, res) => {
-    cbDb = cbLoad();
-    cbDb.assets = cbDb.assets.filter((a: any) => a.id !== String(req.params.id));
-    cbSave(cbDb);
+    transaction(() => {
+      cbDb = cbLoad();
+      cbDb.assets = cbDb.assets.filter((a: any) => a.id !== String(req.params.id));
+      cbSave(cbDb);
+    });
     res.json({ success: true });
   });
 
@@ -1866,23 +1962,32 @@ async function startServer() {
     return idx >= 0 ? idx : 0;
   }
 
-  function cbBuildAppPayload(course: any, modules: any[], lessons: any[], quizzes: any[]) {
+  function cbBuildAppPayload(course: any, modules: any[], lessons: any[], quizzes: any[], assets: any[] = []) {
     const sortedModules = [...modules].sort((a, b) => (a.orderNumber || 0) - (b.orderNumber || 0));
-    const chapters = sortedModules.map((mod) => {
+    const unattachedAssets = assets.filter((a: any) => !a.lessonId);
+    const chapters = sortedModules.map((mod, modIdx) => {
       const moduleLessons = lessons
         .filter((l) => l.moduleId === mod.id)
         .sort((a, b) => (a.orderNumber || 0) - (b.orderNumber || 0));
       return {
         title: mod.title,
-        lectures: moduleLessons.map((les, idx) => ({
-          id: les.id,
-          title: les.title,
-          duration: les.estimatedTime || "",
-          freePreview: idx === 0 && sortedModules[0]?.id === mod.id,
-          videoUrl: les.videoUrl || undefined,
-          audioUrl: les.audioUrl || undefined,
-          readingMaterial: les.lessonContent || undefined
-        }))
+        lectures: moduleLessons.map((les, idx) => {
+          const lessonDownloads = [
+            ...(Array.isArray(les.downloads) ? les.downloads : []),
+            ...assets.filter((a: any) => a.lessonId === les.id).map((a: any) => ({ name: a.name, url: a.url, fileType: a.fileType })),
+            ...(modIdx === 0 && idx === 0 ? unattachedAssets.map((a: any) => ({ name: a.name, url: a.url, fileType: a.fileType })) : [])
+          ].filter((d: any) => d && d.url);
+          return {
+            id: les.id,
+            title: les.title,
+            duration: les.estimatedTime || "",
+            freePreview: idx === 0 && sortedModules[0]?.id === mod.id,
+            videoUrl: les.videoUrl || undefined,
+            audioUrl: les.audioUrl || undefined,
+            readingMaterial: les.lessonContent || undefined,
+            downloads: lessonDownloads.length ? lessonDownloads : undefined
+          };
+        })
       };
     });
 
@@ -1911,47 +2016,51 @@ async function startServer() {
     };
   }
 
-  app.post("/api/courses/:id/publish", requireAdmin, async (req, res) => {
-    cbDb = cbLoad();
-    const courseId = String(req.params.id);
-    const courseIndex = cbDb.courses.findIndex((c: any) => c.id === courseId);
-    if (courseIndex === -1) return res.status(404).json({ error: "Course not found" });
-
-    const course = cbDb.courses[courseIndex];
-    const modules = cbDb.modules.filter((m: any) => m.courseId === courseId);
-    const lessons = cbDb.lessons.filter((l: any) => l.courseId === courseId);
-    const quizzes = cbDb.quizzes.filter((q: any) => lessons.some((l: any) => l.id === q.lessonId));
-
-    if (modules.length === 0 || lessons.length === 0) {
-      return res.status(400).json({ error: "Add at least one module with a lesson before publishing." });
-    }
-
+  app.post("/api/courses/:id/publish", requireAdmin, (req, res) => {
     try {
-      const payload = cbBuildAppPayload(course, modules, lessons, quizzes);
-      let websiteApp: any = null;
+      const result = transaction(() => {
+        cbDb = cbLoad();
+        const courseId = String(req.params.id);
+        const courseIndex = cbDb.courses.findIndex((c: any) => c.id === courseId);
+        if (courseIndex === -1) return { status: 404, body: { error: "Course not found" } };
 
-      if (course.websiteAppId) {
-        try {
-          websiteApp = await db.updateApp(Number(course.websiteAppId), payload);
-        } catch {
-          websiteApp = null;
+        const course = cbDb.courses[courseIndex];
+        const modules = cbDb.modules.filter((m: any) => m.courseId === courseId);
+        const lessons = cbDb.lessons.filter((l: any) => l.courseId === courseId);
+        const quizzes = cbDb.quizzes.filter((q: any) => lessons.some((l: any) => l.id === q.lessonId));
+        const assets = cbDb.assets.filter((a: any) => a.courseId === courseId);
+
+        if (modules.length === 0 || lessons.length === 0) {
+          return { status: 400, body: { error: "Add at least one module with a lesson before publishing." } };
         }
-      }
-      if (!websiteApp) {
-        websiteApp = await db.addApp(payload);
-      }
 
-      const now = new Date().toISOString();
-      cbDb.courses[courseIndex] = {
-        ...course,
-        status: "Uploaded",
-        websiteAppId: websiteApp.id,
-        websitePublishedAt: now,
-        updatedAt: now
-      };
-      cbSave(cbDb);
+        const payload = cbBuildAppPayload(course, modules, lessons, quizzes, assets);
+        let websiteApp: any = null;
 
-      res.json({ success: true, course: cbDb.courses[courseIndex], websiteAppId: websiteApp.id });
+        if (course.websiteAppId) {
+          try {
+            websiteApp = db.updateApp(Number(course.websiteAppId), payload);
+          } catch {
+            websiteApp = null;
+          }
+        }
+        if (!websiteApp) {
+          websiteApp = db.addApp(payload);
+        }
+
+        const now = new Date().toISOString();
+        cbDb.courses[courseIndex] = {
+          ...course,
+          status: "Uploaded",
+          websiteAppId: websiteApp.id,
+          websitePublishedAt: now,
+          updatedAt: now
+        };
+        cbSave(cbDb);
+
+        return { status: 200, body: { success: true, course: cbDb.courses[courseIndex], websiteAppId: websiteApp.id } };
+      });
+      return res.status(result.status).json(result.body);
     } catch (err: any) {
       console.error("[CourseBuilder] Failed to publish course to the website:", err);
       res.status(502).json({ error: err.message || "Failed to publish course to the website." });
@@ -1961,30 +2070,36 @@ async function startServer() {
   // Gemini AI Assistant Endpoint (Course Builder's AI Course Architect)
   app.post("/api/gemini/assist", requireAdmin, async (req, res) => {
     try {
-      const { prompt } = req.body;
+      const { prompt } = req.body || {};
+      if (typeof prompt !== "string" || !prompt.trim()) {
+        return res.status(400).json({ error: "A prompt is required to generate course content." });
+      }
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        return res.status(400).json({ error: "Gemini API key not configured. Please add GEMINI_API_KEY in the server environment." });
+        return res.status(503).json({ error: "Gemini API service is not configured on the server." });
       }
       const { GoogleGenAI } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-3.6-flash",
-        contents: prompt,
+        contents: prompt.trim(),
         config: {
-          systemInstruction: "You are an expert instructional designer and senior curriculum architect for V79 Academy applications (Fire Finance Pro, SIWM, Tiquet, KashDash). Provide precise, professional, educational content in JSON or Markdown format as requested.",
-          temperature: 0.7
+          systemInstruction: "You are an expert instructional designer and senior curriculum architect for V79 Academy applications (Fire Finance Pro, SIWM, Tiquet, KashDash). Provide precise, professional, educational content in JSON or Markdown format as requested."
         }
       });
+      if (!response.text) {
+        return res.status(502).json({ error: "The AI service returned an empty response." });
+      }
       res.json({ result: response.text });
     } catch (error: any) {
       console.error("[CourseBuilder] Gemini AI error:", error);
-      res.status(500).json({ error: error.message || "Failed to generate AI content" });
+      const status = Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599 ? error.status : 502;
+      res.status(status).json({ error: error?.message || "Failed to generate AI content" });
     }
   });
 
   // POST increment download or launch trigger
-  app.post("/api/apps/increment", rateLimit({windowMs:60000,max:30,standardHeaders:true,legacyHeaders:false}), async (req, res) => {
+  app.post("/api/apps/increment", createRateLimiter({windowMs:60000,max:30}), async (req, res) => {
     const { id } = req.body;
     const numericId = Number(id);
 
@@ -2053,7 +2168,13 @@ async function startServer() {
   // GET all student exam attempts
   app.get("/api/exam/attempts", requireAdmin, async (req, res) => {
     try {
-      const appIdQuery = req.query.appId ? Number(req.query.appId) : undefined;
+      let appIdQuery: number | undefined;
+      if (req.query.appId !== undefined) {
+        appIdQuery = Number(req.query.appId);
+        if (!Number.isFinite(appIdQuery)) {
+          return res.status(400).json({ error: "Invalid appId parameter" });
+        }
+      }
       const attempts = await db.getExamAttempts(appIdQuery);
       res.json(attempts);
     } catch (err) {
@@ -2115,7 +2236,13 @@ async function startServer() {
   // GET all feedback, optionally filtered by appId
   app.get("/api/feedback", async (req, res) => {
     try {
-      const appIdQuery = req.query.appId ? Number(req.query.appId) : undefined;
+      let appIdQuery: number | undefined;
+      if (req.query.appId !== undefined) {
+        appIdQuery = Number(req.query.appId);
+        if (!Number.isFinite(appIdQuery)) {
+          return res.status(400).json({ error: "Invalid appId parameter" });
+        }
+      }
       const list = await db.getFeedback(appIdQuery);
       res.json(list);
     } catch (err) {
@@ -2125,7 +2252,7 @@ async function startServer() {
   });
 
   // POST submit new feedback (rating, comment) for an app
-  app.post("/api/feedback", rateLimit({windowMs:3600000,max:10,standardHeaders:true,legacyHeaders:false}), async (req, res) => {
+  app.post("/api/feedback", createRateLimiter({windowMs:3600000,max:10}), async (req, res) => {
     const { appId, appName, rating, comment, userName, feedbackType } = req.body;
 
     const numericAppId = Number(appId);
@@ -2182,9 +2309,9 @@ async function startServer() {
     try {
       const updatedFeedback = await db.onboardFeedback(id, onboardedComment);
       res.json(updatedFeedback);
-    } catch (err) {
+    } catch (err: any) {
       console.error("[API] Error onboarding feedback:", err);
-      res.status(500).json({ error: "Failed to onboard feedback" });
+      res.status(err?.status || 500).json({ error: err?.message || "Failed to onboard feedback" });
     }
   });
 
@@ -2403,7 +2530,8 @@ async function startServer() {
         signal: AbortSignal.timeout(5000),
       });
       const data = await res.json();
-      return !!data.success && typeof data.score === "number" && data.score >= 0.5 && data.action === "submit" && data.hostname === new URL(process.env.CANONICAL_DOMAIN || "https://v79sl.com").hostname;
+      const expectedHost = canonicalUrl?.hostname || "v79sl.com";
+      return !!data.success && typeof data.score === "number" && data.score >= 0.5 && data.action === "submit" && isSameSiteHost(data.hostname, expectedHost);
     } catch (err: any) {
       console.warn("[reCAPTCHA] Verification request failed:", err.message);
       return false;
@@ -2413,19 +2541,15 @@ async function startServer() {
   // 10 submissions per 15 minutes per IP — generous for a real visitor
   // (this form isn't submitted repeatedly in normal use), tight enough to
   // blunt a scripted flood aimed at this endpoint.
-  const leadsLimiter = rateLimit({
+  const leadsLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: 10,
-    standardHeaders: true,
-    legacyHeaders: false,
     message: { error: "Too many requests. Please try again later or contact us directly." },
   });
 
-  const newsletterLimiter = rateLimit({
+  const newsletterLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: 30,
-    standardHeaders: true,
-    legacyHeaders: false,
     message: { error: "Too many signup attempts. Please wait a few minutes and try again." },
   });
 
@@ -2487,42 +2611,45 @@ async function startServer() {
     }
 
     try {
-      const subscribers = readJSON<any[]>(JSON_NEWSLETTER_FILE, []);
-      const emailHash = crypto.createHash("sha256").update(safeEmail).digest("hex");
-      const now = new Date().toISOString();
-      const existingIndex = subscribers.findIndex((subscriber: any) => subscriber.emailHash === emailHash);
-      const alreadySubscribed = existingIndex >= 0 && subscribers[existingIndex]?.status === "active";
+      const { alreadySubscribed } = transaction(() => {
+        const subscribers = readJSON<any[]>(JSON_NEWSLETTER_FILE, []);
+        const emailHash = crypto.createHash("sha256").update(safeEmail).digest("hex");
+        const now = new Date().toISOString();
+        const existingIndex = subscribers.findIndex((subscriber: any) => subscriber.emailHash === emailHash);
+        const already = existingIndex >= 0 && subscribers[existingIndex]?.status === "active";
 
-      if (existingIndex >= 0) {
-        subscribers[existingIndex] = {
-          ...subscribers[existingIndex],
-          firstName: safeFirstName ? encryptPII(safeFirstName) : subscribers[existingIndex].firstName,
-          email: encryptPII(safeEmail),
-          status: "active",
-          source: safeSource || subscribers[existingIndex].source,
-          pageOrigin: safePageOrigin || subscribers[existingIndex].pageOrigin,
-          consent: true,
-          consentVersion: "2026-10-ai-guide-v1",
-          updatedAt: now,
-        };
-      } else {
-        const nextId = subscribers.reduce((max: number, subscriber: any) => Math.max(max, Number(subscriber.id) || 0), 0) + 1;
-        subscribers.push({
-          id: nextId,
-          firstName: encryptPII(safeFirstName),
-          email: encryptPII(safeEmail),
-          emailHash,
-          status: "active",
-          source: safeSource,
-          pageOrigin: safePageOrigin,
-          consent: true,
-          consentVersion: "2026-10-ai-guide-v1",
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
+        if (existingIndex >= 0) {
+          subscribers[existingIndex] = {
+            ...subscribers[existingIndex],
+            firstName: safeFirstName ? encryptPII(safeFirstName) : subscribers[existingIndex].firstName,
+            email: encryptPII(safeEmail),
+            status: "active",
+            source: safeSource || subscribers[existingIndex].source,
+            pageOrigin: safePageOrigin || subscribers[existingIndex].pageOrigin,
+            consent: true,
+            consentVersion: "2026-10-ai-guide-v1",
+            updatedAt: now,
+          };
+        } else {
+          const nextId = subscribers.reduce((max: number, subscriber: any) => Math.max(max, Number(subscriber.id) || 0), 0) + 1;
+          subscribers.push({
+            id: nextId,
+            firstName: encryptPII(safeFirstName),
+            email: encryptPII(safeEmail),
+            emailHash,
+            status: "active",
+            source: safeSource,
+            pageOrigin: safePageOrigin,
+            consent: true,
+            consentVersion: "2026-10-ai-guide-v1",
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
 
-      writeJSON(JSON_NEWSLETTER_FILE, subscribers);
+        writeJSON(JSON_NEWSLETTER_FILE, subscribers);
+        return { alreadySubscribed: already };
+      });
 
       return res.status(alreadySubscribed ? 200 : 201).json({
         success: true,
@@ -2586,7 +2713,7 @@ async function startServer() {
       if (requestId !== undefined && (typeof requestId !== 'string' || !/^[a-zA-Z0-9-]{16,80}$/.test(requestId))) return res.status(400).json({error:'Invalid request identifier'});
       const requestHash=crypto.createHash('sha256').update(JSON.stringify(leadData)).digest('hex');
       const previous = readJSON<any[]>('lead-requests.json', []).find(r=>r.id===requestId && r.expires>Date.now());
-      if(previous) return previous.hash===requestHash ? res.status(200).json({id:previous.leadId,success:true}) : res.status(409).json({error:'Request identifier already used'});
+      if(previous) return previous.hash===requestHash ? res.status(200).json({id:previous.leadId,crmLeadId:previous.crmLeadId,success:true}) : res.status(409).json({error:'Request identifier already used'});
       const { newLead, crmCaptureResult, eventId, hubEventId } = transaction(() => {
       const newLead = db.addLead(leadData);
 
@@ -2611,7 +2738,7 @@ async function startServer() {
       const hubEventId = crypto.randomUUID();
       db.updateLeadTiquetSync(newLead.id, eventId, "pending");
       db.updateLeadHubSync(newLead.id, hubEventId, "pending");
-      if(requestId){const recent=readJSON<any[]>('lead-requests.json',[]).filter(r=>r.expires>Date.now());recent.push({id:requestId,hash:requestHash,leadId:newLead.id,expires:Date.now()+86400000});writeJSON('lead-requests.json',recent);}
+      if(requestId){const recent=readJSON<any[]>('lead-requests.json',[]).filter(r=>r.expires>Date.now());recent.push({id:requestId,hash:requestHash,leadId:newLead.id,crmLeadId:crmCaptureResult.lead.id,expires:Date.now()+86400000});writeJSON('lead-requests.json',recent);}
       return {newLead, crmCaptureResult, eventId, hubEventId};
       });
       
@@ -2658,9 +2785,9 @@ async function startServer() {
     try {
       const updated = await db.updateLead(id, { status, adminNotes });
       res.json(updated);
-    } catch (e) {
+    } catch (e: any) {
       console.error("[API] Error updating lead:", e);
-      res.status(500).json({ error: "Failed to update lead status." });
+      res.status(e?.status || 500).json({ error: e?.message || "Failed to update lead status." });
     }
   });
 
@@ -2734,9 +2861,9 @@ async function startServer() {
     try {
       const updated = transaction(() => crmStorage.updateLead(Number(String(req.params.id)), req.body, "Admin"));
       res.json(updated);
-    } catch (e) {
+    } catch (e: any) {
       console.error("[CRM API] Error updating CRM lead:", e);
-      res.status(500).json({ error: (e as any)?.message || "Failed to update lead." });
+      res.status(e?.status || 500).json({ error: e?.message || "Failed to update lead." });
     }
   });
 
@@ -2746,9 +2873,9 @@ async function startServer() {
       if (!stage) return res.status(400).json({ error: "stage is required in request body" });
       const updated = crmStorage.updateLeadStage(Number(String(req.params.id)), stage, "Admin");
       res.json(updated);
-    } catch (e) {
+    } catch (e: any) {
       console.error("[CRM API] Error updating lead stage:", e);
-      res.status(500).json({ error: (e as any)?.message || "Failed to update lead stage." });
+      res.status(e?.status || 500).json({ error: e?.message || "Failed to update lead stage." });
     }
   });
 
@@ -2823,24 +2950,24 @@ async function startServer() {
     try {
       const archived = crmStorage.archiveLead(Number(String(req.params.id)), "Admin");
       res.json(archived);
-    } catch (e) {
+    } catch (e: any) {
       console.error("[CRM API] Error archiving lead:", e);
-      res.status(500).json({ error: "Failed to archive lead." });
+      res.status(e?.status || 500).json({ error: e?.message || "Failed to archive lead." });
     }
   });
 
   app.post(["/api/admin/crm/leads/merge", "/api/admin/crm/leads/:id/merge"], requireAdmin, (req, res) => {
     try {
-      const primaryId = String(req.params.id) ? Number(String(req.params.id)) : Number(req.body.primaryLeadId || req.body.primaryId);
+      const primaryId = req.params.id ? Number(String(req.params.id)) : Number(req.body.primaryLeadId || req.body.primaryId);
       const duplicateId = Number(req.body.duplicateLeadId || req.body.duplicateId);
-      if (!primaryId || !duplicateId) {
+      if (!Number.isSafeInteger(primaryId) || primaryId < 1 || !Number.isSafeInteger(duplicateId) || duplicateId < 1) {
         return res.status(400).json({ error: "Both primary and duplicate lead IDs are required for merge." });
       }
       const merged = crmStorage.mergeLeads(primaryId, duplicateId, "Admin");
       res.json(merged);
-    } catch (e) {
+    } catch (e: any) {
       console.error("[CRM API] Error merging leads:", e);
-      res.status(500).json({ error: (e as any)?.message || "Failed to merge leads." });
+      res.status(e?.status || 500).json({ error: e?.message || "Failed to merge leads." });
     }
   });
 
@@ -2967,9 +3094,9 @@ async function startServer() {
         limit: req.body.limit || 10
       });
       res.json(result);
-    } catch (e) {
+    } catch (e: any) {
       console.error("[CRM Prospect Search Error]:", e);
-      res.status(500).json({ error: "Prospect search failed." });
+      res.status(e?.status || 500).json({ error: e?.message || "Prospect search failed." });
     }
   });
 
@@ -3005,8 +3132,8 @@ async function startServer() {
     try {
       const lead = crmStorage.approveProspectToLead(String(req.params.id), "Admin");
       res.json({ ...lead, lead });
-    } catch (e) {
-      res.status(500).json({ error: (e as any)?.message || "Failed to approve prospect." });
+    } catch (e: any) {
+      res.status(e?.status || 500).json({ error: e?.message || "Failed to approve prospect." });
     }
   });
 
@@ -3055,12 +3182,12 @@ async function startServer() {
   });
 
   app.get("/api/admin/crm/ai/status", requireAdmin, async (req, res) => {
+    const baseUrl = process.env.OLLAMA_BASE_URL || "http://ollama:11434";
     try {
-      const baseUrl = process.env.OLLAMA_BASE_URL || "http://ollama:11434";
       const status = await pingOllama(baseUrl);
       res.json(status);
     } catch (e) {
-      res.json({ connected: false, models: [], url: "http://localhost:11434" });
+      res.json({ connected: false, models: [], url: baseUrl });
     }
   });
 
@@ -3093,9 +3220,9 @@ async function startServer() {
       const canonicalBase = (cleanEnvValue(process.env.CANONICAL_DOMAIN) || "https://v79sl.com").replace(/\/+$/, "");
       const escapeAttr = (str: string) => String(str || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-      const applyMeta = (source: string, page: { title: string; description: string; url: string; image?: string; type?: string }) => {
+      const applyMeta = (source: string, page: { title: string; description: string; url: string; image?: string; type?: string; schema?: Record<string, unknown> }) => {
         let result = source;
-        const image = page.image || `${canonicalBase}/og-image.png`;
+        const image = page.image || `${canonicalBase}/design-assets/editorial/hero-smb-owner.jpg`;
         const type = page.type || "website";
 
         result = result.replace(/<title>.*?<\/title>/is, `<title>${escapeAttr(page.title)}</title>`);
@@ -3128,13 +3255,112 @@ async function startServer() {
           if (rx.test(result)) result = result.replace(rx, `<meta name="${name}" content="${escapeAttr(value)}" />`);
           else result = result.replace("</head>", `  <meta name="${name}" content="${escapeAttr(value)}" />\n</head>`);
         }
+
+        if (page.schema) {
+          const safeJson = JSON.stringify(page.schema).replace(/</g, "\\u003c");
+          result = result.replace(
+            /<script\s+id="v79-schema"\s+type="application\/ld\+json">[\s\S]*?<\/script>/i,
+            `<script id="v79-schema" type="application/ld+json">${safeJson}</script>`
+          );
+        }
         return result;
       };
 
       const normalizedPath = (req.path || "/").replace(/\/+$/, "") || "/";
+      const appFavicons: Record<string, { icon: string; apple: string }> = {
+        hub: { icon: "/design-assets/apps/hub-icon.png", apple: "/design-assets/apps/hub-icon.png" },
+        tiquet: { icon: "/design-assets/apps/tiquet-icon.png", apple: "/design-assets/apps/tiquet-icon.png" },
+        pos: { icon: "/design-assets/apps/pos-favicon.png", apple: "/design-assets/apps/pos-icon.png" },
+        ffpro: { icon: "/design-assets/apps/ffpro-icon.png", apple: "/design-assets/apps/ffpro-icon.png" },
+        marketing: { icon: "/design-assets/apps/marketing-icon.png", apple: "/design-assets/apps/marketing-icon.png" },
+        academy: { icon: "/design-assets/apps/academy-icon.png", apple: "/design-assets/apps/academy-icon.png" },
+      };
+      const routeImages: Record<string, string> = {
+        "/": `${canonicalBase}/design-assets/editorial/hero-smb-owner.jpg`,
+        "/services": `${canonicalBase}/design-assets/editorial/web-design-studio.jpg`,
+        "/services/website-design": `${canonicalBase}/design-assets/editorial/web-design-studio.jpg`,
+        "/services/managed-it-support": `${canonicalBase}/design-assets/editorial/hero-smb-owner.jpg`,
+        "/services/cybersecurity": `${canonicalBase}/design-assets/editorial/network-security.jpg`,
+        "/services/cloud-backup": `${canonicalBase}/design-assets/editorial/cloud-collaboration.jpg`,
+        "/services/networks-voip": `${canonicalBase}/design-assets/editorial/retail-hospitality.jpg`,
+        "/services/ai-automation": `${canonicalBase}/design-assets/editorial/automation-systems.jpg`,
+        "/services/business-software": `${canonicalBase}/design-assets/editorial/retail-hospitality.jpg`,
+        "/solutions": `${canonicalBase}/design-assets/editorial/cloud-collaboration.jpg`,
+        "/industries": `${canonicalBase}/design-assets/editorial/retail-hospitality.jpg`,
+        "/about": `${canonicalBase}/design-assets/editorial/cloud-collaboration.jpg`,
+        "/resources": `${canonicalBase}/design-assets/editorial/hero-smb-owner.jpg`,
+      };
+      const appMatch = normalizedPath.match(/^\/(?:apps|software)\/([a-z0-9-]+)$/);
+      const matchedAppFav = appMatch ? appFavicons[appMatch[1]] : undefined;
+      const applyAppFavicon = (doc: string): string => {
+        if (!matchedAppFav) return doc;
+        let out = doc.replace(/<link\s+rel="icon"[^>]*\/?>/gi, `<link rel="icon" type="image/png" href="${escapeAttr(matchedAppFav.icon)}" />`);
+        out = out.replace(/<link\s+rel="apple-touch-icon"[^>]*\/?>/i, `<link rel="apple-touch-icon" href="${escapeAttr(matchedAppFav.apple)}" />`);
+        return out;
+      };
       if (designMeta[normalizedPath] && typeof req.query.article !== "string") {
-        const [title,description]=designMeta[normalizedPath];
-        return applyMeta(html, {title,description,url:canonicalBase+(normalizedPath==='/'?'/':normalizedPath)});
+        const [title, description] = designMeta[normalizedPath];
+        const routeUrl = canonicalBase + (normalizedPath === "/" ? "/" : normalizedPath);
+        const routeImg = appMatch
+          ? `${canonicalBase}/design-assets/screenshots/${appMatch[1]}/screen-1.png`
+          : routeImages[normalizedPath] || `${canonicalBase}/design-assets/editorial/hero-smb-owner.jpg`;
+        const isArticleRoute = normalizedPath.startsWith("/resources/");
+        const schemaForRoute: Record<string, unknown> | undefined = normalizedPath === "/"
+          ? undefined
+          : {
+              "@context": "https://schema.org",
+              "@graph": [
+                {
+                  "@type": "BreadcrumbList",
+                  itemListElement: [
+                    { "@type": "ListItem", position: 1, name: "Home", item: `${canonicalBase}/` },
+                    { "@type": "ListItem", position: 2, name: title.split("|")[0].trim(), item: routeUrl },
+                  ],
+                },
+                ...(normalizedPath.startsWith("/services")
+                  ? [{
+                      "@type": "Service",
+                      name: title.split("|")[0].trim(),
+                      description,
+                      url: routeUrl,
+                      provider: { "@type": "Organization", name: "V79 Digital", url: `${canonicalBase}/` },
+                      areaServed: ["Saint Lucia", "Caribbean"],
+                    }]
+                  : appMatch
+                  ? [{
+                      "@type": "SoftwareApplication",
+                      name: title.split("|")[0].trim(),
+                      description,
+                      url: routeUrl,
+                      applicationCategory: "BusinessApplication",
+                      operatingSystem: "Web",
+                      publisher: { "@type": "Organization", name: "V79 Digital", url: `${canonicalBase}/` },
+                    }]
+                  : isArticleRoute
+                  ? [{
+                      "@type": "Article",
+                      headline: title.split("|")[0].trim(),
+                      description,
+                      url: routeUrl,
+                      image: routeImg,
+                      publisher: { "@type": "Organization", name: "V79 Digital", url: `${canonicalBase}/` },
+                    }]
+                  : [{
+                      "@type": "WebPage",
+                      name: title.split("|")[0].trim(),
+                      description,
+                      url: routeUrl,
+                    }]),
+              ],
+            };
+        return applyAppFavicon(applyMeta(html, {
+          title,
+          description,
+          url: routeUrl,
+          image: routeImg,
+          type: isArticleRoute ? "article" : "website",
+          schema: schemaForRoute,
+        }));
       }
       const staticPages: Record<string, { title: string; description: string }> = {
         "/": {
@@ -3607,14 +3833,21 @@ ${designUrls}${articlesXml}</urlset>`;
   app.get('/courses', (_req,res)=>res.redirect(301, '/apps/academy'));
   app.get('/marketplace', (_req,res)=>res.redirect(301, '/solutions'));
   app.use((req,res,next)=>{
+    if (isDev && (req.path.startsWith('/@') || req.path.startsWith('/src/') || req.path.startsWith('/node_modules/') || req.path === '/vite.svg')) {
+      return next();
+    }
     if (/^\/(?:adimin|adimn)(?:\/|$)/i.test(req.path)) {
       return res.redirect(301, req.path.replace(/^\/(?:adimin|adimn)/i, '/admin'));
     }
     if (req.method === 'GET' && req.path.length > 1 && req.path.endsWith('/')) return res.redirect(308, req.path.slice(0,-1) + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''));
-    const courseMatch=req.path.match(/^\/course\/(\d+)$/);
-    if(courseMatch && !db.getApps().some((c:any)=>c.id===Number(courseMatch[1]) && isCourseComplete(c)))return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
+    const courseMatch=req.path.match(/^\/course\/([a-zA-Z0-9_-]+)$/);
+    if (courseMatch) {
+      const key = courseMatch[1];
+      const matchesCourse = db.getApps().some((c:any)=>c.category === 'courses' && isCourseComplete(c) && (String(c.id) === key || c.accessUrl === `/course/${key}` || cbSlugify(c.name) === key));
+      if (!matchesCourse) return res.status(404).type('html').send('<h1>Course not found</h1><a href="/">Return to V79 Digital</a>');
+    }
     const allowed = [...Object.keys(designPages), '/', '/services', '/about', '/contact', '/industries', '/resources', '/solutions', '/free-ai-prompting-guide', '/privacy', '/terms', '/data-deletion', '/admin'];
-    if (req.method === 'GET' && !allowed.includes(req.path) && !/^\/course\/\d+$/.test(req.path) && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to Vision79 Digital</a></main></html>');
+    if (req.method === 'GET' && !allowed.includes(req.path) && !courseMatch && !req.path.startsWith('/assets/') && !req.path.startsWith('/uploads/') && !/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('html').send('<!doctype html><html lang="en"><title>Page not found</title><main><h1>Page not found</h1><p>The page may have moved.</p><a href="/">Return to V79 Digital</a></main></html>');
     next();
   });
   if (isDev) {

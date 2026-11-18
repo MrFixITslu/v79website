@@ -253,20 +253,4 @@ export const SAINT_LUCIA_LOCATIONS = [
   "Cap Estate"
 ];
 
-export const V79_SERVICE_CATALOG = [
-  "Website Development",
-  "Website Modernization",
-  "Business Automation",
-  "CRM Implementation",
-  "Ticketing & Helpdesk",
-  "Inventory Management",
-  "Cybersecurity & Firewall",
-  "Network Design & Cabling",
-  "Wi-Fi Optimization",
-  "Cloud & Microsoft 365",
-  "Automated Disaster Backup",
-  "Managed IT Support",
-  "Digital Transformation",
-  "Custom Web & SaaS Apps",
-  "AI Workflow Integration"
-];
+export { V79_SERVICE_CATALOG } from "./offerings";

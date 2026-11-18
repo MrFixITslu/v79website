@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { V79OfficialLogo } from "./V79OfficialLogo";
 
 type SubscribeResponse = {
   success?: boolean;
@@ -29,6 +28,11 @@ export default function AIPromptGuideLandingPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage("");
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setMessage("Please enter a valid email address.");
+      return;
+    }
 
     if (!consent) {
       setMessage("Please confirm that you want to join the free V79 Digital newsletter.");
@@ -70,25 +74,22 @@ export default function AIPromptGuideLandingPage() {
 
   return (
     <div className="min-h-screen bg-app-bg text-app-text">
-      <header className="border-b border-app-border bg-app-header-bg/90 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-5 flex items-center justify-between gap-4">
-          <a href="/" aria-label="Return to V79 Digital home" className="inline-flex items-center">
-            <V79OfficialLogo size="md" />
-          </a>
+      <main className="pt-24 sm:pt-28">
+        <nav aria-label="Breadcrumb" className="max-w-7xl mx-auto px-6 lg:px-10 pt-3 pb-2 flex items-center gap-2 text-xs sm:text-sm font-medium text-app-text-sec">
           <a
             href="/resources"
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-app-text-sec hover:text-v79-teal transition"
+            className="inline-flex items-center gap-1.5 text-app-text-sec hover:text-v79-teal transition"
           >
             <ArrowLeft className="w-4 h-4" />
-            Resources
+            <span>Back to Resources</span>
           </a>
-        </div>
-      </header>
+          <span aria-hidden="true" className="text-app-text-muted">/</span>
+          <span className="text-app-text font-semibold">Free AI Prompting Guide</span>
+        </nav>
 
-      <main>
         <section className="relative overflow-hidden border-b border-app-border">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(24,185,178,0.13),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(79,70,229,0.12),transparent_42%)] pointer-events-none" />
-          <div className="relative max-w-7xl mx-auto px-6 lg:px-10 py-16 sm:py-20 lg:py-24 grid lg:grid-cols-[1.1fr_0.9fr] gap-10 lg:gap-14 items-center">
+          <div className="relative max-w-7xl mx-auto px-6 lg:px-10 py-10 sm:py-14 lg:py-16 grid lg:grid-cols-[1.1fr_0.9fr] gap-10 lg:gap-14 items-center">
             <div className="space-y-7">
               <div className="inline-flex items-center gap-2 rounded-full border border-v79-teal/25 bg-v79-teal/10 px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-[0.18em] text-v79-teal">
                 <Sparkles className="w-3.5 h-3.5" />

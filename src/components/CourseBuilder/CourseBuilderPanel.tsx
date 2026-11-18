@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AlertCircle, X } from 'lucide-react';
 import { Course, Module, Lesson } from './courseBuilderTypes';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -8,13 +9,11 @@ import { CourseEditor } from './CourseEditor';
 import { CoursePreview } from './CoursePreview';
 import { ExportModal } from './ExportModal';
 import { AICourseAssistantModal } from './AICourseAssistantModal';
+import { AssetManager } from './AssetManager';
 import { cbFetch } from './cbApi';
 
-// This panel is the full V79 Academy Course Builder, ported to run inside
-// the VISION79 admin page. It is mounted only after AdminApp has already
-// authenticated the operator, so - unlike the original standalone app -
-// it has no login/change-password screens of its own. Every API call goes
-// through cbFetch, which attaches the admin's existing Bearer session token.
+// This panel is the full V79 Academy Course Builder, mounted inside AdminApp
+// after cookie-session authentication.
 interface CourseBuilderPanelProps {
   onExit?: () => void;
 }
@@ -25,11 +24,13 @@ export default function CourseBuilderPanel({ onExit }: CourseBuilderPanelProps) 
   const [modules, setModules] = useState<Module[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [assetCourseId, setAssetCourseId] = useState<string>('');
   const [exportingCourse, setExportingCourse] = useState<Course | null>(null);
   const [previewingCourse, setPreviewingCourse] = useState<Course | null>(null);
   const [showAiModal, setShowAiModal] = useState<boolean>(false);
   const [selectedAppCategory, setSelectedAppCategory] = useState<string>('All Applications');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCourses();
@@ -37,16 +38,52 @@ export default function CourseBuilderPanel({ onExit }: CourseBuilderPanelProps) 
 
   const fetchCourses = async () => {
     try {
+      setErrorBanner(null);
       const res = await cbFetch('/api/courses');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to load courses (HTTP ${res.status})`);
+      }
       const data = await res.json();
-      setCourses(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error(e);
+      const courseList: Course[] = Array.isArray(data) ? data : [];
+      setCourses(courseList);
+      if (courseList.length > 0 && !courseList.some((c) => c.id === assetCourseId)) {
+        setAssetCourseId(courseList[0].id);
+      }
+
+      // Populate real module & lesson counts for dashboard overview
+      const modArrays = await Promise.all(
+        courseList.map(async (c) => {
+          try {
+            const mRes = await cbFetch(`/api/courses/${c.id}/modules`);
+            return mRes.ok ? ((await mRes.json()) as Module[]) : [];
+          } catch {
+            return [];
+          }
+        })
+      );
+      const allMods = modArrays.flat();
+      setModules(allMods);
+
+      const lesArrays = await Promise.all(
+        allMods.map(async (m) => {
+          try {
+            const lRes = await cbFetch(`/api/modules/${m.id}/lessons`);
+            return lRes.ok ? ((await lRes.json()) as Lesson[]) : [];
+          } catch {
+            return [];
+          }
+        })
+      );
+      setLessons(lesArrays.flat());
+    } catch (e: any) {
+      setErrorBanner(e?.message || 'Unable to load Course Builder data.');
     }
   };
 
   const handleCreateNewCourse = async () => {
     try {
+      setErrorBanner(null);
       const res = await cbFetch('/api/courses', {
         method: 'POST',
         body: JSON.stringify({
@@ -64,27 +101,34 @@ export default function CourseBuilderPanel({ onExit }: CourseBuilderPanelProps) 
           status: 'Draft'
         })
       });
-      if (res.ok) {
-        const created = await res.json();
-        await fetchCourses();
-        setSelectedCourse(created);
-        setCurrentView('editor');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create course.');
       }
-    } catch (e) {
-      console.error(e);
+      const created = await res.json();
+      await fetchCourses();
+      setSelectedCourse(created);
+      setCurrentView('editor');
+    } catch (e: any) {
+      setErrorBanner(e?.message || 'Failed to create new course.');
     }
   };
 
   const handleDeleteCourse = async (courseId: string) => {
     try {
-      await cbFetch(`/api/courses/${courseId}`, { method: 'DELETE' });
+      setErrorBanner(null);
+      const res = await cbFetch(`/api/courses/${courseId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete course.');
+      }
       await fetchCourses();
       if (selectedCourse?.id === courseId) {
         setSelectedCourse(null);
         setCurrentView('dashboard');
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setErrorBanner(e?.message || 'Failed to delete course.');
     }
   };
 
@@ -96,6 +140,8 @@ export default function CourseBuilderPanel({ onExit }: CourseBuilderPanelProps) 
       />
     );
   }
+
+  const activeAssetCourse = courses.find((c) => c.id === assetCourseId) || courses[0] || null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex text-slate-900 font-sans antialiased">
@@ -118,6 +164,23 @@ export default function CourseBuilderPanel({ onExit }: CourseBuilderPanelProps) 
           onOpenAiAssistant={() => setShowAiModal(true)}
           selectedAppCategory={selectedAppCategory}
         />
+
+        {errorBanner && (
+          <div className="mx-8 mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800 flex items-center justify-between gap-3" role="alert">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{errorBanner}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorBanner(null)}
+              className="p-1 rounded-lg hover:bg-rose-100 text-rose-600"
+              aria-label="Dismiss error"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         <main className="flex-1">
           {currentView === 'dashboard' && (
@@ -169,19 +232,41 @@ export default function CourseBuilderPanel({ onExit }: CourseBuilderPanelProps) 
           )}
 
           {currentView === 'assets' && (
-            <div className="p-8 space-y-6 max-w-7xl mx-auto">
-              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-4 shadow-xs">
-                <h3 className="font-bold text-slate-800 text-base">Integrated with Course Authoring</h3>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Assets are organized directly per course, module, and lesson within each course editor. Select a course from the catalog to manage its media assets.
-                </p>
-                <button
-                  onClick={() => setCurrentView('courses')}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-md transition-all inline-block"
-                >
-                  Browse Course Catalog
-                </button>
-              </div>
+            <div className="p-8 space-y-6 max-w-5xl mx-auto">
+              {activeAssetCourse ? (
+                <>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+                    <div>
+                      <h2 className="font-bold text-slate-900 text-base">Course Assets</h2>
+                      <p className="text-xs text-slate-500">Select a course to upload or manage its downloadable materials.</p>
+                    </div>
+                    <select
+                      aria-label="Select course for asset management"
+                      value={activeAssetCourse.id}
+                      onChange={(e) => setAssetCourseId(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800"
+                    >
+                      {courses.map((c) => (
+                        <option key={c.id} value={c.id}>{c.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <AssetManager course={activeAssetCourse} />
+                </>
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-4 shadow-xs">
+                  <h3 className="font-bold text-slate-800 text-base">No Courses Available</h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Create a course first to attach and organize media assets.
+                  </p>
+                  <button
+                    onClick={handleCreateNewCourse}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-md transition-all inline-block"
+                  >
+                    Create First Course
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </main>

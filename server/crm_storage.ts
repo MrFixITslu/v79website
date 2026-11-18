@@ -123,90 +123,92 @@ export class CRMStorage {
   }
 
   addLead(leadInput: Partial<CRMLead>, author: string = "Website Form"): { lead: CRMLead; isDuplicate: boolean; duplicateOf?: CRMLead } {
-    const list = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
+    return transaction(() => {
+      const list = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
 
-    // Duplicate detection
-    const existingDuplicate = this.detectDuplicate(
-      leadInput.email || "",
-      leadInput.phone || "",
-      leadInput.company || ""
-    );
+      // Duplicate detection
+      const existingDuplicate = this.detectDuplicate(
+        leadInput.email || "",
+        leadInput.phone || "",
+        leadInput.company || ""
+      );
 
-    const nextId = list.reduce((max, l) => Math.max(max, l.id || 0), 0) + 1;
+      const nextId = list.reduce((max, l) => Math.max(max, l.id || 0), 0) + 1;
 
-    // AI/deterministic scoring for new lead
-    const analysis = calculateDeterministicAnalysis({
-      businessName: leadInput.company || leadInput.name || "Prospect",
-      category: leadInput.businessCategory || leadInput.serviceRequested,
-      location: leadInput.location || "Saint Lucia",
-      website: leadInput.website,
-      phone: leadInput.phone,
-      email: leadInput.email,
-      description: leadInput.message
-    });
+      // AI/deterministic scoring for new lead
+      const analysis = calculateDeterministicAnalysis({
+        businessName: leadInput.company || leadInput.name || "Prospect",
+        category: leadInput.businessCategory || leadInput.serviceRequested,
+        location: leadInput.location || "Saint Lucia",
+        website: leadInput.website,
+        phone: leadInput.phone,
+        email: leadInput.email,
+        description: leadInput.message
+      });
 
-    const now = new Date().toISOString();
-    const newLead: CRMLead = {
-      id: nextId,
-      name: (leadInput.name || "").trim(),
-      company: (leadInput.company || "").trim(),
-      email: (leadInput.email || "").trim(),
-      phone: (leadInput.phone || "").trim(),
-      whatsapp: leadInput.whatsapp || leadInput.phone || "",
-      serviceRequested: leadInput.serviceRequested || leadInput.biggestChallenge || "General ICT Inquiry",
-      message: leadInput.message || "",
-      employees: leadInput.employees || "",
-      biggestChallenge: leadInput.biggestChallenge || "",
-      leadSource: leadInput.leadSource || "Website Contact Form",
-      pageOrigin: leadInput.pageOrigin || "/contact",
-      stage: leadInput.stage || "New",
-      status: "Active",
-      priority: leadInput.priority || (analysis.leadScore >= 80 ? "High" : "Medium"),
-      estimatedValue: leadInput.estimatedValue || (analysis.leadScore >= 80 ? 10000 : 5000),
-      location: leadInput.location || "Castries",
-      businessCategory: leadInput.businessCategory || "Commercial",
-      website: leadInput.website || "",
-      facebookUrl: leadInput.facebookUrl || "",
-      instagramUrl: leadInput.instagramUrl || "",
-      linkedinUrl: leadInput.linkedinUrl || "",
-      leadScore: analysis.leadScore,
-      scoreCategory: analysis.scoreCategory,
-      aiAnalysis: analysis,
-      isConverted: false,
-      isArchived: false,
-      duplicateOfLeadId: existingDuplicate ? existingDuplicate.id : undefined,
-      adminNotes: existingDuplicate ? `[Flag] Possible duplicate of Lead #${existingDuplicate.id} (${existingDuplicate.company})` : "",
-      createdAt: now,
-      updatedAt: now
-    };
+      const now = new Date().toISOString();
+      const newLead: CRMLead = {
+        id: nextId,
+        name: (leadInput.name || "").trim(),
+        company: (leadInput.company || "").trim(),
+        email: (leadInput.email || "").trim(),
+        phone: (leadInput.phone || "").trim(),
+        whatsapp: leadInput.whatsapp || leadInput.phone || "",
+        serviceRequested: leadInput.serviceRequested || leadInput.biggestChallenge || "General ICT Inquiry",
+        message: leadInput.message || "",
+        employees: leadInput.employees || "",
+        biggestChallenge: leadInput.biggestChallenge || "",
+        leadSource: leadInput.leadSource || "Website Contact Form",
+        pageOrigin: leadInput.pageOrigin || "/contact",
+        stage: leadInput.stage || "New",
+        status: "Active",
+        priority: leadInput.priority || (analysis.leadScore >= 80 ? "High" : "Medium"),
+        estimatedValue: leadInput.estimatedValue || (analysis.leadScore >= 80 ? 10000 : 5000),
+        location: leadInput.location || "Castries",
+        businessCategory: leadInput.businessCategory || "Commercial",
+        website: leadInput.website || "",
+        facebookUrl: leadInput.facebookUrl || "",
+        instagramUrl: leadInput.instagramUrl || "",
+        linkedinUrl: leadInput.linkedinUrl || "",
+        leadScore: analysis.leadScore,
+        scoreCategory: analysis.scoreCategory,
+        aiAnalysis: analysis,
+        isConverted: false,
+        isArchived: false,
+        duplicateOfLeadId: existingDuplicate ? existingDuplicate.id : undefined,
+        adminNotes: existingDuplicate ? `[Flag] Possible duplicate of Lead #${existingDuplicate.id} (${existingDuplicate.company})` : "",
+        createdAt: now,
+        updatedAt: now
+      };
 
-    list.unshift(newLead);
-    writeJSON(CRM_LEADS_FILE, list);
+      list.unshift(newLead);
+      writeJSON(CRM_LEADS_FILE, list);
 
-    // Record activity
-    this.addActivity({
-      leadId: newLead.id,
-      type: "status_change",
-      title: "Lead Captured",
-      description: `New lead created from ${newLead.leadSource}. Priority: ${newLead.priority}, Score: ${newLead.leadScore} (${newLead.scoreCategory}).`,
-      author
-    });
-
-    if (existingDuplicate) {
+      // Record activity
       this.addActivity({
         leadId: newLead.id,
-        type: "note",
-        title: "Duplicate Detected",
-        description: `System flagged possible duplicate match with existing Lead #${existingDuplicate.id} (${existingDuplicate.name} - ${existingDuplicate.company}).`,
-        author: "CRM System"
+        type: "status_change",
+        title: "Lead Captured",
+        description: `New lead created from ${newLead.leadSource}. Priority: ${newLead.priority}, Score: ${newLead.leadScore} (${newLead.scoreCategory}).`,
+        author
       });
-    }
 
-    return {
-      lead: newLead,
-      isDuplicate: Boolean(existingDuplicate),
-      duplicateOf: existingDuplicate || undefined
-    };
+      if (existingDuplicate) {
+        this.addActivity({
+          leadId: newLead.id,
+          type: "note",
+          title: "Duplicate Detected",
+          description: `System flagged possible duplicate match with existing Lead #${existingDuplicate.id} (${existingDuplicate.name} - ${existingDuplicate.company}).`,
+          author: "CRM System"
+        });
+      }
+
+      return {
+        lead: newLead,
+        isDuplicate: Boolean(existingDuplicate),
+        duplicateOf: existingDuplicate || undefined
+      };
+    });
   }
 
   updateLeadStage(id: number, stage: PipelineStage, author: string) {
@@ -215,126 +217,152 @@ export class CRMStorage {
   }
 
   updateLead(id: number, updates: Partial<CRMLead>, author: string = "Admin"): CRMLead {
-    const list = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
-    const idx = list.findIndex(l => l.id === Number(id));
-    if (idx === -1) throw new Error(`Lead #${id} not found`);
+    return transaction(() => {
+      const list = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
+      const idx = list.findIndex(l => l.id === Number(id));
+      if (idx === -1) throw Object.assign(new Error(`Lead #${id} not found`), { status: 404 });
 
-    const prev = list[idx];
-    const now = new Date().toISOString();
+      const prev = list[idx];
+      const now = new Date().toISOString();
 
-    // Stage change tracking
-    if (updates.stage && updates.stage !== prev.stage) {
-      this.addActivity({
-        leadId: prev.id,
-        type: "stage_change",
-        title: "Stage Updated",
-        description: `Stage moved from "${prev.stage}" to "${updates.stage}".`,
-        metadata: { from: prev.stage, to: updates.stage },
-        author
-      });
-    }
+      // Stage change tracking
+      if (updates.stage && updates.stage !== prev.stage) {
+        this.addActivity({
+          leadId: prev.id,
+          type: "stage_change",
+          title: "Stage Updated",
+          description: `Stage moved from "${prev.stage}" to "${updates.stage}".`,
+          metadata: { from: prev.stage, to: updates.stage },
+          author
+        });
+      }
 
-    // Status change tracking
-    if (updates.status && updates.status !== prev.status) {
-      this.addActivity({
-        leadId: prev.id,
-        type: "status_change",
-        title: "Status Updated",
-        description: `Status changed to "${updates.status}".`,
-        author
-      });
-    }
+      // Status change tracking
+      if (updates.status && updates.status !== prev.status) {
+        this.addActivity({
+          leadId: prev.id,
+          type: "status_change",
+          title: "Status Updated",
+          description: `Status changed to "${updates.status}".`,
+          author
+        });
+      }
 
-    const updated: CRMLead = {
-      ...prev,
-      ...updates,
-      updatedAt: now
-    };
+      const updated: CRMLead = {
+        ...prev,
+        ...updates,
+        id: prev.id,
+        updatedAt: now
+      };
 
-    list[idx] = updated;
-    writeJSON(CRM_LEADS_FILE, list);
-    return updated;
+      list[idx] = updated;
+      writeJSON(CRM_LEADS_FILE, list);
+      return updated;
+    });
   }
 
   convertLeadToClient(id: number, details: { contractValue?: number; billingEmail?: string; notes?: string }, author: string = "Admin"): CRMLead {
-    const lead = this.getLeadById(id);
-    if (!lead) throw new Error(`Lead #${id} not found`);
-    if (lead.isConverted) return lead; // Repeated approval is idempotent.
+    return transaction(() => {
+      const lead = this.getLeadById(id);
+      if (!lead) throw Object.assign(new Error(`Lead #${id} not found`), { status: 404 });
+      if (lead.isConverted) return lead; // Repeated approval is idempotent.
 
-    const clientId = `V79-CLI-${Date.now().toString().slice(-6)}`;
-    const converted = this.updateLead(id, {
-      isConverted: true,
-      convertedAt: new Date().toISOString(),
-      stage: "Won",
-      status: "Converted",
-      estimatedValue: details.contractValue ?? lead.estimatedValue,
-      convertedClientDetails: {
-        clientId,
-        contractValue: details.contractValue ?? lead.estimatedValue,
-        billingEmail: details.billingEmail || lead.email,
-        notes: details.notes || ""
-      }
-    }, author);
+      const clientId = `V79-CLI-${Date.now().toString().slice(-6)}`;
+      const converted = this.updateLead(id, {
+        isConverted: true,
+        convertedAt: new Date().toISOString(),
+        stage: "Won",
+        status: "Converted",
+        estimatedValue: details.contractValue ?? lead.estimatedValue,
+        convertedClientDetails: {
+          clientId,
+          contractValue: details.contractValue ?? lead.estimatedValue,
+          billingEmail: details.billingEmail || lead.email,
+          notes: details.notes || ""
+        }
+      }, author);
 
-    this.addActivity({
-      leadId: id,
-      type: "conversion",
-      title: "Converted to Customer",
-      description: `Lead officially converted to Client ${clientId} with value $${(details.contractValue ?? lead.estimatedValue ?? 0).toLocaleString()} XCD.`,
-      author
+      this.addActivity({
+        leadId: id,
+        type: "conversion",
+        title: "Converted to Customer",
+        description: `Lead officially converted to Client ${clientId} with value $${(details.contractValue ?? lead.estimatedValue ?? 0).toLocaleString()} XCD.`,
+        author
+      });
+
+      return converted;
     });
-
-    return converted;
   }
 
   archiveLead(id: number, author: string = "Admin"): CRMLead {
-    return this.updateLead(id, { isArchived: true, status: "Archived" }, author);
+    return transaction(() => this.updateLead(id, { isArchived: true, status: "Archived" }, author));
   }
 
   deleteLead(id: number): boolean {
-    const list = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
-    const filtered = list.filter(l => l.id !== Number(id));
-    if (filtered.length === list.length) return false;
-    writeJSON(CRM_LEADS_FILE, filtered);
-    return true;
+    return transaction(() => {
+      const targetId = Number(id);
+      const list = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
+      const filtered = list.filter(l => l.id !== targetId);
+      if (filtered.length === list.length) return false;
+      writeJSON(CRM_LEADS_FILE, filtered);
+
+      const activities = readJSON<CRMActivity[]>(CRM_ACTIVITIES_FILE, []);
+      const remainingActivities = activities.filter(a => a.leadId !== targetId);
+      if (remainingActivities.length !== activities.length) writeJSON(CRM_ACTIVITIES_FILE, remainingActivities);
+
+      const calls = readJSON<CRMCallRecord[]>(CRM_CALLS_FILE, []);
+      const remainingCalls = calls.filter(c => c.leadId !== targetId);
+      if (remainingCalls.length !== calls.length) writeJSON(CRM_CALLS_FILE, remainingCalls);
+
+      const tasks = readJSON<CRMTask[]>(CRM_TASKS_FILE, []);
+      const remainingTasks = tasks.filter(t => t.leadId !== targetId);
+      if (remainingTasks.length !== tasks.length) writeJSON(CRM_TASKS_FILE, remainingTasks);
+
+      return true;
+    });
   }
 
   mergeLeads(primaryId: number, duplicateId: number, author: string = "Admin"): CRMLead {
-    const primary = this.getLeadById(primaryId);
-    const duplicate = this.getLeadById(duplicateId);
-    if (!primary || !duplicate) throw new Error("Both leads must exist to perform merge");
+    if (Number(primaryId) === Number(duplicateId)) {
+      throw Object.assign(new Error("Primary and duplicate lead IDs must differ."), { status: 400 });
+    }
+    return transaction(() => {
+      const primary = this.getLeadById(primaryId);
+      const duplicate = this.getLeadById(duplicateId);
+      if (!primary || !duplicate) throw Object.assign(new Error("Both leads must exist to perform merge"), { status: 404 });
 
-    const mergedNotes = `${primary.adminNotes ? primary.adminNotes + "\n\n" : ""}[Merged from Lead #${duplicate.id} on ${new Date().toLocaleDateString()}]:\n${duplicate.message || ""}\n${duplicate.adminNotes || ""}`;
+      const mergedNotes = `${primary.adminNotes ? primary.adminNotes + "\n\n" : ""}[Merged from Lead #${duplicate.id} on ${new Date().toLocaleDateString()}]:\n${duplicate.message || ""}\n${duplicate.adminNotes || ""}`;
 
-    // Update primary
-    const updatedPrimary = this.updateLead(primaryId, {
-      adminNotes: mergedNotes,
-      phone: primary.phone || duplicate.phone,
-      whatsapp: primary.whatsapp || duplicate.whatsapp,
-      website: primary.website || duplicate.website,
-      facebookUrl: primary.facebookUrl || duplicate.facebookUrl,
-      instagramUrl: primary.instagramUrl || duplicate.instagramUrl,
-      linkedinUrl: primary.linkedinUrl || duplicate.linkedinUrl,
-      estimatedValue: Math.max(primary.estimatedValue || 0, duplicate.estimatedValue || 0)
-    }, author);
+      // Update primary
+      const updatedPrimary = this.updateLead(primaryId, {
+        adminNotes: mergedNotes,
+        phone: primary.phone || duplicate.phone,
+        whatsapp: primary.whatsapp || duplicate.whatsapp,
+        website: primary.website || duplicate.website,
+        facebookUrl: primary.facebookUrl || duplicate.facebookUrl,
+        instagramUrl: primary.instagramUrl || duplicate.instagramUrl,
+        linkedinUrl: primary.linkedinUrl || duplicate.linkedinUrl,
+        estimatedValue: Math.max(primary.estimatedValue || 0, duplicate.estimatedValue || 0)
+      }, author);
 
-    // Archive duplicate
-    this.updateLead(duplicateId, {
-      isArchived: true,
-      mergedIntoLeadId: primaryId,
-      status: "Archived",
-      adminNotes: `Merged into Lead #${primaryId}`
-    }, author);
+      // Archive duplicate
+      this.updateLead(duplicateId, {
+        isArchived: true,
+        mergedIntoLeadId: primaryId,
+        status: "Archived",
+        adminNotes: `Merged into Lead #${primaryId}`
+      }, author);
 
-    this.addActivity({
-      leadId: primaryId,
-      type: "note",
-      title: "Leads Merged",
-      description: `Lead #${duplicate.id} (${duplicate.company}) merged into this record.`,
-      author
+      this.addActivity({
+        leadId: primaryId,
+        type: "note",
+        title: "Leads Merged",
+        description: `Lead #${duplicate.id} (${duplicate.company}) merged into this record.`,
+        author
+      });
+
+      return updatedPrimary;
     });
-
-    return updatedPrimary;
   }
 
   // --- Activities ---
@@ -350,15 +378,17 @@ export class CRMStorage {
   }
 
   addActivity(act: Omit<CRMActivity, "id" | "createdAt">): CRMActivity {
-    const list = readJSON<CRMActivity[]>(CRM_ACTIVITIES_FILE, []);
-    const newAct: CRMActivity = {
-      ...act,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString()
-    };
-    list.unshift(newAct);
-    writeJSON(CRM_ACTIVITIES_FILE, list);
-    return newAct;
+    return transaction(() => {
+      const list = readJSON<CRMActivity[]>(CRM_ACTIVITIES_FILE, []);
+      const newAct: CRMActivity = {
+        ...act,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString()
+      };
+      list.unshift(newAct);
+      writeJSON(CRM_ACTIVITIES_FILE, list);
+      return newAct;
+    });
   }
 
   // --- Calls ---
@@ -374,49 +404,51 @@ export class CRMStorage {
   }
 
   addCall(record: Omit<CRMCallRecord, "id" | "createdAt">): CRMCallRecord {
-    const list = readJSON<CRMCallRecord[]>(CRM_CALLS_FILE, []);
-    const newRecord: CRMCallRecord = {
-      ...record,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString()
-    };
-    list.unshift(newRecord);
-    writeJSON(CRM_CALLS_FILE, list);
+    return transaction(() => {
+      const list = readJSON<CRMCallRecord[]>(CRM_CALLS_FILE, []);
+      const newRecord: CRMCallRecord = {
+        ...record,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString()
+      };
+      list.unshift(newRecord);
+      writeJSON(CRM_CALLS_FILE, list);
 
-    // Update lead follow-up & stage automatically based on outcome
-    const lead = this.getLeadById(record.leadId);
-    if (lead) {
-      let nextStage: PipelineStage = lead.stage;
-      let nextStatus: LeadStatus = lead.status;
+      // Update lead follow-up & stage automatically based on outcome
+      const lead = this.getLeadById(record.leadId);
+      if (lead) {
+        let nextStage: PipelineStage = lead.stage;
+        let nextStatus: LeadStatus = lead.status;
 
-      if (record.outcome === "Interested" || record.outcome === "Meeting Scheduled") {
-        if (lead.stage === "New" || lead.stage === "Researching" || lead.stage === "Contacted") {
-          nextStage = record.outcome === "Meeting Scheduled" ? "Meeting Scheduled" : "Qualified";
+        if (record.outcome === "Interested" || record.outcome === "Meeting Scheduled") {
+          if (lead.stage === "New" || lead.stage === "Researching" || lead.stage === "Contacted") {
+            nextStage = record.outcome === "Meeting Scheduled" ? "Meeting Scheduled" : "Qualified";
+          }
+        } else if (record.outcome === "Not Interested" || record.outcome === "Wrong Number") {
+          if (record.outcome === "Not Interested") nextStage = "Lost";
+        } else if (record.outcome === "Do Not Contact") {
+          nextStatus = "Lost";
+        } else if (lead.stage === "New") {
+          nextStage = "Contacted";
         }
-      } else if (record.outcome === "Not Interested" || record.outcome === "Wrong Number") {
-        if (record.outcome === "Not Interested") nextStage = "Lost";
-      } else if (record.outcome === "Do Not Contact") {
-        nextStatus = "Lost";
-      } else if (lead.stage === "New") {
-        nextStage = "Contacted";
+
+        this.updateLead(lead.id, {
+          stage: nextStage,
+          status: nextStatus,
+          nextFollowUpAt: record.nextFollowUpAt || lead.nextFollowUpAt
+        }, record.caller || "Admin");
+
+        this.addActivity({
+          leadId: lead.id,
+          type: "call",
+          title: `Call: ${record.outcome}`,
+          description: `${record.caller} called lead. Outcome: ${record.outcome}. Notes: ${record.notes || "None"}${record.nextFollowUpAt ? `. Next follow-up: ${new Date(record.nextFollowUpAt).toLocaleString()}` : ""}`,
+          author: record.caller || "Admin"
+        });
       }
 
-      this.updateLead(lead.id, {
-        stage: nextStage,
-        status: nextStatus,
-        nextFollowUpAt: record.nextFollowUpAt || lead.nextFollowUpAt
-      }, record.caller || "Admin");
-
-      this.addActivity({
-        leadId: lead.id,
-        type: "call",
-        title: `Call: ${record.outcome}`,
-        description: `${record.caller} called lead. Outcome: ${record.outcome}. Notes: ${record.notes || "None"}${record.nextFollowUpAt ? `. Next follow-up: ${new Date(record.nextFollowUpAt).toLocaleString()}` : ""}`,
-        author: record.caller || "Admin"
-      });
-    }
-
-    return newRecord;
+      return newRecord;
+    });
   }
 
   // --- Tasks & Follow-ups ---
@@ -430,38 +462,42 @@ export class CRMStorage {
   }
 
   addTask(task: Omit<CRMTask, "id" | "createdAt">): CRMTask {
-    const list = readJSON<CRMTask[]>(CRM_TASKS_FILE, []);
-    const lead = this.getLeadById(task.leadId);
+    return transaction(() => {
+      const list = readJSON<CRMTask[]>(CRM_TASKS_FILE, []);
+      const lead = this.getLeadById(task.leadId);
 
-    const newTask: CRMTask = {
-      ...task,
-      id: crypto.randomUUID(),
-      leadName: lead?.name,
-      companyName: lead?.company,
-      createdAt: new Date().toISOString()
-    };
-    list.push(newTask);
-    writeJSON(CRM_TASKS_FILE, list);
+      const newTask: CRMTask = {
+        ...task,
+        id: crypto.randomUUID(),
+        leadName: lead?.name,
+        companyName: lead?.company,
+        createdAt: new Date().toISOString()
+      };
+      list.push(newTask);
+      writeJSON(CRM_TASKS_FILE, list);
 
-    this.addActivity({
-      leadId: task.leadId,
-      type: "task",
-      title: "Task Created",
-      description: `Task assigned: "${task.title}". Due: ${new Date(task.dueAt).toLocaleDateString()}.`,
-      author: task.assignedTo || "Admin"
+      this.addActivity({
+        leadId: task.leadId,
+        type: "task",
+        title: "Task Created",
+        description: `Task assigned: "${task.title}". Due: ${new Date(task.dueAt).toLocaleDateString()}.`,
+        author: task.assignedTo || "Admin"
+      });
+
+      return newTask;
     });
-
-    return newTask;
   }
 
   updateTaskStatus(taskId: string, status: "pending" | "completed" | "cancelled"): CRMTask {
-    const list = readJSON<CRMTask[]>(CRM_TASKS_FILE, []);
-    const idx = list.findIndex(t => t.id === taskId);
-    if (idx === -1) throw new Error(`Task ${taskId} not found`);
+    return transaction(() => {
+      const list = readJSON<CRMTask[]>(CRM_TASKS_FILE, []);
+      const idx = list.findIndex(t => t.id === taskId);
+      if (idx === -1) throw Object.assign(new Error(`Task ${taskId} not found`), { status: 404 });
 
-    list[idx].status = status;
-    writeJSON(CRM_TASKS_FILE, list);
-    return list[idx];
+      list[idx].status = status;
+      writeJSON(CRM_TASKS_FILE, list);
+      return list[idx];
+    });
   }
 
   // --- Prospects & Prospect Finder ---
@@ -502,13 +538,16 @@ export class CRMStorage {
     searchProviderKey?: string;
     limit?: number;
   }): Promise<{ discovered: Prospect[]; duplicatesCount: number; newCount: number }> {
-    const existingProspects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    const existingLeads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
     const limit = params.limit || 10;
 
     // Filter through Saint Lucia public directory and query matches
     let candidates = readJSON<any[]>("business-directory.json", []);
-    if (!candidates.length) throw new Error("Import your business directory first. No live social-network search is configured.");
+    if (!candidates.length) {
+      throw Object.assign(
+        new Error("Import your business directory first. No live social-network search is configured."),
+        { status: 400 }
+      );
+    }
 
     if (params.location && params.location !== "all") {
       candidates = candidates.filter(b => (b.location || "").toLowerCase().includes(params.location!.toLowerCase()));
@@ -524,70 +563,75 @@ export class CRMStorage {
       );
     }
 
-    let duplicatesCount = 0;
-    const newlyDiscovered: Prospect[] = [];
+    return transaction(() => {
+      const existingProspects = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const existingLeads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []);
 
-    for (const b of candidates.slice(0, limit)) {
-      const existsInProspects = existingProspects.some(p => p.businessName.toLowerCase() === b.businessName.toLowerCase());
-      const existsInLeads = existingLeads.some(l => l.company.toLowerCase() === b.businessName.toLowerCase());
+      let duplicatesCount = 0;
+      const newlyDiscovered: Prospect[] = [];
 
-      if (existsInProspects || existsInLeads) {
-        duplicatesCount++;
-        continue;
+      for (const b of candidates.slice(0, limit)) {
+        const existsInProspects = existingProspects.some(p => p.businessName.toLowerCase() === b.businessName.toLowerCase());
+        const existsInLeads = existingLeads.some(l => l.company.toLowerCase() === b.businessName.toLowerCase());
+
+        if (existsInProspects || existsInLeads) {
+          duplicatesCount++;
+          continue;
+        }
+
+        const analysis = calculateDeterministicAnalysis(b);
+        const newProspect: Prospect = {
+          id: `prospect-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          businessName: b.businessName,
+          category: b.category || "Commercial",
+          industry: b.industry || "General Industry",
+          location: b.location || params.location || "Saint Lucia",
+          website: b.website,
+          phone: b.phone,
+          email: b.email,
+          facebookUrl: b.facebookUrl,
+          instagramUrl: b.instagramUrl,
+          linkedinUrl: b.linkedinUrl,
+          description: b.description || "",
+          companySize: b.companySize || "1–10",
+          sourceUrl: b.facebookUrl || b.website || "https://stlucia.org/business",
+          discoveredAt: new Date().toISOString(),
+          workflowStatus: "discovered",
+          aiAnalysis: analysis,
+          leadScore: analysis.leadScore,
+          scoreCategory: analysis.scoreCategory
+        };
+
+        existingProspects.unshift(newProspect);
+        newlyDiscovered.push(newProspect);
       }
 
-      const analysis = calculateDeterministicAnalysis(b);
-      const newProspect: Prospect = {
-        id: `prospect-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        businessName: b.businessName,
-        category: b.category || "Commercial",
-        industry: b.industry || "General Industry",
-        location: b.location || params.location || "Saint Lucia",
-        website: b.website,
-        phone: b.phone,
-        email: b.email,
-        facebookUrl: b.facebookUrl,
-        instagramUrl: b.instagramUrl,
-        linkedinUrl: b.linkedinUrl,
-        description: b.description || "",
-        companySize: b.companySize || "1–10",
-        sourceUrl: b.facebookUrl || b.website || "https://stlucia.org/business",
-        discoveredAt: new Date().toISOString(),
-        workflowStatus: "discovered",
-        aiAnalysis: analysis,
-        leadScore: analysis.leadScore,
-        scoreCategory: analysis.scoreCategory
+      writeJSON(CRM_PROSPECTS_FILE, existingProspects);
+
+      // Record Search Log
+      const searchLogs = readJSON<ProspectSearchLog[]>(CRM_SEARCHES_FILE, []);
+      const newLog: ProspectSearchLog = {
+        id: crypto.randomUUID(),
+        query: params.query || `Search in ${params.location || "All Saint Lucia"}`,
+        location: params.location || "All Saint Lucia",
+        category: params.category || "All Categories",
+        totalFound: candidates.length,
+        newProspects: newlyDiscovered.length,
+        duplicates: duplicatesCount,
+        approvedCount: 0,
+        rejectedCount: 0,
+        searchProvider: "Curated local directory (not a live web search)",
+        timestamp: new Date().toISOString()
       };
+      searchLogs.unshift(newLog);
+      writeJSON(CRM_SEARCHES_FILE, searchLogs);
 
-      existingProspects.unshift(newProspect);
-      newlyDiscovered.push(newProspect);
-    }
-
-    writeJSON(CRM_PROSPECTS_FILE, existingProspects);
-
-    // Record Search Log
-    const searchLogs = readJSON<ProspectSearchLog[]>(CRM_SEARCHES_FILE, []);
-    const newLog: ProspectSearchLog = {
-      id: crypto.randomUUID(),
-      query: params.query || `Search in ${params.location || "All Saint Lucia"}`,
-      location: params.location || "All Saint Lucia",
-      category: params.category || "All Categories",
-      totalFound: candidates.length,
-      newProspects: newlyDiscovered.length,
-      duplicates: duplicatesCount,
-      approvedCount: 0,
-      rejectedCount: 0,
-      searchProvider: "Curated local directory (not a live web search)",
-      timestamp: new Date().toISOString()
-    };
-    searchLogs.unshift(newLog);
-    writeJSON(CRM_SEARCHES_FILE, searchLogs);
-
-    return {
-      discovered: newlyDiscovered,
-      duplicatesCount,
-      newCount: newlyDiscovered.length
-    };
+      return {
+        discovered: newlyDiscovered,
+        duplicatesCount,
+        newCount: newlyDiscovered.length
+      };
+    });
   }
 
   getSearchHistory(): ProspectSearchLog[] {
@@ -630,39 +674,43 @@ export class CRMStorage {
   }
 
   approveProspectToLead(prospectId: string, author: string = "Admin"): CRMLead {
-    const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    const idx = list.findIndex(p => p.id === prospectId);
-    if (idx === -1) throw new Error(`Prospect ${prospectId} not found`);
-
-    const p = list[idx];
-    if (p.convertedLeadId) { const existing = this.getLeadById(p.convertedLeadId); if (existing) return existing; }
     return transaction(() => {
-    const { lead } = this.addLead({
-      name: p.businessName,
-      company: p.businessName,
-      phone: p.phone || "",
-      email: p.email || "",
-      whatsapp: p.phone || "",
-      serviceRequested: p.aiAnalysis?.recommendedServices[0] || "ICT Modernization",
-      message: `[Discovered Lead] ${p.description}`,
-      location: p.location,
-      businessCategory: p.category,
-      website: p.website,
-      facebookUrl: p.facebookUrl,
-      instagramUrl: p.instagramUrl,
-      linkedinUrl: p.linkedinUrl,
-      leadSource: "Prospect Finder",
-      pageOrigin: "Public Business Discovery",
-      stage: "Researching",
-      priority: p.leadScore >= 80 ? "High" : "Medium",
-      estimatedValue: p.leadScore >= 80 ? 12000 : 6000
-    }, author);
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const idx = list.findIndex(p => p.id === prospectId);
+      if (idx === -1) throw Object.assign(new Error(`Prospect ${prospectId} not found`), { status: 404 });
 
-    list[idx].workflowStatus = "approved";
-    list[idx].convertedLeadId = lead.id;
-    writeJSON(CRM_PROSPECTS_FILE, list);
+      const p = list[idx];
+      if (p.convertedLeadId) {
+        const existing = this.getLeadById(p.convertedLeadId);
+        if (existing) return existing;
+      }
 
-    return lead;
+      const { lead } = this.addLead({
+        name: p.businessName,
+        company: p.businessName,
+        phone: p.phone || "",
+        email: p.email || "",
+        whatsapp: p.phone || "",
+        serviceRequested: p.aiAnalysis?.recommendedServices[0] || "ICT Modernization",
+        message: `[Discovered Lead] ${p.description}`,
+        location: p.location,
+        businessCategory: p.category,
+        website: p.website,
+        facebookUrl: p.facebookUrl,
+        instagramUrl: p.instagramUrl,
+        linkedinUrl: p.linkedinUrl,
+        leadSource: "Prospect Finder",
+        pageOrigin: "Public Business Discovery",
+        stage: "Researching",
+        priority: p.leadScore >= 80 ? "High" : "Medium",
+        estimatedValue: p.leadScore >= 80 ? 12000 : 6000
+      }, author);
+
+      list[idx].workflowStatus = "approved";
+      list[idx].convertedLeadId = lead.id;
+      writeJSON(CRM_PROSPECTS_FILE, list);
+
+      return lead;
     });
   }
 
@@ -680,33 +728,38 @@ export class CRMStorage {
   }
 
   rejectProspect(prospectId: string): boolean {
-    const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    const idx = list.findIndex(p => p.id === prospectId);
-    if (idx === -1) return false;
-    list[idx].workflowStatus = "rejected";
-    writeJSON(CRM_PROSPECTS_FILE, list);
-    return true;
+    return transaction(() => {
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      const idx = list.findIndex(p => p.id === prospectId);
+      if (idx === -1) return false;
+      list[idx].workflowStatus = "rejected";
+      writeJSON(CRM_PROSPECTS_FILE, list);
+      return true;
+    });
   }
 
   bulkRejectProspects(prospectIds: string[]): number {
-    const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
-    let count = 0;
-    for (const id of prospectIds) {
-      const idx = list.findIndex(p => p.id === id);
-      if (idx !== -1) {
-        list[idx].workflowStatus = "rejected";
-        count++;
+    return transaction(() => {
+      const list = readJSON<Prospect[]>(CRM_PROSPECTS_FILE, []);
+      let count = 0;
+      for (const id of prospectIds) {
+        const idx = list.findIndex(p => p.id === id);
+        if (idx !== -1) {
+          list[idx].workflowStatus = "rejected";
+          count++;
+        }
       }
-    }
-    writeJSON(CRM_PROSPECTS_FILE, list);
-    return count;
+      writeJSON(CRM_PROSPECTS_FILE, list);
+      return count;
+    });
   }
 
   // --- Analytics & Reports ---
 
   getMetrics(): CRMMetrics {
     const leads = readJSON<CRMLead[]>(CRM_LEADS_FILE, []).filter(l => !l.isArchived);
-    const tasks = readJSON<CRMTask[]>(CRM_TASKS_FILE, []);
+    const activeLeadIds = new Set(leads.map(l => l.id));
+    const tasks = readJSON<CRMTask[]>(CRM_TASKS_FILE, []).filter(t => activeLeadIds.has(t.leadId));
 
     const totalLeads = leads.length;
     const newLeads = leads.filter(l => l.stage === "New").length;

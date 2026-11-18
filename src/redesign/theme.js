@@ -17,6 +17,8 @@
   function apply() {
     var preference = preferred();
     var actual = preference === 'auto' ? themeAt() : preference;
+    root.classList.toggle('dark', actual === 'dark');
+    root.classList.toggle('light', actual === 'light');
     root.dataset.theme = actual;
     root.dataset.themePreference = preference;
     root.style.colorScheme = actual;
@@ -44,7 +46,7 @@
     wrap.className = 'v79-appearance';
     wrap.setAttribute('role', 'group');
     wrap.setAttribute('aria-label', 'Appearance — Saint Lucia time');
-    wrap.innerHTML = '<span class="v79-appearance-label">Appearance</span><div class="v79-appearance-options">'
+    wrap.innerHTML = '<div class="v79-appearance-options">'
       + '<button type="button" data-v79-theme-choice="auto" aria-pressed="false" title="Automatic Saint Lucia time: light 06:00–17:59, dark 18:00–05:59">Auto</button>'
       + '<button type="button" data-v79-theme-choice="light" aria-pressed="false" title="Keep light mode until you choose Auto or Dark">Light</button>'
       + '<button type="button" data-v79-theme-choice="dark" aria-pressed="false" title="Keep dark mode until you choose Auto or Light">Dark</button>'

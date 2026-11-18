@@ -55,6 +55,10 @@ await test('production regression suite',{timeout:30000},async t=>{
   assert.equal(adminPage.headers.get('x-robots-tag'),'noindex, nofollow, noarchive');
   assert.ok(adminPage.text.includes('name="robots" content="noindex, nofollow, noarchive, noimageindex"'));
   const health=await anon.call('/api/health');
+  const unusualHost=await anon.call('/services','GET',undefined,{Host:'preview.invalid'});
+  assert.equal(unusualHost.headers.get('x-frame-options'),'SAMEORIGIN');
+  assert.match(unusualHost.headers.get('content-security-policy') || '', /frame-ancestors 'self';/);
+  assert.equal((await anon.call('/api/leads','POST',{name:'Blocked origin'},{Host:'preview.invalid',Origin:'https://preview.invalid'})).status,403);
   assert.equal(health.headers.get('x-robots-tag'),'noindex, nofollow');
   assert.equal(health.headers.get('cross-origin-opener-policy'),'same-origin');
   assert.equal(health.headers.get('x-permitted-cross-domain-policies'),'none');
@@ -64,7 +68,7 @@ await test('production regression suite',{timeout:30000},async t=>{
   const services=await anon.call('/services');
   assert.equal(services.status,200);
   assert.ok(services.text.includes(`<link rel="canonical" href="${base}/services" />`));
-  assert.ok(services.text.includes('Managed IT, Cybersecurity &amp; AI Services | V79 Digital'));
+  assert.ok(services.text.includes('V79 Ecosystem, Website &amp; ICT Services | V79 Digital'));
   assert.ok(services.text.includes('exploded-section'));
   for (const route of ['/services/cybersecurity','/apps/tiquet','/faq']) assert.equal((await anon.call(route)).status,200,route);
   assert.equal((await anon.call('/services/not-a-real-service')).status,404);

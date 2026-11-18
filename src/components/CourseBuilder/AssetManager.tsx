@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Course, Asset } from './courseBuilderTypes';
-import { FolderKanban, Upload, FileText, Video, Music, Image as ImageIcon, Trash2, ExternalLink } from 'lucide-react';
+import { FolderKanban, Upload, FileText, Video, Music, Image as ImageIcon, Trash2, ExternalLink, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { cbFetch } from './cbApi';
 
 interface AssetManagerProps {
@@ -12,50 +12,101 @@ export function AssetManager({ course }: AssetManagerProps) {
   const [name, setName] = useState('');
   const [fileType, setFileType] = useState<'video' | 'audio' | 'image' | 'pdf' | 'document' | 'download'>('pdf');
   const [url, setUrl] = useState('');
-  const [fileSize, setFileSize] = useState('2.1 MB');
+  const [fileSize, setFileSize] = useState('');
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
-    fetchAssets();
+    setConfirmDeleteId(null);
+    setNotice(null);
+    void fetchAssets();
   }, [course.id]);
 
   const fetchAssets = async () => {
     try {
       const res = await cbFetch(`/api/courses/${course.id}/assets`);
+      if (!res.ok) throw new Error('Failed to load course assets.');
       const data = await res.json();
-      setAssets(data);
-    } catch (e) {
-      console.error(e);
+      setAssets(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setNotice({ type: 'error', message: e?.message || 'Unable to load assets.' });
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFile(true);
+    setNotice(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await cbFetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || 'File upload failed.');
+      }
+      setUrl(data.url);
+      if (!name.trim()) setName(file.name);
+      const sizeKb = file.size / 1024;
+      setFileSize(sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(sizeKb))} KB`);
+      setNotice({ type: 'success', message: `Uploaded "${file.name}". Click Add Asset to attach it to this course.` });
+    } catch (err: any) {
+      setNotice({ type: 'error', message: err?.message || 'Unable to upload file.' });
+    } finally {
+      setUploadingFile(false);
     }
   };
 
   const handleAddAsset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    setNotice(null);
+    if (!name.trim()) {
+      setNotice({ type: 'error', message: 'Enter an asset name.' });
+      return;
+    }
+    if (!url.trim()) {
+      setNotice({ type: 'error', message: 'Upload a file or enter a valid asset URL.' });
+      return;
+    }
     try {
       const res = await cbFetch(`/api/courses/${course.id}/assets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name,
+          name: name.trim(),
           fileType,
-          url: url || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-          fileSize
+          url: url.trim(),
+          fileSize: fileSize.trim() || 'External'
         })
       });
-      if (res.ok) {
-        setName('');
-        setUrl('');
-        fetchAssets();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save asset.');
       }
-    } catch (e) {
-      console.error(e);
+      setName('');
+      setUrl('');
+      setFileSize('');
+      setNotice({ type: 'success', message: 'Asset attached to course.' });
+      await fetchAssets();
+    } catch (e: any) {
+      setNotice({ type: 'error', message: e?.message || 'Unable to save asset.' });
     }
   };
 
   const handleDeleteAsset = async (id: string) => {
-    if (!confirm('Delete this asset?')) return;
-    await cbFetch(`/api/assets/${id}`, { method: 'DELETE' });
-    fetchAssets();
+    try {
+      const res = await cbFetch(`/api/assets/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete asset.');
+      setConfirmDeleteId(null);
+      setNotice({ type: 'success', message: 'Asset removed.' });
+      await fetchAssets();
+    } catch (e: any) {
+      setNotice({ type: 'error', message: e?.message || 'Unable to delete asset.' });
+    }
   };
 
   const getAssetIcon = (type: string) => {
@@ -78,6 +129,24 @@ export function AssetManager({ course }: AssetManagerProps) {
           <FolderKanban className="w-6 h-6" />
         </div>
       </div>
+
+      {notice && (
+        <div
+          role={notice.type === 'error' ? 'alert' : 'status'}
+          className={`px-4 py-3 rounded-xl border text-xs flex items-center space-x-2 ${
+            notice.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          {notice.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          )}
+          <span>{notice.message}</span>
+        </div>
+      )}
 
       {/* Upload Asset Form */}
       <form onSubmit={handleAddAsset} className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-xs">
@@ -124,23 +193,44 @@ export function AssetManager({ course }: AssetManagerProps) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">File URL / Source Link</label>
-          <input
-            type="text"
-            placeholder="https://..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-800 font-mono"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">File URL / Source Link</label>
+            <input
+              type="text"
+              placeholder="https://... or /uploads/..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-800 font-mono"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Or Upload Local File</label>
+            <label className="flex items-center justify-center gap-2 w-full bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-lg px-3.5 py-2 text-xs font-medium text-slate-700 cursor-pointer transition-colors">
+              {uploadingFile ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 text-indigo-600" />
+                  <span>Choose file to upload</span>
+                </>
+              )}
+              <input type="file" onChange={handleFileUpload} disabled={uploadingFile} className="sr-only" />
+            </label>
+          </div>
         </div>
 
         <div className="flex justify-end pt-2">
           <button
             type="submit"
-            className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-md transition-all"
+            disabled={uploadingFile}
+            className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-md transition-all disabled:opacity-50"
           >
-            Upload Asset
+            Add Asset
           </button>
         </div>
       </form>
@@ -176,13 +266,33 @@ export function AssetManager({ course }: AssetManagerProps) {
                 >
                   <ExternalLink className="w-4 h-4" />
                 </a>
-                <button
-                  onClick={() => handleDeleteAsset(ast.id)}
-                  className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                  title="Delete Asset"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {confirmDeleteId === ast.id ? (
+                  <div className="flex items-center space-x-1">
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteAsset(ast.id)}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-semibold hover:bg-rose-700"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="px-2 py-1 rounded-lg text-slate-600 hover:bg-slate-100 text-[11px] font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(ast.id)}
+                    className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                    title="Delete Asset"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, X, BookOpen, Check } from 'lucide-react';
+import { Sparkles, X, Check, AlertCircle } from 'lucide-react';
 import { AppCategory, DifficultyLevel } from './courseBuilderTypes';
 import { cbFetch } from './cbApi';
 
@@ -14,11 +14,13 @@ export function AICourseAssistantModal({ onClose, onCourseCreated }: AICourseAss
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('Advanced');
   const [loading, setLoading] = useState(false);
   const [generatedPreview, setGeneratedPreview] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       const prompt = `Create a professional training course outline and metadata for V79 Academy application "${category}".
 Topic: ${topic}
@@ -38,7 +40,10 @@ Provide the response as JSON with fields:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, type: 'course_outline' })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to generate course outline.');
+      }
       if (data.result) {
         // Parse JSON from response
         let jsonStr = data.result;
@@ -49,10 +54,12 @@ Provide the response as JSON with fields:
         }
         const parsed = JSON.parse(jsonStr.trim());
         setGeneratedPreview(parsed);
+      } else {
+        throw new Error('No course outline was returned by the server.');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert('Failed to generate course with AI. Please check GEMINI_API_KEY.');
+      setError(e?.message || 'Failed to generate course outline.');
     } finally {
       setLoading(false);
     }
@@ -60,10 +67,10 @@ Provide the response as JSON with fields:
 
   const handleAcceptCourse = async () => {
     if (!generatedPreview) return;
+    setError(null);
     try {
       const res = await cbFetch('/api/courses', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...generatedPreview,
           category,
@@ -74,12 +81,14 @@ Provide the response as JSON with fields:
           status: 'Draft'
         })
       });
-      if (res.ok) {
-        onCourseCreated();
-        onClose();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create course.');
       }
-    } catch (e) {
-      console.error(e);
+      onCourseCreated();
+      onClose();
+    } catch (e: any) {
+      setError(e?.message || 'Unable to save generated course.');
     }
   };
 
@@ -94,10 +103,11 @@ Provide the response as JSON with fields:
             </div>
             <div>
               <h3 className="font-bold text-lg">AI Course Architect</h3>
-              <p className="text-xs text-indigo-100">Powered by Gemini 2.5 Flash</p>
+              <p className="text-xs text-indigo-100">Powered by V79 AI Curriculum Architect</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/10 transition-colors"
           >
@@ -107,6 +117,12 @@ Provide the response as JSON with fields:
 
         {/* Content */}
         <div className="p-6 flex-1 overflow-y-auto space-y-6">
+          {error && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2" role="alert">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
           {!generatedPreview ? (
             <form onSubmit={handleGenerate} className="space-y-4">
               <div>
