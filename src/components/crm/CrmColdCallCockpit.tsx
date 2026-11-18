@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Phone, MessageSquare, Clock, Sparkles, ChevronRight, CheckCircle2, AlertCircle, Copy, Check } from "lucide-react";
 import { CRMLead, CallOutcome } from "../../crm/types";
 
@@ -32,7 +32,11 @@ export function CrmColdCallCockpit({
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  useEffect(() => {
+    setCurrentIndex((i) => Math.max(0, Math.min(i, Math.max(0, activeQueue.length - 1))));
+  }, [activeQueue.length]);
   const activeLead: CRMLead | undefined = activeQueue[currentIndex] || activeQueue[0];
+  const hasPhone = Boolean(activeLead?.phone?.trim());
 
   const handleCopyPhone = (phone: string) => {
     try {
@@ -179,19 +183,30 @@ export function CrmColdCallCockpit({
                   <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
                     Phone / WhatsApp Contact
                   </span>
-                  <span className="text-2xl font-mono font-black text-app-text tracking-tight">
-                    {activeLead.phone}
+                  <span className={`text-2xl font-mono font-black tracking-tight ${hasPhone ? "text-app-text" : "text-sm font-medium text-app-text-muted"}`}>
+                    {hasPhone ? activeLead.phone : "No phone number on file"}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <a
-                    href={`tel:${activeLead.phone}`}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition"
-                  >
-                    <Phone className="w-4 h-4" />
-                    <span>Call Now</span>
-                  </a>
+                  {hasPhone ? (
+                    <a
+                      href={`tel:${activeLead.phone}`}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition"
+                    >
+                      <Phone className="w-4 h-4" />
+                      <span>Call Now</span>
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="px-4 py-2.5 rounded-xl bg-app-btn-sec text-app-text-muted font-bold text-xs flex items-center gap-2 opacity-50 cursor-not-allowed"
+                    >
+                      <Phone className="w-4 h-4" />
+                      <span>No Phone</span>
+                    </button>
+                  )}
 
                   {activeLead.whatsapp && (
                     <a
@@ -206,8 +221,10 @@ export function CrmColdCallCockpit({
                   )}
 
                   <button
-                    onClick={() => handleCopyPhone(activeLead.phone)}
-                    className="p-2.5 rounded-xl bg-app-btn-sec hover:bg-app-btn-sec/80 text-app-text transition cursor-pointer"
+                    type="button"
+                    disabled={!hasPhone}
+                    onClick={() => hasPhone && handleCopyPhone(activeLead.phone)}
+                    className="p-2.5 rounded-xl bg-app-btn-sec hover:bg-app-btn-sec/80 text-app-text transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     title="Copy Phone Number"
                   >
                     {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}

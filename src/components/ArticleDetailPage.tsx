@@ -49,7 +49,7 @@ export function ArticleDetailPage({
       .then((data) => {
         setArticle(data);
         if (data.title) {
-          document.title = `${data.title} | Vision79 Digital`;
+          document.title = `${data.title} | V79 Digital`;
         }
         if (data.coverImage) {
           let ogImageTag = document.querySelector('meta[property="og:image"]');
@@ -86,7 +86,7 @@ export function ArticleDetailPage({
       .catch(() => {});
 
     return () => {
-      document.title = "Managed IT Services & Cybersecurity Saint Lucia | Vision79 Digital";
+      document.title = "Managed IT, Cloud & Business Software Saint Lucia | V79 Digital";
     };
   }, [slug]);
 
@@ -137,7 +137,7 @@ export function ArticleDetailPage({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="pt-24 pb-20 px-6 lg:px-8 max-w-4xl mx-auto space-y-8"
+      className="pt-24 sm:pt-28 pb-20 px-6 lg:px-8 max-w-4xl mx-auto space-y-8"
     >
       {/* Top Navigation Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-app-border">
@@ -151,7 +151,7 @@ export function ArticleDetailPage({
         </button>
 
         <div className="flex items-center gap-2 text-[11px] font-mono text-app-text-muted">
-          <span>Vision79 Knowledge Base</span>
+          <span>V79 Digital Knowledge Base</span>
           <span>/</span>
           <span className="text-indigo-400 uppercase tracking-wider font-semibold">
             {article.category}
@@ -240,15 +240,15 @@ export function ArticleDetailPage({
         />
       </div>
 
-      {/* Author & Vision79 Trust Card */}
+      {/* Author & V79 Digital Trust Card */}
       <div className="glass rounded-2xl p-6 border border-app-border space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-base font-bold font-display text-app-text dark:text-white">
-              About Vision79 Digital
+              About V79 Digital
             </h2>
             <p className="text-xs text-app-text-sec font-light max-w-xl leading-relaxed">
-              Founded by telecommunications architect Neil Verdant (25+ years Caribbean telecom heritage), Vision79 Digital provides enterprise managed IT services, automated daily cloud backups, cybersecurity, and 4-hour on-site SLAs across Saint Lucia.
+              Founded by telecommunications architect Neil Verdant (20+ years Caribbean telecom heritage), V79 Digital provides enterprise managed IT services, automated daily cloud backups, cybersecurity, and practical business software across Saint Lucia.
             </p>
           </div>
           <a

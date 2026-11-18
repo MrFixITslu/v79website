@@ -15,7 +15,8 @@ export function Sidebar({ currentView, setCurrentView, selectedAppCategory, setS
     'Fire Finance Pro (FFPRO2)',
     'SIWM',
     'Tiquet',
-    'KashDash'
+    'KashDash',
+    'General'
   ];
 
   return (

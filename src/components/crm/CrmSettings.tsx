@@ -5,6 +5,7 @@ import { CRMLead } from "../../crm/types";
 interface CrmSettingsProps {
   ollamaConnected: boolean;
   ollamaModel?: string;
+  ollamaUrl?: string;
   onTestOllama: () => Promise<void>;
   leadsCount: number;
   leads?: CRMLead[];
@@ -13,12 +14,14 @@ interface CrmSettingsProps {
 export function CrmSettings({
   ollamaConnected,
   ollamaModel,
+  ollamaUrl,
   onTestOllama,
   leadsCount,
   leads = []
 }: CrmSettingsProps) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const handleTest = async () => {
     setTesting(true);
@@ -34,6 +37,7 @@ export function CrmSettings({
   };
 
   const handleExportJson = () => {
+    setExportError(null);
     try {
       const jsonStr = JSON.stringify(leads, null, 2);
       const blob = new Blob([jsonStr], { type: "application/json" });
@@ -45,9 +49,8 @@ export function CrmSettings({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Export failed:", e);
-      window.open("/api/admin/crm/leads", "_blank");
+    } catch {
+      setExportError("Could not export CRM leads JSON. Please try again.");
     }
   };
 
@@ -111,7 +114,7 @@ export function CrmSettings({
               <input
                 type="text"
                 disabled
-                value="http://localhost:11434"
+                value={ollamaUrl || "Not configured (Ollama disabled)"}
                 className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2 font-mono text-xs"
               />
             </div>
@@ -224,6 +227,11 @@ export function CrmSettings({
             <span>Export Raw JSON</span>
           </button>
         </div>
+        {exportError && (
+          <div role="alert" className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-xs">
+            {exportError}
+          </div>
+        )}
       </div>
     </div>
   );

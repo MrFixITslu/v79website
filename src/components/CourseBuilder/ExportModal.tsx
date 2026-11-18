@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Course } from './courseBuilderTypes';
-import { X, Download, Folder, FileJson, FileText, CheckCircle2 } from 'lucide-react';
+import { X, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import JSZip from 'jszip';
 import { cbFetch } from './cbApi';
 
@@ -13,18 +13,21 @@ export function ExportModal({ course, onClose }: ExportModalProps) {
   const [packageData, setPackageData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchPackage();
+    void fetchPackage();
   }, [course.id]);
 
   const fetchPackage = async () => {
     try {
+      setExportError(null);
       const res = await cbFetch(`/api/courses/${course.id}/export-package`);
+      if (!res.ok) throw new Error('Failed to load export package.');
       const data = await res.json();
       setPackageData(data);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setExportError(e?.message || 'Failed to load package preview.');
     } finally {
       setLoading(false);
     }
@@ -33,6 +36,7 @@ export function ExportModal({ course, onClose }: ExportModalProps) {
   const handleDownloadZip = async () => {
     if (!packageData) return;
     setExporting(true);
+    setExportError(null);
     try {
       const zip = new JSZip();
       const folderName = `v79-academy-course-${course.id}`;
@@ -41,18 +45,18 @@ export function ExportModal({ course, onClose }: ExportModalProps) {
       if (!courseFolder) return;
 
       courseFolder.file('course.json', JSON.stringify(packageData['course.json'], null, 2));
-      courseFolder.file('README.md', packageData['README.md']);
+      courseFolder.file('README.md', packageData['README.md'] || '');
 
       const modulesFolder = courseFolder.folder('modules');
-      if (modulesFolder) {
+      if (modulesFolder && Array.isArray(packageData.modules)) {
         packageData.modules.forEach((mod: any, mIdx: number) => {
-          const modFolder = modulesFolder.folder(`module-0${mIdx + 1}`);
+          const modFolder = modulesFolder.folder(`module-${String(mIdx + 1).padStart(2, '0')}`);
           if (modFolder) {
             modFolder.file('module.json', JSON.stringify(mod, null, 2));
             const lessonsFolder = modFolder.folder('lessons');
-            if (lessonsFolder && mod.lessons) {
+            if (lessonsFolder && Array.isArray(mod.lessons)) {
               mod.lessons.forEach((les: any, lIdx: number) => {
-                const lesFolder = lessonsFolder.folder(`lesson-0${lIdx + 1}`);
+                const lesFolder = lessonsFolder.folder(`lesson-${String(lIdx + 1).padStart(2, '0')}`);
                 if (lesFolder) {
                   lesFolder.file('content.json', JSON.stringify(les, null, 2));
                 }
@@ -60,6 +64,18 @@ export function ExportModal({ course, onClose }: ExportModalProps) {
             }
           }
         });
+      }
+
+      const quizzesFolder = courseFolder.folder('quizzes');
+      if (quizzesFolder && Array.isArray(packageData.quizzes)) {
+        packageData.quizzes.forEach((quiz: any, qIdx: number) => {
+          quizzesFolder.file(`quiz-${String(qIdx + 1).padStart(2, '0')}.json`, JSON.stringify(quiz, null, 2));
+        });
+      }
+
+      const assetsFolder = courseFolder.folder('assets');
+      if (assetsFolder) {
+        assetsFolder.file('manifest.json', JSON.stringify(packageData.assets || [], null, 2));
       }
 
       const content = await zip.generateAsync({ type: 'blob' });
@@ -71,9 +87,9 @@ export function ExportModal({ course, onClose }: ExportModalProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (e) {
+    } catch (e: any) {
       console.error('ZIP generation error:', e);
-      alert('Failed to generate zip package.');
+      setExportError(e?.message || 'Failed to generate zip package.');
     } finally {
       setExporting(false);
     }
@@ -94,6 +110,7 @@ export function ExportModal({ course, onClose }: ExportModalProps) {
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
           >
@@ -103,6 +120,13 @@ export function ExportModal({ course, onClose }: ExportModalProps) {
 
         {/* Content */}
         <div className="p-6 flex-1 overflow-y-auto space-y-6">
+          {exportError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2" role="alert">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{exportError}</span>
+            </div>
+          )}
+
           {loading ? (
             <div className="text-center py-12 text-slate-400">Loading package structure...</div>
           ) : packageData ? (

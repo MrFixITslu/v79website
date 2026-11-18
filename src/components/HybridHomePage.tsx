@@ -85,14 +85,11 @@ export default function HybridHomePage() {
 
   return (
     <div className="overflow-hidden">
-      <section aria-labelledby="home-headline" className="relative isolate overflow-hidden bg-app-bg px-6 pt-12 pb-20 sm:pt-20 lg:px-12 lg:pt-24 lg:pb-28">
+      <section aria-labelledby="home-headline" className="relative isolate overflow-hidden bg-app-bg px-6 pt-8 pb-20 sm:pt-12 lg:px-12 lg:pt-14 lg:pb-28">
         <div aria-hidden="true" className="pointer-events-none absolute -right-28 top-4 h-80 w-80 rounded-full border border-v79-teal/10 sm:h-[32rem] sm:w-[32rem]" />
         <div aria-hidden="true" className="pointer-events-none absolute -right-10 top-16 h-72 w-72 rounded-full border border-v79-teal/10 sm:h-[27rem] sm:w-[27rem]" />
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
-          <div className="space-y-7">
-            <div className="inline-flex items-center gap-2 rounded-full border border-v79-teal/25 bg-v79-teal/5 px-4 py-2 text-xs font-semibold tracking-wide text-v79-teal-dark dark:text-v79-teal-light">
-              <MapPin aria-hidden="true" className="h-4 w-4" /> Saint Lucia roots · Caribbean reach
-            </div>
+          <div className="space-y-6">
             <h1 id="home-headline" className="max-w-4xl font-display text-4xl font-extrabold leading-[1.09] tracking-tight text-app-text sm:text-5xl lg:text-[clamp(3rem,4.8vw,5rem)] dark:text-white">
               Technology that helps your business <span className="text-v79-teal-dark dark:text-v79-teal-light">move forward.</span>
             </h1>

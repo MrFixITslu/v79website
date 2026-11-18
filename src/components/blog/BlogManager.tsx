@@ -28,7 +28,7 @@ const emptyForm = {
   title: "",
   description: "",
   category: "General",
-  author: "Vision79 Digital Expert",
+  author: "V79 Digital Expert",
   date: new Date().toISOString().split("T")[0],
   coverImage: "",
   content: ""
@@ -56,20 +56,10 @@ export function BlogManager({ adminToken, onUnauthorized }: BlogManagerProps) {
   const inlineFileInputRef = useRef<HTMLInputElement | null>(null);
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const getHeaders = useCallback((withJson: boolean) => {
-    let token = adminToken;
-    if (!token) {
-      try {
-        token = sessionStorage.getItem("admin-token");
-      } catch {
-        token = null;
-      }
-    }
-    return {
-      ...(withJson ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    };
-  }, [adminToken]);
+  const getHeaders = useCallback((withJson: boolean) => ({
+    ...(withJson ? { "Content-Type": "application/json" } : {}),
+    ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {})
+  }), [adminToken]);
 
   const fetchPosts = useCallback(async () => {
     setIsLoading(true);
@@ -116,7 +106,7 @@ export function BlogManager({ adminToken, onUnauthorized }: BlogManagerProps) {
         title: data.title || "",
         description: data.description || "",
         category: data.category || "General",
-        author: data.author || "Vision79 Digital Expert",
+        author: data.author || "V79 Digital Expert",
         date: data.date || new Date().toISOString().split("T")[0],
         coverImage: data.coverImage || "",
         content: data.content || ""
@@ -150,6 +140,7 @@ export function BlogManager({ adminToken, onUnauthorized }: BlogManagerProps) {
       const method = editingSlug ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
+        credentials: "same-origin",
         headers: getHeaders(true),
         body: JSON.stringify(form)
       });
@@ -177,6 +168,7 @@ export function BlogManager({ adminToken, onUnauthorized }: BlogManagerProps) {
     try {
       const res = await fetch(`/api/admin/articles/${deleteTarget.slug}`, {
         method: "DELETE",
+        credentials: "same-origin",
         headers: getHeaders(false)
       });
       if (res.status === 401) {
@@ -202,6 +194,7 @@ export function BlogManager({ adminToken, onUnauthorized }: BlogManagerProps) {
     formData.append("file", file);
     const res = await fetch("/api/upload", {
       method: "POST",
+      credentials: "same-origin",
       headers: getHeaders(false),
       body: formData
     });

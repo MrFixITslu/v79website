@@ -19,7 +19,6 @@ import {
   MessageSquare, 
   Send, 
   Sparkles, 
-  Code, 
   Video,
   FileText,
   BadgeAlert,
@@ -46,6 +45,14 @@ interface CourseDetailPageProps {
   onBack: () => void;
 }
 
+interface LectureDownload {
+  name?: string;
+  title?: string;
+  fileType?: string;
+  url: string;
+  fileSize?: string;
+}
+
 interface Lecture {
   id: string;
   title: string;
@@ -54,6 +61,7 @@ interface Lecture {
   videoUrl?: string;
   audioUrl?: string;
   readingMaterial?: string;
+  downloads?: LectureDownload[];
 }
 
 interface Chapter {
@@ -66,6 +74,7 @@ export function CourseDetailPage(props: CourseDetailPageProps) { return <Learner
 function CourseDetailContent({ course: initialCourse, onBack, student }: CourseDetailPageProps & {student:Learner}) {
   const [course,setCourse] = useState(initialCourse);
   const [syncError,setSyncError] = useState("");
+  const [lectureNotice, setLectureNotice] = useState<string | null>(null);
   const [loaded,setLoaded] = useState(false);
   const [saveVersion,setSaveVersion] = useState(0);
   // Persistence state for course purchases
@@ -74,6 +83,20 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
 
   const studentId = student.id;
   const [completedLectures,setCompletedLectures] = useState<Record<string,boolean>>({});
+  const chapters: Chapter[] = useMemo(() => {
+    if (course.curriculum) {
+      try {
+        const parsed = JSON.parse(course.curriculum);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as Chapter[];
+        }
+      } catch (e) {
+        console.error("Failed to parse course curriculum JSON:", e);
+      }
+    }
+    return [];
+  }, [course.curriculum]);
+
   const handleToggleLectureComplete = (id:string, complete:boolean) => { setCompletedLectures(p=>({...p,[id]:complete})); setSaveVersion(v=>v+1); };
   const handleToggleAllLectures = (complete:boolean) => { setCompletedLectures(Object.fromEntries(chapters.flatMap(c=>c.lectures).map(l=>[l.id,complete]))); setSaveVersion(v=>v+1); };
   // Checking/resetting purchase state based on price/type
@@ -208,25 +231,6 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
     if (audioElRef.current) audioElRef.current.playbackRate = playbackSpeed;
   }, [playbackSpeed, activeLecture]);
 
-  const chapters: Chapter[] = useMemo(() => {
-    if (course.curriculum) {
-      try {
-        const parsed = JSON.parse(course.curriculum);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed as Chapter[];
-        }
-      } catch (e) {
-        console.error("Failed to parse course curriculum JSON:", e);
-      }
-    }
-    // No real curriculum has been authored for this course yet. Previously
-    // this returned a hardcoded fake demo curriculum ("Block 1: Production
-    // Core Architecture Swaps & Setup" etc.) with made-up lecture titles and
-    // durations - that data didn't correspond to anything real, so it has
-    // been removed. Callers should render an empty/curriculum-pending state.
-    return [];
-  }, [course.curriculum]);
-
   // Set default initial active lecture
   useEffect(() => {
     if (chapters.length > 0 && chapters[0].lectures.length > 0) {
@@ -236,9 +240,10 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
 
   const handleSelectLecture = (lec: Lecture) => {
     if (!isEnrolled && !lec.freePreview) {
-      alert("Request enrollment to access this lecture. Paid courses require staff approval; no payment is taken here.");
+      setLectureNotice("Request enrollment to access this lecture. Paid courses require staff approval; no payment is taken here.");
       return;
     }
+    setLectureNotice(null);
     setActiveLecture(lec);
   };
 
@@ -254,7 +259,7 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
   // enrollment in your learner account.
   const handleCheckoutSubmit = async () => {
     setPayError(null);setIsPaying(true);
-    try { const r=await fetch('/api/student/courses/'+course.id+'/enroll',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error);await refreshLearning();if(!d.state.enrolled)setPayError(d.message); }
+    try { const r=await fetch('/api/student/courses/'+course.id+'/enroll',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error);await refreshLearning();if(d.state.enrolled){setLectureNotice(null);}else{setPayError(d.message);} }
     catch(e){setPayError((e as Error).message);}finally{setIsPaying(false);}
   };
   const saveNote = (txt:string) => {setStudentNote(txt);setSaveVersion(v=>v+1);};
@@ -266,12 +271,12 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
   };
 
   return (
-    <div id="course-details-layout" className="w-full flex flex-col min-h-screen text-app-text antialiased">
+    <div id="course-details-layout" className="w-full flex flex-col min-h-screen pt-20 sm:pt-24 text-app-text antialiased">
       {syncError && <div role="alert" className="p-3 border border-red-500">{syncError} <button onClick={()=>setSaveVersion(v=>v+1)}>Retry saving</button></div>}
 
       
       {/* PROFESSIONAL TITLE BACK ACTION BAR */}
-      <div className="flex items-center justify-between border-b border-app-border bg-app-aside-bg/30 p-4 sticky top-0 backdrop-blur-md z-40">
+      <div className="flex items-center justify-between border-b border-app-border bg-app-aside-bg/30 p-4 backdrop-blur-md">
         <button 
           onClick={onBack}
           className="flex items-center gap-2 text-xs font-mono font-medium hover:text-indigo-400 text-app-text-sec transition cursor-pointer"
@@ -280,7 +285,7 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
           Back to Courses Catalog
         </button>
         <span className="text-[10px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-mono tracking-wider px-2.5 py-0.5 rounded-full uppercase">
-          Vision79 Masterclass
+          V79 Digital Masterclass
         </span>
       </div>
 
@@ -327,6 +332,18 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
         
         {/* LEFT COLUMN: CURRICULUM + VIDEO PLAYER + NOTES */}
         <div className="lg:col-span-8 flex flex-col gap-6 min-w-0">
+          {lectureNotice && (
+            <div role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200 flex items-center justify-between gap-3">
+              <span>{lectureNotice}</span>
+              <button
+                type="button"
+                onClick={() => setLectureNotice(null)}
+                className="text-[11px] font-mono underline shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           
           {/* INTERACTIVE VIDEO LESSON SIMULATOR STREAM PLAYER */}
           <div className="relative overflow-hidden rounded-2xl border border-app-border bg-black shadow-2xl group flex flex-col">
@@ -614,7 +631,7 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
                   >
                     <div className="flex items-center gap-1.5 text-xs font-mono text-app-text-muted pb-1">
                       <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Take interactive notes that auto-save instantly to your local vault.</span>
+                      <span>Take interactive notes synced automatically with your V79 Academy learner account.</span>
                     </div>
 
                     <textarea
@@ -625,7 +642,7 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
                       className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-3 text-xs font-mono placeholder:text-app-text-muted/50 focus:outline-none focus:border-indigo-500 transition-all leading-relaxed"
                     />
                     <div className="flex items-center justify-between text-[10px] font-mono text-app-text-muted">
-                      <span>Notes storage: Local secure sandbox browser vault</span>
+                      <span>Notes storage: Saved to your V79 Academy learner account</span>
                       <span>{studentNote.length} characters written</span>
                     </div>
                   </motion.div>
@@ -701,29 +718,60 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
                     exit={{ opacity: 0 }}
                     className="space-y-4"
                   >
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                      <div className="p-4 rounded-xl border border-app-border bg-app-btn-sec/5 hover:border-indigo-500/40 transition flex items-start gap-3">
-                        <Code className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                        <div className="space-y-1 min-w-0">
-                          <p className="text-xs font-semibold text-app-text truncate">VISION79 Core Stack Boilerplate</p>
-                          <p className="text-[10px] text-app-text-muted leading-relaxed">Boilerplate template complete with dynamic SQLite setup schemas and port maps.</p>
-                          <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 font-mono inline-block pt-1 hover:underline">
-                            Download Source .zip →
-                          </a>
+                    {(() => {
+                      const activeDownloads = Array.isArray(activeLecture?.downloads) ? activeLecture.downloads : [];
+                      const allDownloadsMap = new Map<string, LectureDownload>();
+                      for (const dl of activeDownloads) {
+                        if (dl?.url) allDownloadsMap.set(dl.url, dl);
+                      }
+                      for (const chap of chapters) {
+                        for (const lec of chap.lectures) {
+                          if (!isEnrolled && !lec.freePreview) continue;
+                          for (const dl of lec.downloads || []) {
+                            if (dl?.url && !allDownloadsMap.has(dl.url)) {
+                              allDownloadsMap.set(dl.url, dl);
+                            }
+                          }
+                        }
+                      }
+                      const resourceList = Array.from(allDownloadsMap.values());
+                      if (resourceList.length === 0) {
+                        return (
+                          <div className="p-8 text-center border border-dashed border-app-border/60 rounded-xl text-app-text-muted space-y-1">
+                            <FileText className="w-7 h-7 text-zinc-600 mx-auto" />
+                            <p className="text-xs font-medium text-app-text">No downloadable files attached yet.</p>
+                            <p className="text-[10px] font-mono text-app-text-muted">
+                              Any templates, guides, or datasets published with this course will appear here.
+                            </p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          {resourceList.map((dl, idx) => (
+                            <div key={`${dl.url}-${idx}`} className="p-4 rounded-xl border border-app-border bg-app-btn-sec/5 hover:border-indigo-500/40 transition flex items-start gap-3">
+                              <FileText className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                              <div className="space-y-1 min-w-0">
+                                <p className="text-xs font-semibold text-app-text truncate">
+                                  {dl.name || dl.title || `Course Resource ${idx + 1}`}
+                                </p>
+                                <p className="text-[10px] text-app-text-muted leading-relaxed uppercase font-mono">
+                                  {[dl.fileType, dl.fileSize].filter(Boolean).join(" · ") || "Downloadable resource"}
+                                </p>
+                                <a
+                                  href={dl.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-indigo-400 font-mono inline-block pt-1 hover:underline"
+                                >
+                                  Download resource →
+                                </a>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      </div>
-
-                      <div className="p-4 rounded-xl border border-app-border bg-app-btn-sec/5 hover:border-indigo-500/40 transition flex items-start gap-3">
-                        <FileText className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                        <div className="space-y-1 min-w-0">
-                          <p className="text-xs font-semibold text-app-text truncate">Production Alter Migration Script</p>
-                          <p className="text-[10px] text-app-text-muted leading-relaxed">Reference script compiling dynamic columns migration commands cleanly.</p>
-                          <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-emerald-400 font-mono inline-block pt-1 hover:underline">
-                            View Raw TS Snippet →
-                          </a>
-                        </div>
-                      </div>
-                    </div>
+                      );
+                    })()}
                   </motion.div>
                 )}
 
@@ -741,13 +789,13 @@ function CourseDetailContent({ course: initialCourse, onBack, student }: CourseD
                         <span className="text-3xl font-bold font-display text-app-text">
                           {(feedbacks.length > 0
                             ? (feedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbacks.length).toFixed(1)
-                            : (course.rating || 4.7).toFixed(1))}
+                            : Number(course.rating ?? 0).toFixed(1))}
                         </span>
                         <div className="flex justify-center gap-0.5 text-amber-400">
                           {Array.from({ length: 5 }).map((_, i) => {
                             const avg = feedbacks.length > 0
                               ? feedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbacks.length
-                              : course.rating || 4.7;
+                              : Number(course.rating ?? 0);
                             return (
                               <Star
                                 key={i}

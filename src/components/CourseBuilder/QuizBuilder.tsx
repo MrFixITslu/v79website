@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Lesson, Quiz, QuizQuestion } from './courseBuilderTypes';
-import { Plus, Trash2, ArrowLeft, CheckCircle2, HelpCircle } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cbFetch } from './cbApi';
 
 interface QuizBuilderProps {
@@ -13,6 +13,7 @@ export function QuizBuilder({ lesson, onBack }: QuizBuilderProps) {
   const [title, setTitle] = useState('');
   const [passingScore, setPassingScore] = useState(80);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // New question form state
   const [qText, setQText] = useState('');
@@ -22,12 +23,14 @@ export function QuizBuilder({ lesson, onBack }: QuizBuilderProps) {
   const [explanation, setExplanation] = useState('');
 
   useEffect(() => {
-    fetchQuiz();
+    setNotice(null);
+    void fetchQuiz();
   }, [lesson.id]);
 
   const fetchQuiz = async () => {
     try {
       const res = await cbFetch(`/api/lessons/${lesson.id}/quiz`);
+      if (!res.ok) throw new Error('Failed to load quiz.');
       const data = await res.json();
       if (data) {
         setQuiz(data);
@@ -35,61 +38,83 @@ export function QuizBuilder({ lesson, onBack }: QuizBuilderProps) {
         setPassingScore(data.passingScore);
         setQuestions(data.questions || []);
       } else {
+        setQuiz(null);
         setTitle(`${lesson.title} Assessment`);
         setPassingScore(80);
         setQuestions([]);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setNotice({ type: 'error', message: e?.message || 'Unable to load lesson quiz.' });
     }
   };
 
   const handleAddQuestion = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!qText.trim()) return;
+    setNotice(null);
+    if (!qText.trim()) {
+      setNotice({ type: 'error', message: 'Enter a question prompt before adding.' });
+      return;
+    }
+
+    const cleanOptions = qType === 'multiple_choice'
+      ? options.map((o) => o.trim()).filter((o) => o !== '')
+      : ['True', 'False'];
+
+    if (cleanOptions.length < 2) {
+      setNotice({ type: 'error', message: 'Provide at least two non-empty answer options.' });
+      return;
+    }
+
+    const resolvedCorrect = correctAnswer.trim();
+    if (!resolvedCorrect || !cleanOptions.includes(resolvedCorrect)) {
+      setNotice({ type: 'error', message: 'Select which answer option is correct.' });
+      return;
+    }
 
     const newQ: QuizQuestion = {
       id: `q-${Date.now()}`,
       quizId: quiz?.id || `quiz-${Date.now()}`,
-      questionText: qText,
+      questionText: qText.trim(),
       questionType: qType,
-      options: qType === 'multiple_choice' ? options.filter(o => o.trim() !== '') : ['True', 'False'],
-      correctAnswer: correctAnswer || (qType === 'true_false' ? 'True' : options[0]),
-      explanation: explanation || 'Correct answer based on lesson material.',
+      options: cleanOptions,
+      correctAnswer: resolvedCorrect,
+      explanation: explanation.trim() || 'Correct answer based on lesson material.',
       orderNumber: questions.length + 1
     };
 
-    const updatedQuestions = [...questions, newQ];
-    setQuestions(updatedQuestions);
+    setQuestions([...questions, newQ]);
 
-    // Reset form
+    // Reset form completely
     setQText('');
     setExplanation('');
     setOptions(['', '', '', '']);
+    setCorrectAnswer(qType === 'true_false' ? 'True' : '');
   };
 
   const handleDeleteQuestion = (qId: string) => {
-    setQuestions(questions.filter(q => q.id !== qId));
+    setQuestions(questions.filter((q) => q.id !== qId));
   };
 
   const handleSaveQuiz = async () => {
+    setNotice(null);
     try {
       const res = await cbFetch(`/api/lessons/${lesson.id}/quiz`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
           passingScore,
           questions
         })
       });
-      if (res.ok) {
-        const saved = await res.json();
-        setQuiz(saved);
-        alert('Quiz saved successfully!');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save quiz.');
       }
-    } catch (e) {
-      console.error(e);
+      const saved = await res.json();
+      setQuiz(saved);
+      setNotice({ type: 'success', message: 'Quiz saved successfully.' });
+    } catch (e: any) {
+      setNotice({ type: 'error', message: e?.message || 'Unable to save quiz.' });
     }
   };
 
@@ -99,6 +124,7 @@ export function QuizBuilder({ lesson, onBack }: QuizBuilderProps) {
       <div className="flex items-center justify-between pb-6 border-b border-slate-200">
         <div className="flex items-center space-x-3">
           <button
+            type="button"
             onClick={onBack}
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
           >
@@ -110,6 +136,7 @@ export function QuizBuilder({ lesson, onBack }: QuizBuilderProps) {
           </div>
         </div>
         <button
+          type="button"
           onClick={handleSaveQuiz}
           className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 shadow-md transition-all flex items-center space-x-2"
         >
@@ -117,6 +144,24 @@ export function QuizBuilder({ lesson, onBack }: QuizBuilderProps) {
           <span>Save Quiz</span>
         </button>
       </div>
+
+      {notice && (
+        <div
+          role={notice.type === 'error' ? 'alert' : 'status'}
+          className={`px-4 py-3 rounded-xl border text-xs flex items-center space-x-2 ${
+            notice.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          {notice.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          )}
+          <span>{notice.message}</span>
+        </div>
+      )}
 
       {/* Quiz Settings */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-xl border border-slate-200">

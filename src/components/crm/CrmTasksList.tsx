@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { CheckSquare, Clock, Plus, Filter, Calendar, AlertCircle, ChevronRight, User } from "lucide-react";
 import { CRMTask, CRMLead } from "../../crm/types";
 
@@ -25,6 +25,14 @@ export function CrmTasksList({
   const [title, setTitle] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [priority, setPriority] = useState<"Low" | "Medium" | "High">("Medium");
+
+  useEffect(() => {
+    if (leads.length === 0) {
+      setSelectedLeadId(0);
+    } else if (!leads.some((l) => l.id === selectedLeadId)) {
+      setSelectedLeadId(leads[0].id);
+    }
+  }, [leads, selectedLeadId]);
 
   const filteredTasks = useMemo(() => {
     const now = new Date();
@@ -196,15 +204,21 @@ export function CrmTasksList({
 
             <div>
               <label className="text-[10px] font-mono uppercase text-app-text-muted block mb-1">Associated Lead</label>
-              <select
-                value={selectedLeadId}
-                onChange={(e) => setSelectedLeadId(Number(e.target.value))}
-                className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs focus:outline-none"
-              >
-                {leads.map((l) => (
-                  <option key={l.id} value={l.id}>{l.company} - {l.name}</option>
-                ))}
-              </select>
+              {leads.length === 0 ? (
+                <p role="alert" className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs">
+                  Create or approve a lead first before scheduling a task.
+                </p>
+              ) : (
+                <select
+                  value={selectedLeadId}
+                  onChange={(e) => setSelectedLeadId(Number(e.target.value))}
+                  className="w-full bg-app-input border border-app-input-border text-app-text rounded-xl p-2.5 text-xs focus:outline-none"
+                >
+                  {leads.map((l) => (
+                    <option key={l.id} value={l.id}>{l.company} - {l.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
@@ -255,7 +269,8 @@ export function CrmTasksList({
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                disabled={leads.length === 0 || !selectedLeadId}
+                className="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Save Task
               </button>

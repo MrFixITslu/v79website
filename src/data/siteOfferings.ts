@@ -19,16 +19,27 @@ export interface ServicePage {
   metaDescription: string;
 }
 
+export interface ProductScreenshot {
+  src: string;
+  title: string;
+  caption: string;
+  sourceNote: string;
+}
+
 export interface ProductPage {
   slug: string;
   path: string;
   title: string;
+  domain: string;
+  iconPath: string;
+  faviconPath: string;
   summary: string;
   problem: string;
   capabilities: string[];
   steps: { title: string; detail: string }[];
   audiences: string[];
   faqs: { question: string; answer: string }[];
+  screenshots: ProductScreenshot[];
   metaTitle: string;
   metaDescription: string;
 }
@@ -179,6 +190,9 @@ export const PRODUCT_PAGES: ProductPage[] = [
     slug: "hub",
     path: "/software/hub",
     title: "V79 Hub",
+    domain: "hub.v79sl.com",
+    iconPath: "/design-assets/apps/hub-icon.png",
+    faviconPath: "/design-assets/apps/hub-icon.png",
     summary: "A central place to reach the V79 applications available to your business.",
     problem: "Switching between disconnected systems makes even simple work harder. Hub is designed to make your enabled V79 business tools easier to find and access.",
     capabilities: ["Central entry point for V79 business applications", "Business workspace and account access", "Application access based on enabled services", "A place to explore connected business workflows"],
@@ -193,13 +207,19 @@ export const PRODUCT_PAGES: ProductPage[] = [
       { question: "Does Hub include every V79 app automatically?", answer: "No. Available products and access depend on the services enabled for your organisation." },
       { question: "Can I sign in now?", answer: "Existing authorised users can open Hub. If your organisation does not have access, contact V79 Digital to discuss the current options." }
     ],
+    screenshots: [
+      { src: "/design-assets/screenshots/hub/screen-1.png", title: "Hub Sign-In & Workspace Security", caption: "Authorised users sign in once with email, password and multi-factor authentication.", sourceNote: "Live app screen" },
+    ],
     metaTitle: "V79 Hub | Connected Business Applications",
     metaDescription: "Explore V79 Hub, the central workspace connecting V79 business applications for authorised users."
   },
   {
     slug: "tiquet",
     path: "/software/tiquet",
-    title: "V79 Tiquet",
+    title: "Tiquet",
+    domain: "tiquet.v79sl.com",
+    iconPath: "/design-assets/apps/tiquet-icon.png",
+    faviconPath: "/design-assets/apps/tiquet-icon.png",
     summary: "A clearer way to organise support requests and make sure each one has a next step.",
     problem: "When requests are scattered across calls, chats and messages, it is easy to lose track of what needs attention. Tiquet helps organise requests into a more visible workflow.",
     capabilities: ["Record and organise service requests", "View ticket status and work history", "Assign and follow up on requests within the supported workflow", "Keep related updates together", "Support a more consistent service delivery process"],
@@ -214,8 +234,124 @@ export const PRODUCT_PAGES: ProductPage[] = [
       { question: "Is Tiquet a customer portal?", answer: "The available features and customer access depend on the current application release. Ask us for a demonstration of the supported workflow." },
       { question: "How do we try Tiquet?", answer: "Contact V79 Digital about the current demonstration or access arrangements. We do not promise an unrestricted self-service trial here." }
     ],
-    metaTitle: "V79 Tiquet | Service Request & Ticket Tracking",
-    metaDescription: "Discover V79 Tiquet: simple service request and ticket tracking to help businesses follow up, organise work and keep requests moving."
+    screenshots: [
+    ],
+    metaTitle: "Tiquet | Service Request & Ticket Tracking",
+    metaDescription: "Discover Tiquet: simple service request and ticket tracking to help businesses follow up, organise work and keep requests moving."
+  },
+  {
+    slug: "pos",
+    path: "/software/pos",
+    title: "V79 POS",
+    domain: "pos.v79sl.com",
+    iconPath: "/design-assets/apps/pos-icon.png",
+    faviconPath: "/design-assets/apps/pos-favicon.png",
+    summary: "A clearer view of sales, register checkout, stock movements and purchasing.",
+    problem: "Disconnected spreadsheets and counter tools hide low stock, margin gaps and supplier delays. V79 POS connects checkout activity, catalogue pricing and location stock in one workflow.",
+    capabilities: ["Fast counter register and sale totals", "Product catalogue, SKUs and variant pricing", "Location stock balances and low-stock visibility", "Supplier records and purchase order receiving", "Customer purchase history and margin reporting"],
+    steps: [
+      { title: "Set up your catalogue", detail: "Create product records, categories, variants and selling locations." },
+      { title: "Run the register", detail: "Complete counter sales and track register activity clearly." },
+      { title: "Watch stock levels", detail: "Review on-hand and available inventory quantities across locations." },
+      { title: "Replenish from suppliers", detail: "Create purchase orders and receive stock directly into inventory." }
+    ],
+    audiences: ["Retail shops and counter-service businesses", "Distributors managing multi-location inventory", "Stores replacing manual sales and stock sheets"],
+    faqs: [
+      { question: "Can we preview the interface before subscribing?", answer: "Yes. Five real screens from the live V79 POS demo workspace are shown below." },
+      { question: "Does it support multiple locations?", answer: "Inventory location balances and stock health views help separate stock by store or warehouse." }
+    ],
+    screenshots: [
+      { src: "/design-assets/screenshots/pos/screen-1.png", title: "POS Sales & Margin Overview", caption: "Monitor net revenue, completed sales, average ticket size and gross margin.", sourceNote: "Live demo screen" },
+      { src: "/design-assets/screenshots/pos/screen-2.png", title: "Register & Checkout Counter", caption: "Add catalogue products, adjust quantities and complete customer sales.", sourceNote: "Live demo screen" },
+      { src: "/design-assets/screenshots/pos/screen-3.png", title: "Product Catalogue & Variant Pricing", caption: "Manage SKUs, categories, pricing and current sellable stock levels.", sourceNote: "Live demo screen" },
+      { src: "/design-assets/screenshots/pos/screen-4.png", title: "Location Inventory Balances", caption: "Inspect on-hand quantities, available stock and health alerts per location.", sourceNote: "Live demo screen" },
+      { src: "/design-assets/screenshots/pos/screen-5.png", title: "Suppliers & Purchase Orders", caption: "Create replenishment purchase orders and track incoming supplier deliveries.", sourceNote: "Live demo screen" }
+    ],
+    metaTitle: "V79 POS | Retail Sales, Stock & Purchasing",
+    metaDescription: "Explore V79 POS: register checkout, product catalogue, stock balances and supplier purchasing in one connected workspace."
+  },
+  {
+    slug: "ffpro",
+    path: "/software/ffpro",
+    title: "FFPRO",
+    domain: "ffpro.v79sl.com",
+    iconPath: "/design-assets/apps/ffpro-icon.png",
+    faviconPath: "/design-assets/apps/ffpro-icon.png",
+    summary: "Bring budgets, transactions, reserve goals and cashflow forecasts into one clear workspace.",
+    problem: "When spending, invoices and upcoming bills live across scattered files, owners make cash decisions in the dark. FFPRO makes budgets, ledgers and forecasts easier to inspect.",
+    capabilities: ["Monthly cashflow inflows vs outflows overview", "Income and expense transaction ledger", "Category budget allocations and variance tracking", "Dedicated reserve and savings goal planning", "Recurring commitments and 90-day scenario views"],
+    steps: [
+      { title: "Record activity", detail: "Capture inflows, expenses and recurring obligations cleanly." },
+      { title: "Assign category budgets", detail: "Set clear monthly targets across core operating categories." },
+      { title: "Track reserves", detail: "Monitor contributions toward equipment, tax and emergency goals." },
+      { title: "Review forecast", detail: "Preview upcoming commitments and runway scenarios ahead of spending." }
+    ],
+    audiences: ["Small and growing Caribbean businesses", "Teams managing tight working-capital budgets", "Owners separating operational and reserve cashflow"],
+    faqs: [
+      { question: "Is FFPRO accounting software for tax filing?", answer: "FFPRO focuses on practical budgeting, cashflow visibility, reserve goals and forecasting rather than replacing licensed tax audit filings." },
+      { question: "Can multiple categories be tracked?", answer: "Yes, operating categories can be budgeted and monitored against monthly variance." }
+    ],
+    screenshots: [
+    ],
+    metaTitle: "FFPRO | Business Financial Planning & Cashflow",
+    metaDescription: "Explore FFPRO: budgets, transaction ledgers, savings goals and cashflow forecasting in one clear finance workspace."
+  },
+  {
+    slug: "marketing",
+    path: "/software/marketing",
+    title: "V79 Marketing",
+    domain: "marketing.v79sl.com",
+    iconPath: "/design-assets/apps/marketing-icon.png",
+    faviconPath: "/design-assets/apps/marketing-icon.png",
+    summary: "Plan campaigns, brand messaging, content calendars and authorised channels consistently.",
+    problem: "Ad-hoc posting and scattered assets make consistent marketing hard to sustain. V79 Marketing organises campaigns, approvals, channel tokens and follow-up enquiries.",
+    capabilities: ["Brand profile and approved messaging guidelines", "Campaign planner with owners and deliverable deadlines", "Publishing calendar and draft approval workflow", "Official OAuth channel connection management", "Verified lead follow-up without simulated analytics"],
+    steps: [
+      { title: "Set brand context", detail: "Keep voice, positioning notes and core offers available." },
+      { title: "Plan campaigns", detail: "Organise campaigns, owners, deliverables and target dates." },
+      { title: "Schedule posts", detail: "Prepare drafts and coordinate calendar publishing windows." },
+      { title: "Review real enquiries", detail: "Track incoming enquiries and connected channel status transparently." }
+    ],
+    audiences: ["Businesses building regular outreach habits", "Teams needing structured draft approvals", "Organisations managing multi-channel calendars"],
+    faqs: [
+      { question: "Does V79 Marketing use connected OAuth accounts?", answer: "Supported channel providers connect through official OAuth authorisation flows so token permissions stay transparent." },
+      { question: "Are simulated analytics shown?", answer: "No. Connected reporting relies strictly on actual verified data returned by authorised channels." }
+    ],
+    screenshots: [
+    ],
+    metaTitle: "V79 Marketing | Campaigns, Content & Channels",
+    metaDescription: "Explore V79 Marketing: campaign planning, publishing calendars, brand guidelines and authorised channel management."
+  },
+  {
+    slug: "academy",
+    path: "/software/academy",
+    title: "V79 Academy",
+    domain: "academy.v79sl.com",
+    iconPath: "/design-assets/apps/academy-icon.png",
+    faviconPath: "/design-assets/apps/academy-icon.png",
+    summary: "Practical digital, AI and technology courses structured around clear modules and hands-on practice.",
+    problem: "Passive video playlists rarely translate into workplace confidence. V79 Academy organises structured courses around Understand, Practise, Check and Apply steps.",
+    capabilities: ["Structured curriculum modules and interactive lessons", "Searchable catalogue by track and difficulty", "Practical exercises tailored for workplace workflows", "Readiness checks and learner progress tracking", "Individual and team enrolment pathways"],
+    steps: [
+      { title: "Choose a track", detail: "Pick an AI, cybersecurity or workplace technology course." },
+      { title: "Work step by step", detail: "Complete readings, guided prompts and practical tasks." },
+      { title: "Check readiness", detail: "Verify understanding with structured module checks." },
+      { title: "Apply at work", detail: "Carry repeatable habits and templates into daily operations." }
+    ],
+    audiences: ["Teams building safe AI and digital habits", "Professionals upgrading practical technology fluency", "Organisations training staff across departments"],
+    faqs: [
+      { question: "Can we preview live Academy screens?", answer: "Yes. Five captures directly from the live V79 Academy platform are shown below." },
+      { question: "Do learners need separate accounts?", answer: "Learners sign in through the Academy portal or V79 Hub depending on how organisational access is provisioned." }
+    ],
+    screenshots: [
+      { src: "/design-assets/screenshots/academy/screen-1.png", title: "Academy Home & 4-Step Method", caption: "Follow the Understand, Practise, Check and Apply learning path.", sourceNote: "Live app screen" },
+      { src: "/design-assets/screenshots/academy/screen-2.png", title: "Interactive Course Catalogue", caption: "Browse, search and filter courses by learning path and focus.", sourceNote: "Live app screen" },
+      { src: "/design-assets/screenshots/academy/screen-3.png", title: "Course Overview & Lesson Scope", caption: "Inspect practical course outcomes and requirements before enrolling.", sourceNote: "Live app screen" },
+      { src: "/design-assets/screenshots/academy/screen-4.png", title: "Structured Module Outline", caption: "Move cleanly through numbered lessons, exercises and readiness checks.", sourceNote: "Live app screen" },
+      { src: "/design-assets/screenshots/academy/screen-5.png", title: "Learner Account Registration", caption: "Sign in or register a learner profile to save progress across modules.", sourceNote: "Live app screen" }
+    ],
+    metaTitle: "V79 Academy | Practical Digital & AI Learning",
+    metaDescription: "Explore V79 Academy: structured AI, cybersecurity and workplace technology training built for real Caribbean teams."
   }
 ];
 
@@ -226,3 +362,4 @@ export function getServicePage(path: string): ServicePage | undefined {
 export function getProductPage(path: string): ProductPage | undefined {
   return PRODUCT_PAGES.find(page => page.path === path);
 }
+

@@ -63,13 +63,13 @@ export function ShareButtons({
   const articleUrl = getArticleUrl();
   const absoluteImageUrl = getAbsoluteImageUrl();
   const encodedUrl = encodeURIComponent(articleUrl);
-  const encodedTitle = encodeURIComponent(`${title} | Vision79 Digital`);
+  const encodedTitle = encodeURIComponent(`${title} | V79 Digital`);
   const encodedImageUrl = encodeURIComponent(absoluteImageUrl);
   const encodedDesc = encodeURIComponent(description || title);
   
   // WhatsApp formatted text with title, description, and link
   const whatsappText = encodeURIComponent(
-    `*${title}*\n\n${description ? `${description}\n\n` : ""}📖 Read the full article on Vision79 Digital:\n${articleUrl}`
+    `*${title}*\n\n${description ? `${description}\n\n` : ""}📖 Read the full article on V79 Digital:\n${articleUrl}`
   );
 
   const handleCopy = async () => {
@@ -108,7 +108,7 @@ export function ShareButtons({
               if (navigator.canShare({ files: [file] })) {
                 await navigator.share({
                   title,
-                  text: `${title} - Read more on Vision79 Digital`,
+                  text: `${title} - Read more on V79 Digital`,
                   url: articleUrl,
                   files: [file],
                 });
@@ -124,7 +124,7 @@ export function ShareButtons({
         // Standard URL share fallback
         await navigator.share({
           title,
-          text: description ? `${title}\n\n${description}` : `Read "${title}" on Vision79 Digital`,
+          text: description ? `${title}\n\n${description}` : `Read "${title}" on V79 Digital`,
           url: articleUrl,
         });
       } catch {

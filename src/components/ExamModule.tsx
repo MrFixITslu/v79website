@@ -45,6 +45,8 @@ export function ExamModule({ course, onSave, isSubmitting }: ExamModuleProps) {
   const [studentAttempts, setStudentAttempts] = useState<StudentAttempt[]>([]);
   const [loadingAttempts, setLoadingAttempts] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusNotice, setStatusNotice] = useState<{ type: "error" | "warning" | "success"; message: string } | null>(null);
+  const [confirmDeleteIdx, setConfirmDeleteIdx] = useState<number | null>(null);
 
   // Initialize questions from course.exam or fallbacks
   useEffect(() => {
@@ -82,7 +84,9 @@ export function ExamModule({ course, onSave, isSubmitting }: ExamModuleProps) {
   const fetchStudentAttempts = async () => {
     setLoadingAttempts(true);
     try {
-      const res = await fetch(`/api/exam/attempts?appId=${encodeURIComponent(course.id)}`);
+      const res = await fetch(`/api/exam/attempts?appId=${encodeURIComponent(course.id)}`, {
+        credentials: "same-origin"
+      });
       if (res.ok) {
         const data = await res.json();
         setStudentAttempts(data);
@@ -111,38 +115,39 @@ export function ExamModule({ course, onSave, isSubmitting }: ExamModuleProps) {
 
   // Handle saving
   const handleSaveExam = () => {
-    // Validate exam has at least one question
+    setStatusNotice(null);
     if (questions.length === 0) {
-      alert("Validation Error: Please define at least one exam question.");
+      setStatusNotice({ type: "error", message: "Validation Error: Please define at least one exam question." });
       return;
     }
 
-    // Validate each question has at least two options and a valid correctAnswer
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       if (!q.question.trim()) {
-        alert(`Validation Error: Question #${i + 1} has no text.`);
+        setStatusNotice({ type: "error", message: `Validation Error: Question #${i + 1} has no text.` });
         return;
       }
       if (!q.options || q.options.length < 2) {
-        alert(`Validation Error: Question #${i + 1} must have at least 2 choice options.`);
+        setStatusNotice({ type: "error", message: `Validation Error: Question #${i + 1} must have at least 2 choice options.` });
         return;
       }
       if (q.options.some(opt => !opt.trim())) {
-        alert(`Validation Error: Question #${i + 1} contains empty choice values.`);
+        setStatusNotice({ type: "error", message: `Validation Error: Question #${i + 1} contains empty choice values.` });
         return;
       }
       if (q.correctAnswer < 0 || q.correctAnswer >= q.options.length) {
-        alert(`Validation Error: Question #${i + 1} correct answer index is out of bounds.`);
+        setStatusNotice({ type: "error", message: `Validation Error: Question #${i + 1} correct answer index is out of bounds.` });
         return;
       }
     }
 
     onSave(JSON.stringify(questions));
+    setStatusNotice({ type: "success", message: "Exam questions validated and saved." });
   };
 
   // Add a new blank question
   const handleAddQuestion = () => {
+    setStatusNotice(null);
     setQuestions([
       ...questions,
       {
@@ -153,11 +158,11 @@ export function ExamModule({ course, onSave, isSubmitting }: ExamModuleProps) {
     ]);
   };
 
-  // Delete a question
+  // Delete a question (confirmed inline)
   const handleDeleteQuestion = (qIdx: number) => {
-    if (!window.confirm(`Delete Question #${qIdx + 1}? This cannot be undone once saved.`)) return;
     const updated = questions.filter((_, idx) => idx !== qIdx);
     setQuestions(updated);
+    setConfirmDeleteIdx(null);
   };
 
   // Update question text
@@ -192,19 +197,13 @@ export function ExamModule({ course, onSave, isSubmitting }: ExamModuleProps) {
     const updated = [...questions];
     const question = updated[qIdx];
     if (question.options.length <= 2) {
-      alert("A question must have at least 2 options.");
+      setStatusNotice({ type: "error", message: "A question must have at least 2 options." });
       return;
     }
 
     const wasCorrectAnswer = question.correctAnswer === oIdx;
     const newOptions = question.options.filter((_, idx) => idx !== oIdx);
 
-    // Removing an option shifts every later index down by one. If the
-    // correct answer was AFTER the removed option, its index must shift
-    // down too, or "correct" silently ends up pointing at a different,
-    // wrong option. If the removed option WAS the correct answer, there's
-    // no safe automatic choice - reset to the first option and make the
-    // admin explicitly re-pick, rather than silently guessing.
     let newCorrectAnswer = question.correctAnswer;
     if (wasCorrectAnswer) {
       newCorrectAnswer = 0;
@@ -216,7 +215,10 @@ export function ExamModule({ course, onSave, isSubmitting }: ExamModuleProps) {
     setQuestions(updated);
 
     if (wasCorrectAnswer) {
-      alert(`The option you deleted was marked as the correct answer for Question #${qIdx + 1}. Please re-select the correct answer for this question before saving.`);
+      setStatusNotice({
+        type: "warning",
+        message: `The option deleted from Question #${qIdx + 1} was marked correct. Please verify the newly selected correct answer before saving.`
+      });
     }
   };
 
@@ -308,6 +310,28 @@ export function ExamModule({ course, onSave, isSubmitting }: ExamModuleProps) {
               </button>
             </div>
 
+            {statusNotice && (
+              <div
+                role={statusNotice.type === "error" ? "alert" : "status"}
+                className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                  statusNotice.type === "success"
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    : statusNotice.type === "warning"
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                    : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                }`}
+              >
+                <span>{statusNotice.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setStatusNotice(null)}
+                  className="text-[10px] font-mono underline shrink-0"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {questions.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-2xl bg-zinc-900/10 space-y-2">
                 <AlertCircle className="w-8 h-8 text-zinc-500 mx-auto" />
@@ -319,14 +343,34 @@ export function ExamModule({ course, onSave, isSubmitting }: ExamModuleProps) {
                 {questions.map((q, qIdx) => (
                   <div key={qIdx} className="p-5 bg-zinc-900/70 border border-zinc-800 rounded-xl space-y-4 shadow-sm relative group hover:border-zinc-700/60 transition">
                     
-                    {/* Delete Question Floating Button */}
-                    <button
-                      onClick={() => handleDeleteQuestion(qIdx)}
-                      className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                      title="Delete Question"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {/* Delete Question Inline Control */}
+                    {confirmDeleteIdx === qIdx ? (
+                      <div className="absolute top-4 right-4 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteQuestion(qIdx)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-semibold hover:bg-rose-700"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteIdx(null)}
+                          className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-[11px] font-semibold hover:bg-zinc-700"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteIdx(qIdx)}
+                        className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="Delete Question"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
 
                     {/* Question Header & Input */}
                     <div className="space-y-1.5 max-w-[90%]">

@@ -64,12 +64,12 @@ export function V79AppearanceControls({
 }: {mode: V79Mode; onChange: (mode: V79Mode) => void}) {
   return (
     <div role="group" aria-label="Appearance — Saint Lucia time"
-      className="inline-flex shrink-0 items-center gap-0.5 rounded-xl border border-app-border bg-app-aside-bg/70 p-1">
+      className="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-app-border bg-app-aside-bg/70 p-0.5">
       {(["auto", "light", "dark"] as const).map(choice => (
         <button key={choice} type="button" aria-pressed={mode === choice}
           title={choice === "auto" ? "Light 06:00–17:59, dark 18:00–05:59 Saint Lucia time" : `Keep ${choice} mode until changed`}
           onClick={() => onChange(choice)}
-          className={`min-h-9 rounded-lg px-2.5 text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v79-teal ${mode === choice ? "bg-white text-v79-navy shadow-sm dark:bg-v79-teal-dark dark:text-white" : "text-app-text-sec hover:bg-white/70 dark:hover:bg-white/10"}`}>
+          className={`min-h-6 rounded-md px-2 text-[11px] font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v79-teal ${mode === choice ? "bg-white text-v79-navy shadow-sm dark:bg-v79-teal-dark dark:text-white" : "text-app-text-sec hover:bg-white/70 dark:hover:bg-white/10"}`}>
           {choice === "auto" ? "Auto" : choice === "light" ? "Light" : "Dark"}
         </button>
       ))}
