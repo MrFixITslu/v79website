@@ -33,3 +33,10 @@ test('Hub-first public renderer is canonical without discarding GitHub resources
     assert.ok(existsSync(join(root, name)), 'Preserved GitHub-only resource missing: ' + name);
   }
 });
+
+test('Explore our services places Software and SaaS first and keeps the remaining service order', () => {
+  const section = PAGES['/services'].split('Explore our services')[1].split('How we work')[0];
+  const cards = [...section.matchAll(/href="\/services\/([^"\/]+)"[\s\S]*?<span class="card-index">(\d\d) · /g)];
+  assert.deepEqual(cards.map(card => card[1]), ['business-software', 'website-design', 'managed-it-support', 'cybersecurity', 'cloud-backup', 'networks-voip', 'ai-automation']);
+  assert.deepEqual(cards.map(card => card[2]), ['01', '02', '03', '04', '05', '06', '07']);
+});
