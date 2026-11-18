@@ -1,6 +1,6 @@
 FROM node:24-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY --chmod=0644 package.json package-lock.json ./
 RUN npm ci
 COPY . .
 RUN npm run lint && npm run build
@@ -8,7 +8,7 @@ RUN npm run lint && npm run build
 FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000
-COPY package.json package-lock.json ./
+COPY --chmod=0644 package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder --chown=node:node /app/dist ./dist
 RUN mkdir -p /app/data /app/uploads && chown node:node /app/data /app/uploads
