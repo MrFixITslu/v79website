@@ -16,7 +16,11 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm audit --omit=dev --audit-level=moderate
-      - run: docker build -t website2026:test .
+      - name: Verify image build from restricted source permissions
+        run: |
+          chmod 0600 package.json package-lock.json
+          docker build -t website2026:test .
+          docker run --rm --network none --entrypoint sh website2026:test -c 'test "$(id -u)" = 1000 && test -r /app/package.json && test -r /app/package-lock.json'
       - name: Smoke test production container
         run: |
           docker run -d --name website-smoke -p 127.0.0.1:3199:3000 -e CAPTCHA_MODE=disabled -e CANONICAL_DOMAIN=http://localhost:3199 website2026:test
