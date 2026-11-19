@@ -1294,3 +1294,23 @@ body.motion-off *, body.motion-off *::before, body.motion-off *::after {
   animation: none !important; transition: none !important; scroll-behavior: auto !important;
 }
 body.motion-off .reveal { opacity: 1 !important; transform: none !important; }
+
+/* Verified individual Claude Academy credentials; no partnership claim. */
+.professional-credentials { padding: clamp(42px,6vw,80px) 0; border-top: 1px solid var(--line,#cbd5e1); text-align:center; }
+.credentials-inner { max-width:980px; }
+.credentials-inner h2 { margin: 10px 0; font-size:clamp(1.7rem,3vw,2.4rem); }
+.credentials-inner p { margin:0 auto 24px; max-width:620px; line-height:1.6; }
+.credentials-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(12px,3vw,32px); max-width:760px; margin:auto; }
+.credential-link { display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px 4px; border-radius:12px; color:inherit; text-decoration:none; transition:transform .2s ease; }
+.credential-link img { display:block; width:min(100%,190px); height:auto; aspect-ratio:1; object-fit:contain; }
+.credential-link strong { font-size: .95rem; }
+.credential-link span { font-size:.8rem; text-decoration:underline; text-underline-offset:3px; }
+.credential-link:hover { transform:translateY(-3px); }
+.credential-link:focus-visible { outline:2px solid currentColor; outline-offset:4px; }
+@media(max-width:560px){ .credentials-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .credential-link:last-child { grid-column:1/-1; } .credential-link img { max-width:146px; } }
+@media(prefers-reduced-motion:reduce){ .credential-link { transition:none; } .credential-link:hover { transform:none; } }
+/* Keep the founder's face and the Pitons visible on the featured software card. */
+.editorial-cards-grid a[href="/services/business-software"] .service-card-media img { object-position:center 42%; }
+
+/* R5: restored public social navigation. */
+.footer-social{margin-top:22px;display:grid;gap:10px}.footer-social>strong{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:#78d9de}.footer-social-links{display:flex;flex-wrap:wrap;gap:8px}.footer-social-links a{display:inline-flex;align-items:center;padding:7px 11px;border:1px solid rgba(167,198,216,.32);border-radius:7px;color:#d5e4ee;font-size:.82rem;transition:background .16s ease,color .16s ease}.footer-social-links a:hover,.footer-social-links a:focus-visible{background:rgba(120,217,222,.14);color:#fff;text-decoration:none}.footer-social-links a:focus-visible{outline:2px solid #78d9de;outline-offset:3px}
