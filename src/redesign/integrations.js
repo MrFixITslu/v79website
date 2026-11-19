@@ -40,6 +40,6 @@ export async function loadResources(root){
   const r=await fetch('/api/articles',{signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error();const rows=await r.json();
   if(!Array.isArray(rows))throw Error();container.replaceChildren();
   if(!rows.length){container.textContent='New articles will appear here when published.';return;}
-  for(const row of rows){const a=document.createElement('a');a.className='guide-card';a.href='/resources?article='+encodeURIComponent(row.slug);const h=document.createElement('h3');h.textContent=row.title;const p=document.createElement('p');p.className='guide-summary';p.textContent=row.description||'';a.append(h,p);container.append(a);}
- }catch{container.textContent='Published articles could not load. Please refresh to try again.';}
+  for(const row of rows){const a=document.createElement('a');a.className='guide-card';a.href='/resources?article='+encodeURIComponent(row.slug);const h=document.createElement('h3');h.textContent=row.title;const p=document.createElement('p');p.className='guide-summary';p.textContent=row.description||'';const category=document.createElement('span');category.className='card-eyebrow';category.textContent=row.category||'Article';const more=document.createElement('span');more.className='link-more';more.textContent='Read article ↗';a.append(category,h,p,more);container.append(a);}
+ }catch{container.textContent='Published articles could not load. Please refresh to try again.';}finally{container.setAttribute('aria-busy','false');}
 }

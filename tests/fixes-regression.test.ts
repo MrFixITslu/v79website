@@ -290,6 +290,52 @@ test("hero removes Saint Lucia roots pill, theme removes visible Appearance labe
   assert.ok(publicCss.includes(".assist-hero .assist-primary{background:#087f86"), "Hero CTA should use V79 teal");
 });
 
+// Exact allowlist from deployed R5; 19 restored assets from V79websiteupdate@eef6a5cb367f09a4e16abba38ecefc136f89db55.
+const approvedAppPreviews: Record<string, string[]> = {
+  "hub": [
+    "fe681923de73d045ca61ac588aff40917ee0f091aad0a989335d7fb0ea9573e8",
+    "c32016dd7088037218420aaa4703ab9fd5e835c506854d0b2a5d01273f5da8f4",
+    "0c70a76c2c597b2a69bfeae4ff689df30703448edc34a0c1182dbfa6335d5cd5",
+    "597c6e10992fb6230375bf7cef20508a0b35852d04563ebc3c74069f3e9d4a3e",
+    "4f39d5b4d21952073ad7111863d52a559cea31dfffcd2765d50222758daf11ec"
+  ],
+  "tiquet": [
+    "6a0ff14e836e049fd20c981e8ffe1e87a5bf64f09457fa62ea04f7e5f723bb73",
+    "e46f29fb2173dd66e50a2e0b66312709a417d0b957df639fafeac972fda85684",
+    "ffdd800a76399d025563bf8ab31f3147559c7c4f21c1dbb7a9ae87f7008376be",
+    "a8ef4d0fb084965baaa1861f99ab1a888377d8f1b835e9e2449499b1dd5e5949",
+    "bf9b8238acccd4877f861debc773ae66d781f1ff92ea9e1802225628b9469e75"
+  ],
+  "pos": [
+    "62458dd76ad98a3e147ccd4baf63fe2cddf7bd20d1a3d950080c083b1884ac4b",
+    "cba066a4173406c532c39a6a442d2908e4ba500279d7a955b812172df95a742c",
+    "3fd44a42e4b94832b749992491cf423bff6dec95d8e5d342dc4179ecda57722b",
+    "db5e0350442dd1957bf427e6e538bb36dbeecc158d3123e43bb9f7206109c6fc",
+    "e18ef9aea2d6448f254b44f87e19b4da8cd2be65013db14cf317d8ac8be38a7f"
+  ],
+  "ffpro": [
+    "d5ec8ae0d9813baa991e6f956eef64970f918e6ce7ef0abd70e90b0c528ae046",
+    "bc0580b0eaf513d26bc982478471a8c5b73cbd37d8e72b9275f39f19b5a478da",
+    "0d78f7ac2d13a239d860536dbb686069ac25ceed901302010569206067f47758",
+    "3acb5af2e1754f7e8dadc8f0b662d6e72a6f7fb4bae9f450e5a5e214758fb514",
+    "62859c8bc9715ded74b45c62e6390db11b9bedae0c704f6079d107c11af986eb"
+  ],
+  "marketing": [
+    "af14f172831bb76daa7a8d586aa902428afa9034e6f2eba5a72a88a90d0f07db",
+    "b9fe78bd89801836ff4d24421ee0cd9cab35d96a07b31b8ccfae95a18bb9f7f9",
+    "1380eb2dd4b7c290674486424723855eeb02e2710ec7024a65623e7ab19839ec",
+    "fa0e05bb9142edc466b589d0b0f3ffd8f8a1f2f4ad66c8723a028527170b7453",
+    "34012ab33e8f94357df8030c1af7884a1679f611e14100c85bc151bf38aa6345"
+  ],
+  "academy": [
+    "433d0f21015dc7028cac4634cb46ec0cb93418211aeaae83c715d33444b992c6",
+    "86fb4ca3f7e04f26aa929fc1b00cc5b0276bff5ff6285403f003641dad513946",
+    "288b0f5174b657fb8eea87bd170b4b42833ff84fa4edda75daca816f071471d9",
+    "43480ab542de358b458d812cf852c435d551b0fe946bae1c364d3f84fe752990",
+    "533dfe585c7af26f5497f4c47b48a3621a9048be89c91df217264346f1efd003"
+  ]
+};
+
 test("Software & Apps cards use local icons and only privacy-reviewed previews", () => {
   const websiteDesignPath = path.join(repo, "shared/website-design.ts");
   const rawDesign = fs.readFileSync(websiteDesignPath, "utf8");
@@ -322,11 +368,21 @@ test("Software & Apps cards use local icons and only privacy-reviewed previews",
     assert.ok(fs.existsSync(path.join(repo, "public", app.icon)), `Missing icon file on disk: ${app.icon}`);
     assert.ok(fs.existsSync(path.join(repo, "public", app.favicon)), `Missing favicon file on disk: ${app.favicon}`);
 
-    const approvedScreens = app.slug === 'hub' ? 1 : ['pos', 'academy'].includes(app.slug) ? 5 : 0;
+    // The restored assets are the original owner's explicitly requested illustrative
+    // previews, not exports from authenticated customer workspaces. Pin each approved
+    // image by digest so a new screenshot cannot silently replace an allowed asset.
+    const approved = approvedAppPreviews[app.slug];
+    assert.equal(approved.length, 5);
     for (let i = 1; i <= 5; i++) {
       const shotPath = `/design-assets/screenshots/${app.slug}/screen-${i}.png`;
-      assert.equal(html.includes(shotPath), i <= approvedScreens, `${route} preview policy for ${i}`);
-      assert.equal(fs.existsSync(path.join(repo, "public", shotPath)), i <= approvedScreens, `Public asset policy: ${shotPath}`);
+      assert.ok(html.includes(shotPath), `${route} preview ${i} missing`);
+      const asset = path.join(repo, "public", shotPath);
+      assert.ok(fs.existsSync(asset), `Public asset missing: ${shotPath}`);
+      assert.equal(crypto.createHash("sha256").update(fs.readFileSync(asset)).digest("hex"), approved[i - 1], `Unreviewed replacement: ${shotPath}`);
+    }
+    assert.equal((html.match(/data-gallery-item=/g) || []).length, 5);
+    if (["hub", "tiquet", "ffpro", "marketing"].includes(app.slug)) {
+      assert.equal((html.match(/data-badge="Illustrative interface preview"/g) || []).length, app.slug === "hub" ? 4 : 5);
     }
   }
 
@@ -499,3 +555,34 @@ test("editorial redesign enforces non-bold equal-width wordmark, clean footer wi
 });
 
 
+
+
+test("R5 preserves credentials, featured SaaS, blog mount, social links and official FFPRO branding", () => {
+  const shell = fs.readFileSync(path.join(repo, "index.html"), "utf8");
+  const raw = fs.readFileSync(path.join(repo, "shared/website-design.ts"), "utf8");
+  const PAGES = JSON.parse(raw.split("\n")[2].slice("export const PAGES: Record<string,string> = ".length, -1));
+  const services = PAGES["/services"];
+  assert.match(services, /class="interactive-card reveal service-motion-card service-card-wide" href="\/services\/business-software"/);
+  assert.match(services, /class="interactive-card reveal service-motion-card" href="\/services\/website-design"/);
+  assert.ok(services.includes("/design-assets/business-owner.webp"));
+  assert.ok(PAGES["/resources"].includes('id="publishedArticles"'));
+  const integrations = fs.readFileSync(path.join(repo, "src/redesign/integrations.js"), "utf8");
+  assert.ok(integrations.includes("fetch('/api/articles'"));
+  assert.ok(shell.includes("Professional credentials"));
+  for (const [slug, verify] of [
+    ["claude-101", "50cd690c32a59b03ccc761c5cef4da55"],
+    ["claude-code-101", "2bcc0d73cf388807962927a99948aaf3"],
+    ["claude-code-in-action", "46a9c18ea3c684b2689b2c076b2d9dcd"],
+  ]) {
+    assert.ok(shell.includes("https://academy.claude.com/verify/" + verify));
+    const asset = fs.readFileSync(path.join(repo, "public/design-assets/credentials", slug + ".webp"));
+    assert.equal(asset.toString("ascii", 8, 12), "WEBP");
+  }
+  for (const network of ["facebook.com", "instagram.com", "linkedin.com", "tiktok.com", "youtube.com"]) {
+    assert.ok(shell.includes(network), "Social navigation missing " + network);
+  }
+  for (const name of ["ffpro-icon.png", "ffpro-favicon.png"]) {
+    const icon = fs.readFileSync(path.join(repo, "public/design-assets/apps", name));
+    assert.equal(crypto.createHash("sha256").update(icon).digest("hex"), "bbb75e9569711b6f32c19253871bca831f3d4509b89e6c461c4c0f8a4e0685c0");
+  }
+});
